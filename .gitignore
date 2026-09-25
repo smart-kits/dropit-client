@@ -1,0 +1,5 @@
+# Client configs hold the token in plain text. This repository is public —
+# anything committed here can never be taken back.
+**/data.json
+**/config.json
+.DS_Store

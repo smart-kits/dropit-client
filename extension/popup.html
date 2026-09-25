@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>dropit</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1a1a18; --bg: #fbfbfa; --dim: #6b6b66; --line: #e4e4e0; --card: #fff; --accent: #c2410c; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #e8e8e4; --bg: #16161a; --dim: #8a8a84; --line: #2c2c32; --card: #1e1e24; --accent: #fb923c; } }
+  body { width: 280px; margin: 0; padding: 14px; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
+  h1 { font-size: 14px; margin: 0 0 10px; }
+  button { font: inherit; width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 7px;
+           border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+  button.cta { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  input { font: inherit; width: 100%; padding: 7px 9px; margin-bottom: 6px; border-radius: 7px;
+          border: 1px solid var(--line); background: var(--card); color: var(--fg); box-sizing: border-box; }
+  p { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
+  #msg { color: var(--accent); min-height: 18px; font-size: 12px; margin-top: 8px; }
+  [hidden] { display: none !important; }
+</style>
+
+<div id="setup" hidden>
+  <h1>这是你的第一台设备吗？</h1>
+  <button class="cta" id="create">是，创建新账号</button>
+  <input id="code" placeholder="否 —— 输入配对码" maxlength="10">
+  <button id="claim">加入</button>
+  <p>配对码在已经用上 dropit 的设备上生成，5 分钟内有效。</p>
+</div>
+
+<div id="main" hidden>
+  <h1 id="who"></h1>
+  <button class="cta" id="page">投当前页面</button>
+  <button id="unpair">在这个浏览器上退出</button>
+  <p>选中文字、链接、图片可以直接右键投递。</p>
+</div>
+
+<div id="msg"></div>
+<script type="module" src="popup.js"></script>

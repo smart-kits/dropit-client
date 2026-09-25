@@ -1,0 +1,74 @@
+# dropit clients
+
+**English** · [简体中文](./README.zh-CN.md)
+
+**Send things to yourself — from any device, to every device.**
+
+See a link, jot down a thought, grab a file: one tap drops it into your queue,
+and it's already waiting on your other devices. Items stay for 30 days and can be
+pulled again at any time.
+
+This repository holds the open-source dropit clients. The Obsidian plugin lives in
+its own repository: [smart-kits/dropit-obsidian](https://github.com/smart-kits/dropit-obsidian).
+
+## Clients
+
+| Client | Platform | Sends | Receives | Guide |
+|---|---|:-:|:-:|---|
+| **CLI** | macOS · Linux (Node.js ≥ 18) | ✅ text, links, files | ✅ into a local folder | [cli/](./cli/) |
+| **Browser extension** | Chrome · Edge | ✅ pages, links, selected text | — | [extension/](./extension/) |
+| **iOS Shortcuts** | iPhone · iPad | ✅ share sheet, Back Tap | — | [shortcuts/](./shortcuts/) |
+| **Obsidian plugin** | Desktop · mobile | — | ✅ as notes in your vault | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian) |
+
+The CLI also powers Raycast, Alfred and the macOS Services menu — see [cli/](./cli/).
+
+## Features
+
+- **One step to send.** No forms, no choices on the send path — share, right-click or type one command.
+- **Real-time delivery.** Receivers get new items over a live connection and catch up automatically after being offline.
+- **Nothing gets lost.** Receivers advance their position only after an item is safely written; a crash means a duplicate at worst, never a gap.
+- **Duplicate-safe.** Sending the same thing twice on the same day is recognized and not stored twice.
+- **Every device is separate.** Each device is paired on its own and can be revoked on its own. Send-only devices (browser, phone) cannot read your history.
+- **Minimal permissions.** The browser extension requests no host permissions at all.
+- **No build step, no dependencies.** The CLI is a single Node.js file; the extension loads as-is.
+
+## Getting started
+
+1. **Set up your first device.** This creates your account.
+   - CLI: `dropit pair`
+   - Obsidian: *Settings → dropit →* 是，创建新账号 (*Yes, create a new account*) → 创建
+   - Browser extension: click the icon → 是，创建新账号
+2. **Generate a pairing code** on that device. It is valid for 5 minutes.
+   - CLI: `dropit code`
+   - Obsidian: *Settings → dropit →* 配对码 (*Pairing code*) → 生成
+3. **Join from every other device** with that code.
+   - CLI: `dropit pair <code>`
+   - Browser extension: click the icon → enter the code → 加入 (*Join*)
+   - iOS: run the *dropit 配对* (pair) shortcut
+4. **Send something** — `dropit send "hello"`, right-click a page, or share from your phone — and watch it arrive.
+
+Pairing codes are 6 characters and forgiving: case, spaces, dashes, and `0`/`O` or `1`/`I`/`l` mix-ups don't matter.
+
+## Security & privacy
+
+- Your token is stored **only on your device** — CLI: `~/.config/dropit/config.json` (mode `0600`); extension: the browser's local extension storage; Obsidian: the plugin's `data.json`.
+- Tokens come in two scopes: `full` (send, receive, pair new devices) and `ingest_only` (send only). The browser extension and the iPhone shortcut use `ingest_only` when joining with a code.
+- Lost a device? Revoke it from any `full` device: `dropit devices`, then `dropit revoke <device_id>`.
+
+## Contributing
+
+- Enable the pre-commit secret scan before your first commit, so a token can never land in the repository:
+
+  ```bash
+  brew install gitleaks          # or see https://github.com/gitleaks/gitleaks
+  git config core.hooksPath .githooks
+  ```
+
+- Commit messages are in English.
+- Docs come in pairs: `README.md` (English) and `README.zh-CN.md` (简体中文). Please update both.
+
+> The clients' interface text is currently Chinese only.
+
+## License
+
+[MIT](./LICENSE)

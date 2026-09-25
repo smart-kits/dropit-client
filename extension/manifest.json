@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "dropit",
+  "version": "2.0.0",
+  "description": "Send the current page, a link or selected text to your dropit with a right-click.",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab",
+    "notifications"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "投进 dropit"
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}

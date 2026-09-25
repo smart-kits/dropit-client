@@ -1,0 +1,303 @@
+#!/usr/bin/env node
+/**
+ * dropit CLI
+ *
+ * Single file, zero dependencies. Both a producer (send / send -f) and a consumer (watch).
+ * The macOS Services menu, Raycast and Alfred integrations are thin wrappers around it — see README.
+ *
+ * Requires Node >= 18. Real-time push in `watch` needs Node >= 22 (global WebSocket);
+ * older versions fall back to catching up on start.
+ */
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const readline = require('node:readline');
+
+const CONFIG = path.join(os.homedir(), '.config', 'dropit', 'config.json');
+const DEFAULT_ENDPOINTS = ['https://dropit.realeye.top'];
+const HEARTBEAT_MS = 60_000;
+const STALE_MS = 150_000;
+const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
+
+// Error messages shown to the user, keyed by the API error code
+const MESSAGES = {
+  INVALID_TOKEN: 'token 无效，请重新配对：dropit pair',
+  DEVICE_REVOKED: '设备已被移除，请重新配对：dropit pair',
+  SCOPE_INSUFFICIENT: '这个 token 只能投递，不能接收',
+  DEVICE_LIMIT_REACHED: '设备数已达上限，先移除一台',
+  PAIRING_CODE_INVALID: '配对码无效',
+  PAIRING_CODE_EXPIRED: '配对码已过期，请重新生成',
+  RATE_LIMITED: '投递过于频繁，稍后再试',
+  QUOTA_EXCEEDED: '队列已满，等旧内容过期或手动删除',
+  BLOB_UNAVAILABLE: '服务器暂不支持传文件',
+};
+
+// ── Config ──────────────────────────────────────────────────────────────
+
+function load() {
+  try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return { endpoints: DEFAULT_ENDPOINTS }; }
+}
+
+function save(cfg) {
+  fs.mkdirSync(path.dirname(CONFIG), { recursive: true });
+  fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2), { mode: 0o600 });   // holds the token — owner-only
+}
+
+// ── Network: fall back to the next endpoint, remember the one that works ──
+
+async function api(cfg, method, path_, body, auth = true) {
+  const endpoints = cfg.endpoints?.length ? cfg.endpoints : DEFAULT_ENDPOINTS;
+  let lastErr;
+  for (const base of endpoints) {
+    try {
+      const res = await fetch(base.replace(/\/$/, '') + path_, {
+        method,
+        headers: {
+          ...(auth && cfg.token ? { authorization: `Bearer ${cfg.token}` } : {}),
+          ...(body ? { 'content-type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (base !== endpoints[0]) {            // this one works — try it first next time
+        cfg.endpoints = [base, ...endpoints.filter((e) => e !== base)];
+        save(cfg);
+      }
+      if (!res.ok) {
+        const err = new Error(MESSAGES[data.error] ?? `请求失败 HTTP ${res.status}`);
+        Object.assign(err, { code: data.error, status: res.status, data });
+        throw err;
+      }
+      return data;
+    } catch (err) {
+      if (err.status) throw err;             // the server answered; not an endpoint problem
+      lastErr = err;
+    }
+  }
+  throw new Error(`网络不可用（试过 ${endpoints.length} 个域名）：${lastErr?.message ?? ''}`);
+}
+
+// ── Commands ────────────────────────────────────────────────────────────
+
+/** First run: with a pairing code, join an existing account; without one, create a new account. */
+async function pair(args) {
+  const cfg = load();
+  const code = args[0];
+  const name = `CLI · ${os.hostname()}`;
+  const res = code
+    ? await api(cfg, 'POST', '/v1/pair/claim', { code: code.trim().toUpperCase(), device_name: name, scope: 'full' }, false)
+    : await api(cfg, 'POST', '/v1/accounts', { device_name: name }, false);
+  save({ ...cfg, token: res.token, device_id: res.device_id, cursor: 0 });
+  console.log(code ? '已加入账号' : `已创建账号 ${res.user_id}`);
+  await refreshEndpoints(load());
+}
+
+/** Issue a pairing code for another device */
+async function newCode() {
+  const { code, expires_at } = await api(needToken(), 'POST', '/v1/pair');
+  console.log(`${code}\n5 分钟内有效（${new Date(expires_at).toLocaleTimeString()} 过期）`);
+}
+
+async function send(args) {
+  const cfg = needToken();
+  const fileFlag = args.indexOf('-f');
+  if (fileFlag !== -1) return sendFile(cfg, args[fileFlag + 1]);
+
+  const raw = args.length ? args.join(' ') : await readStdin();
+  if (!raw.trim()) die('没有内容可投。用法：dropit send <文本或链接>，或从管道读入');
+  const kind = /^https?:\/\/\S+$/.test(raw.trim()) ? 'url' : 'text';
+  const res = await api(cfg, 'POST', '/v1/ingest', { kind, raw: raw.trim(), source: 'cli', client_ts: Date.now() })
+    .catch((err) => (err.code === 'DEDUPED' ? err.data : Promise.reject(err)));
+  console.log(res.deduped === true ? `已投过了（#${res.seq}）` : `✓ #${res.seq}`);
+}
+
+/** Three-step upload: request an upload URL → PUT the file → confirm */
+async function sendFile(cfg, file) {
+  if (!file || !fs.existsSync(file)) die(`找不到文件：${file}`);
+  const stat = fs.statSync(file);
+  const start = await api(cfg, 'POST', '/v1/ingest/blob', {
+    kind: kindOf(file), filename: path.basename(file), size: stat.size,
+    mime: mimeOf(file), source: 'cli', client_ts: Date.now(),
+  }).catch((err) => (err.code === 'DEDUPED' ? err.data : Promise.reject(err)));
+  if (start.deduped) return console.log(`已投过了（#${start.seq}）`);
+
+  // Streamed: the file is never read fully into memory.
+  const put = await fetch(start.upload_url, {
+    method: 'PUT',
+    headers: { 'content-type': mimeOf(file), 'content-length': String(stat.size) },
+    body: fs.createReadStream(file),
+    duplex: 'half',
+  }).catch((err) => die(`上传失败（网络不可用，或上传地址已过期）：${err.message}`));
+  if (!put.ok) die(`上传失败 HTTP ${put.status}`);   // fail loudly, never pretend it worked
+
+  await api(cfg, 'POST', `/v1/ingest/blob/${start.seq}/done`);
+  console.log(`✓ #${start.seq} ${path.basename(file)} ${(stat.size / 1024).toFixed(0)} KB`);
+}
+
+/** Local-folder consumer: writes incoming items as files, in real time */
+async function watch(args) {
+  const cfg = needToken();
+  const dir = path.resolve(args[0] ?? cfg.folder ?? path.join(os.homedir(), 'dropit'));
+  fs.mkdirSync(dir, { recursive: true });
+  save({ ...cfg, folder: dir });
+  console.log(`落地目录 ${dir}`);
+
+  const state = { cursor: cfg.cursor ?? 0, syncing: false, socket: null, retry: 0, lastBeat: 0 };
+  const sync = () => pullInto(dir, state);
+
+  await sync();
+  if (typeof WebSocket === 'undefined') {
+    console.log('Node < 22，没有全局 WebSocket —— 已补齐，实时推送不可用。');
+    return;
+  }
+  connect(state, sync);
+  setInterval(() => heartbeat(state, sync), HEARTBEAT_MS);
+  process.on('SIGINT', () => { state.socket?.close(); process.exit(0); });
+}
+
+async function pullInto(dir, state) {
+  if (state.syncing) return;
+  state.syncing = true;
+  try {
+    for (let hasMore = true; hasMore; ) {
+      const cfg = load();
+      const page = await api(cfg, 'GET', `/v1/pull?after=${state.cursor}&limit=200`);
+      for (const item of page.items) await writeItem(dir, item);
+      state.cursor = page.next_after;              // advance only after writing: a duplicate beats a lost item
+      save({ ...cfg, cursor: state.cursor });
+      hasMore = page.has_more;
+    }
+  } catch (err) {
+    console.error(`拉取失败：${err.message}`);
+  } finally {
+    state.syncing = false;
+  }
+}
+
+async function writeItem(dir, item) {
+  const stamp = new Date(item.created_at).toISOString().slice(0, 10);
+  if (item.url) {                                  // binary item: fetch from its signed download URL
+    const name = `${stamp}-${item.seq}-${sanitize(item.meta?.filename ?? 'file')}`;
+    const target = path.join(dir, name);
+    if (fs.existsSync(target)) return;
+    const res = await fetch(item.url);
+    if (!res.ok) return console.error(`下载失败 #${item.seq} HTTP ${res.status}`);
+    fs.writeFileSync(target, Buffer.from(await res.arrayBuffer()));
+    return console.log(`↓ ${name}`);
+  }
+  const target = path.join(dir, `${stamp}-${item.seq}.md`);
+  if (fs.existsSync(target)) return;
+  fs.writeFileSync(target, `---\ndropit_seq: ${item.seq}\nkind: ${item.kind}\nsource: ${item.source}\n`
+    + `created: ${new Date(item.created_at).toISOString()}\n---\n\n${item.raw}\n`);
+  console.log(`↓ ${path.basename(target)}`);
+}
+
+// ── Real-time (same liveness logic as the Obsidian plugin) ──────────────
+
+async function connect(state, sync) {
+  if (state.socket) return;
+  const cfg = load();
+  try {
+    const { ticket } = await api(cfg, 'POST', '/v1/ws/ticket');
+    const base = (cfg.endpoints ?? DEFAULT_ENDPOINTS)[0].replace(/^http/, 'ws').replace(/\/$/, '');
+    const socket = new WebSocket(`${base}/v1/ws?ticket=${encodeURIComponent(ticket)}`);
+    state.socket = socket;
+    socket.onopen = () => { state.retry = 0; state.lastBeat = Date.now(); console.log('实时推送已连接'); };
+    socket.onmessage = (ev) => { state.lastBeat = Date.now(); if (ev.data !== 'pong') sync(); };
+    socket.onclose = () => { state.socket = null; reconnect(state, sync); };
+    socket.onerror = () => socket.close();
+  } catch (err) {
+    if (err.code === 'WS_REQUIRES_PAID') return console.log('当前账号没有实时推送，已补齐当前内容。');
+    console.error(`实时连接失败：${err.message}`);
+    reconnect(state, sync);
+  }
+}
+
+function reconnect(state, sync) {
+  const delay = BACKOFF_MS[Math.min(state.retry++, BACKOFF_MS.length - 1)];
+  setTimeout(() => connect(state, sync), delay).unref?.();
+}
+
+/** After sleep/wake a socket often goes stale while readyState still says OPEN — ping and time it. */
+function heartbeat(state, sync) {
+  if (!state.socket) return void connect(state, sync);
+  if (Date.now() - state.lastBeat > STALE_MS) return void state.socket.close();
+  try { state.socket.send('ping'); } catch { state.socket.close(); }
+}
+
+async function me() {
+  const m = await api(needToken(), 'GET', '/v1/me');
+  console.log(`${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} 台设备 · `
+    + `${(m.bytes_used / 1048576).toFixed(1)}/${(m.bytes_limit / 1048576).toFixed(0)} MB · `
+    + `实时推送 ${m.ws_available ? '可用' : '不可用'}`);
+}
+
+async function devices() {
+  const { devices } = await api(needToken(), 'GET', '/v1/devices');
+  for (const d of devices) {
+    console.log(`${d.device_id}  ${d.scope.padEnd(12)} 游标 ${String(d.cursor).padEnd(6)} ${d.name}`);
+  }
+}
+
+const revoke = (args) => api(needToken(), 'DELETE', `/v1/devices/${encodeURIComponent(args[0] ?? '')}`)
+  .then(() => console.log('已吊销，名额已释放'));
+
+/**
+ * Refresh the endpoint list and persist it.
+ * **Merge, don't replace** — the current endpoint just worked; if the returned list were
+ * wrong, replacing it would drop the only working address. Known-good goes first.
+ */
+async function refreshEndpoints(cfg) {
+  try {
+    const { endpoints } = await api(cfg, 'GET', '/v1/endpoints', null, false);
+    if (!endpoints?.length) return;
+    const current = (load().endpoints ?? DEFAULT_ENDPOINTS)[0];
+    save({ ...load(), endpoints: [...new Set([current, ...endpoints])] });
+  } catch { /* keep the local list if this fails */ }
+}
+
+// ── Misc ────────────────────────────────────────────────────────────────
+
+const IMAGE = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.heic': 'image/heic' };
+const OTHER = { '.pdf': 'application/pdf', '.md': 'text/markdown', '.txt': 'text/plain', '.zip': 'application/zip', '.mp4': 'video/mp4', '.mov': 'video/quicktime' };
+const ext = (f) => path.extname(f).toLowerCase();
+const mimeOf = (f) => IMAGE[ext(f)] ?? OTHER[ext(f)] ?? 'application/octet-stream';
+const kindOf = (f) => (IMAGE[ext(f)] ? 'image' : ext(f) === '.mp4' || ext(f) === '.mov' ? 'video' : 'file');
+const sanitize = (name) => name.replace(/[/\\:*?"<>|]/g, '_').slice(0, 120);
+
+function needToken() {
+  const cfg = load();
+  if (!cfg.token) die('还没配对。第一台设备跑 `dropit pair`，之后的设备跑 `dropit pair <配对码>`');
+  return cfg;
+}
+
+const readStdin = () => new Promise((res) => {
+  if (process.stdin.isTTY) return res('');
+  let buf = '';
+  readline.createInterface({ input: process.stdin }).on('line', (l) => { buf += l + '\n'; }).on('close', () => res(buf));
+});
+
+function die(msg) {
+  console.error(msg);
+  process.exit(1);
+}
+
+const USAGE = `dropit —— 发给自己
+
+  dropit pair [配对码]      第一台设备不带参数建号；之后的设备带配对码加入
+  dropit code               生成配对码，给新设备用
+  dropit send <文本|链接>    也可以从管道读：pbpaste | dropit send
+  dropit send -f <文件>      图片/PDF/视频等文件
+  dropit watch [目录]        本地文件夹 consumer，实时落盘（默认 ~/dropit）
+  dropit me                 看权益和用量
+  dropit devices            列设备
+  dropit revoke <device_id> 吊销一台设备
+`;
+
+const COMMANDS = { pair, code: newCode, send, watch, me, devices, revoke };
+
+const [cmd, ...args] = process.argv.slice(2);
+if (!COMMANDS[cmd]) die(USAGE);
+COMMANDS[cmd](args).catch((err) => die(err.message));
