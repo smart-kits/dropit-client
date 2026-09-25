@@ -10,6 +10,18 @@
 这个仓库是 dropit 的开源客户端。Obsidian 插件在单独的仓库：
 [smart-kits/dropit-obsidian](https://github.com/smart-kits/dropit-obsidian)。
 
+## 让你的 AI 来装
+
+在用 AI 编程助手（Claude Code、Codex、Cursor……）？把下面这段贴给它：
+
+```text
+按照 https://raw.githubusercontent.com/smart-kits/dropit-client/main/AGENTS.md
+帮我在这台电脑上安装 dropit。创建账号之前先问我；任何时候都不要显示或提交我的 token。
+```
+
+它会安装并配对命令行、验证能用，再一步步带你完成需要你亲手操作的部分
+（加载浏览器扩展、搭建 iOS 快捷指令）。给 AI 的说明在 [AGENTS.md](./AGENTS.md)。
+
 ## 客户端一览
 
 | 客户端 | 平台 | 投 | 收 | 说明 |

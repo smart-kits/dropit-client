@@ -11,6 +11,20 @@ pulled again at any time.
 This repository holds the open-source dropit clients. The Obsidian plugin lives in
 its own repository: [smart-kits/dropit-obsidian](https://github.com/smart-kits/dropit-obsidian).
 
+## Let your AI install it
+
+Using an AI coding agent (Claude Code, Codex, Cursor, …)? Paste this:
+
+```text
+Install dropit on this machine for me by following
+https://raw.githubusercontent.com/smart-kits/dropit-client/main/AGENTS.md
+Ask me before creating an account, and never show or commit my token.
+```
+
+The agent installs and pairs the CLI, checks that it works, and walks you through the
+parts that need your hands (loading the browser extension, building the iOS shortcuts).
+Instructions for agents are in [AGENTS.md](./AGENTS.md).
+
 ## Clients
 
 | Client | Platform | Sends | Receives | Guide |

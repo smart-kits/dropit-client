@@ -1,0 +1,147 @@
+# AGENTS.md
+
+Instructions for AI agents (Claude Code, Codex, Cursor, …) that **install dropit for a user**
+or **work on this repository**. Humans: see [README.md](./README.md).
+
+---
+
+## Part 1 · Installing dropit for a user
+
+### Ground rules
+
+1. **Never print, log, paste or commit a token.** Tokens start with `dk_`. They live in
+   `~/.config/dropit/config.json` (CLI) and must stay there. To confirm pairing worked,
+   run `dropit me` — never `cat` the config file.
+2. **Ask before creating an account.** Ask the user: *"Do you already use dropit on another device?"*
+   - **No** → this machine is the first device; `dropit pair` creates the account.
+   - **Yes** → ask them to generate a pairing code on that device (`dropit code`, or
+     *Settings → dropit → Pairing code* in Obsidian) and give it to you. Then `dropit pair <code>`.
+     A code is 6 characters and expires after 5 minutes.
+   Creating a second account by mistake splits the user's items across two accounts.
+3. **Don't use `sudo` without asking.** Prefer a user-writable directory on `PATH`.
+4. Steps marked **👤 user** need the user's hands (a browser or phone UI). Tell them exactly
+   what to click; don't pretend you did it.
+
+### Which clients to install
+
+Ask which devices the user wants, or install the CLI first — it is the base for the others
+and the easiest to verify.
+
+| Client | Where | Can an agent do it end-to-end? |
+|---|---|---|
+| CLI | macOS / Linux terminal | ✅ yes |
+| Browser extension | Chrome / Edge | ⚠️ partly — loading it is 👤 user |
+| iOS Shortcuts | iPhone / iPad | ❌ no — hand the user the guide, with `{API}` filled in |
+| Obsidian plugin | Obsidian vault | ✅ mostly — see [dropit-obsidian/AGENTS.md](https://github.com/smart-kits/dropit-obsidian/blob/main/AGENTS.md) |
+
+### A · CLI
+
+**Check prerequisites**
+
+```bash
+node --version    # needs >= 18; real-time `watch` needs >= 22
+git --version
+```
+
+If Node.js is missing or too old, ask before installing it (e.g. `brew install node` on macOS).
+
+**Install**
+
+```bash
+git clone https://github.com/smart-kits/dropit-client.git ~/.dropit-client
+mkdir -p ~/.local/bin
+ln -sf ~/.dropit-client/cli/dropit ~/.local/bin/dropit
+command -v dropit || echo 'Add ~/.local/bin to PATH'
+```
+
+If `~/.local/bin` is not on `PATH`, add `export PATH="$HOME/.local/bin:$PATH"` to the user's
+shell profile (`~/.zshrc` on macOS) — tell them you did.
+
+**Pair** (follow ground rule 2 first)
+
+```bash
+dropit pair            # first device: creates the account
+dropit pair K7M2QX     # joining: use the code the user gave you
+```
+
+**Verify**
+
+```bash
+dropit me                          # prints plan · devices · storage — proves the token works
+dropit send "dropit is set up ✅"   # prints ✓ #<seq>
+```
+
+If the user wants to receive on this machine too:
+
+```bash
+dropit watch ~/dropit              # Ctrl-C to stop; the item above appears as a .md file
+```
+
+To keep `watch` running at login on macOS, use the launchd snippet in
+[cli/README.md](./cli/README.md#keep-watch-running-macos-launchd) — replace
+`/usr/local/bin/dropit` with the output of `command -v dropit`.
+
+**Optional integrations**: Raycast, the macOS Services menu and Alfred are described in
+[cli/README.md](./cli/README.md#integrations). Raycast only needs 👤 the user to add the
+`cli/raycast/` directory.
+
+### B · Browser extension
+
+```bash
+git clone https://github.com/smart-kits/dropit-client.git ~/.dropit-client   # skip if already cloned
+```
+
+👤 **User**, in Chrome or Edge:
+
+1. Open `chrome://extensions` (Edge: `edge://extensions`) and turn on **Developer mode**
+2. **Load unpacked** → choose `~/.dropit-client/extension`
+3. Click the dropit icon → either create an account (first device) or enter a pairing code
+
+To produce a pairing code for the extension from a paired CLI, run `dropit code` and give the
+user the result. Verify by asking the user to right-click any page → send it, then check it
+arrived (e.g. with `dropit watch`).
+
+### C · iOS Shortcuts
+
+Agents can't build shortcuts. Give the user [shortcuts/README.md](./shortcuts/README.md)
+and replace every `{API}` placeholder with the service address from the CLI config:
+
+```bash
+node -e 'console.log(require(require("os").homedir()+"/.config/dropit/config.json").endpoints[0])'
+```
+
+Then run `dropit code` and give the user the pairing code for the *dropit 配对* shortcut.
+
+### Updating and uninstalling
+
+```bash
+git -C ~/.dropit-client pull                  # update
+dropit devices                                # find this machine's device_id
+dropit revoke <device_id>                     # revoke it — needs a device with a full token
+rm ~/.local/bin/dropit && rm -rf ~/.dropit-client ~/.config/dropit   # remove
+```
+
+### Troubleshooting
+
+| Output | Meaning | Fix |
+|---|---|---|
+| `还没配对` | No token yet | `dropit pair` / `dropit pair <code>` |
+| `token 无效` · `设备已被移除` | Token invalid or device revoked | Get a new code, `dropit pair <code>` |
+| `配对码无效` · `配对码已过期` | Wrong or expired code | Ask for a fresh code (valid 5 min) |
+| `设备数已达上限` | Device limit reached | `dropit devices`, then `dropit revoke <id>` an unused one |
+| `网络不可用（试过 N 个域名）` | No service address reachable | Check the network / proxy |
+| `Node < 22 …` | No global WebSocket | Upgrade Node.js for real-time `watch` |
+
+The CLI's interface text is Chinese for now; the table above maps it.
+
+---
+
+## Part 2 · Working on this repository
+
+- **Enable the secret scan first:** `git config core.hooksPath .githooks` (needs `gitleaks`).
+- **Commit messages in English.**
+- **Docs come in pairs:** every `README.md` (English) has a `README.zh-CN.md` twin. Change both.
+- **No backend details.** Don't add infrastructure names, internal design references or server
+  internals to docs or comments. Clients talk to the API; that's all they need to know.
+- **No build step, no dependencies.** Keep the CLI a single file and the extension loadable as-is.
+- Verify the CLI still parses: `node --check cli/dropit`.
