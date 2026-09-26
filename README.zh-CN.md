@@ -75,10 +75,12 @@ Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/READM
   git config core.hooksPath .githooks
   ```
 
+- push 之前跑测试：`node test/i18n.test.mjs`（零依赖）。
+- 所有界面文案都在中英两张表里，新增文案两边都要加，否则测试会失败。
 - 提交信息用英文。
 - 文档成对维护：`README.md`（英文）和 `README.zh-CN.md`（简体中文），改一份请同步另一份。
 
-> 客户端界面文字目前只有中文。
+> 界面语言自动跟随：默认英文；系统、浏览器或 Obsidian 设为中文时显示简体中文。命令行看 `LANG`，也可以用 `DROPIT_LANG=zh` 或 `DROPIT_LANG=en` 强制指定。
 
 ## 许可
 

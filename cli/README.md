@@ -9,6 +9,7 @@ many entry points, one piece of logic.
 - Single file, zero dependencies
 - Node.js ≥ 18 (real-time `watch` needs Node.js ≥ 22)
 - macOS and Linux
+- English or Simplified Chinese — follows `LANG`; override with `DROPIT_LANG=zh` / `DROPIT_LANG=en`
 
 ## Install
 
@@ -106,12 +107,12 @@ pbpaste | dropit send
 
 | Message | Meaning | What to do |
 |---|---|---|
-| `token 无效` / `设备已被移除` | The token is invalid or this device was revoked | `dropit pair <code>` again |
-| `设备数已达上限` | Device limit reached | `dropit devices`, then `dropit revoke <id>` one you no longer use |
-| `投递过于频繁` | Too many sends in a short time | Wait a moment and retry |
-| `队列已满` | Storage is full | Wait for old items to expire (30 days) |
-| `网络不可用（试过 N 个域名）` | No service address was reachable | Check your connection |
-| `上传失败 …` | A file upload failed — reported, never silently dropped | Retry `dropit send -f` |
+| `Invalid token` / `This device was removed` | The token is invalid or this device was revoked | `dropit pair <code>` again |
+| `Device limit reached` | You've reached the device limit | `dropit devices`, then `dropit revoke <id>` one you no longer use |
+| `Sending too fast` | Too many sends in a short time | Wait a moment and retry |
+| `Storage is full` | Your storage is full | Wait for old items to expire (30 days) |
+| `Network unavailable (tried N addresses)` | No service address was reachable | Check your connection |
+| `Upload failed …` | A file upload failed — reported, never silently dropped | Retry `dropit send -f` |
 
 The CLI keeps a list of service addresses in its config. If the first one can't be reached,
 it tries the next and remembers whichever worked.

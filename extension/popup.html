@@ -18,18 +18,18 @@
 </style>
 
 <div id="setup" hidden>
-  <h1>这是你的第一台设备吗？</h1>
-  <button class="cta" id="create">是，创建新账号</button>
-  <input id="code" placeholder="否 —— 输入配对码" maxlength="10">
-  <button id="claim">加入</button>
-  <p>配对码在已经用上 dropit 的设备上生成，5 分钟内有效。</p>
+  <h1 data-i18n="setupTitle"></h1>
+  <button class="cta" id="create" data-i18n="create"></button>
+  <input id="code" maxlength="10">
+  <button id="claim" data-i18n="claim"></button>
+  <p data-i18n="setupNote"></p>
 </div>
 
 <div id="main" hidden>
   <h1 id="who"></h1>
-  <button class="cta" id="page">投当前页面</button>
-  <button id="unpair">在这个浏览器上退出</button>
-  <p>选中文字、链接、图片可以直接右键投递。</p>
+  <button class="cta" id="page" data-i18n="page"></button>
+  <button id="unpair" data-i18n="unpair"></button>
+  <p data-i18n="mainNote"></p>
 </div>
 
 <div id="msg"></div>

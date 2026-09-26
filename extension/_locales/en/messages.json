@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "dropit" },
+  "extDescription": { "message": "Send the current page, a link or selected text to your dropit with a right-click." },
+  "actionTitle": { "message": "Send to dropit" }
+}

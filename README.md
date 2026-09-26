@@ -50,15 +50,15 @@ The CLI also powers Raycast, Alfred and the macOS Services menu — see [cli/](.
 
 1. **Set up your first device.** This creates your account.
    - CLI: `dropit pair`
-   - Obsidian: *Settings → dropit →* 是，创建新账号 (*Yes, create a new account*) → 创建
-   - Browser extension: click the icon → 是，创建新账号
+   - Obsidian: *Settings → dropit → Yes, create a new account → Create*
+   - Browser extension: click the icon → *Yes, create a new account*
 2. **Generate a pairing code** on that device. It is valid for 5 minutes.
    - CLI: `dropit code`
-   - Obsidian: *Settings → dropit →* 配对码 (*Pairing code*) → 生成
+   - Obsidian: *Settings → dropit → Pairing code → Generate*
 3. **Join from every other device** with that code.
    - CLI: `dropit pair <code>`
-   - Browser extension: click the icon → enter the code → 加入 (*Join*)
-   - iOS: run the *dropit 配对* (pair) shortcut
+   - Browser extension: click the icon → enter the code → *Join*
+   - iOS: run the *dropit pair* shortcut
 4. **Send something** — `dropit send "hello"`, right-click a page, or share from your phone — and watch it arrive.
 
 Pairing codes are 6 characters and forgiving: case, spaces, dashes, and `0`/`O` or `1`/`I`/`l` mix-ups don't matter.
@@ -78,10 +78,12 @@ Pairing codes are 6 characters and forgiving: case, spaces, dashes, and `0`/`O` 
   git config core.hooksPath .githooks
   ```
 
+- Run the tests before you push: `node test/i18n.test.mjs` (no dependencies).
+- Every interface string lives in an English and a Chinese table; add both, or the test fails.
 - Commit messages are in English.
 - Docs come in pairs: `README.md` (English) and `README.zh-CN.md` (简体中文). Please update both.
 
-> The clients' interface text is currently Chinese only.
+> The interface follows your language: English by default, Simplified Chinese when your system, browser or Obsidian is set to Chinese. The CLI reads `LANG`; set `DROPIT_LANG=zh` or `DROPIT_LANG=en` to override.
 
 ## License
 

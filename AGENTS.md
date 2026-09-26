@@ -110,7 +110,7 @@ and replace every `{API}` placeholder with the service address from the CLI conf
 node -e 'console.log(require(require("os").homedir()+"/.config/dropit/config.json").endpoints[0])'
 ```
 
-Then run `dropit code` and give the user the pairing code for the *dropit 配对* shortcut.
+Then run `dropit code` and give the user the pairing code for the *dropit pair* shortcut (it has a Chinese name if they followed [the Chinese guide](./shortcuts/README.zh-CN.md)).
 
 ### Updating and uninstalling
 
@@ -125,14 +125,14 @@ rm ~/.local/bin/dropit && rm -rf ~/.dropit-client ~/.config/dropit   # remove
 
 | Output | Meaning | Fix |
 |---|---|---|
-| `还没配对` | No token yet | `dropit pair` / `dropit pair <code>` |
-| `token 无效` · `设备已被移除` | Token invalid or device revoked | Get a new code, `dropit pair <code>` |
-| `配对码无效` · `配对码已过期` | Wrong or expired code | Ask for a fresh code (valid 5 min) |
-| `设备数已达上限` | Device limit reached | `dropit devices`, then `dropit revoke <id>` an unused one |
-| `网络不可用（试过 N 个域名）` | No service address reachable | Check the network / proxy |
+| `Not paired yet` | No token yet | `dropit pair` / `dropit pair <code>` |
+| `Invalid token` · `This device was removed` | Token invalid or device revoked | Get a new code, `dropit pair <code>` |
+| `Invalid pairing code` · `Pairing code expired` | Wrong or expired code | Ask for a fresh code (valid 5 min) |
+| `Device limit reached` | Device limit reached | `dropit devices`, then `dropit revoke <id>` an unused one |
+| `Network unavailable (tried N addresses)` | No service address reachable | Check the network / proxy |
 | `Node < 22 …` | No global WebSocket | Upgrade Node.js for real-time `watch` |
 
-The CLI's interface text is Chinese for now; the table above maps it.
+Messages are shown in English unless `LANG` (or `DROPIT_LANG`) is Chinese. For predictable output while installing, run the CLI with `DROPIT_LANG=en`.
 
 ---
 
@@ -144,4 +144,5 @@ The CLI's interface text is Chinese for now; the table above maps it.
 - **No backend details.** Don't add infrastructure names, internal design references or server
   internals to docs or comments. Clients talk to the API; that's all they need to know.
 - **No build step, no dependencies.** Keep the CLI a single file and the extension loadable as-is.
-- Verify the CLI still parses: `node --check cli/dropit`.
+- **Interface text is bilingual.** Strings live in `T` (CLI) and `extension/i18n.js` (+ `_locales/` for the manifest), each with `en` and `zh`. Add every new string to both.
+- **Test before pushing:** `node test/i18n.test.mjs` and `node --check cli/dropit`.

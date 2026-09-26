@@ -1,10 +1,11 @@
 import { send } from './api.js';
+import { t } from './i18n.js';
 
 const MENUS = [
-  { id: 'selection', title: '把选中的字投进 dropit', contexts: ['selection'] },
-  { id: 'link', title: '把这个链接投进 dropit', contexts: ['link'] },
-  { id: 'image', title: '把图片地址投进 dropit', contexts: ['image'] },
-  { id: 'page', title: '把这个页面投进 dropit', contexts: ['page'] },
+  { id: 'selection', title: t.menuSelection, contexts: ['selection'] },
+  { id: 'link', title: t.menuLink, contexts: ['link'] },
+  { id: 'image', title: t.menuImage, contexts: ['image'] },
+  { id: 'page', title: t.menuPage, contexts: ['page'] },
 ];
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -25,12 +26,12 @@ chrome.contextMenus.onClicked.addListener((info) => {
 export async function drop(payload) {
   try {
     const res = await send(payload);
-    flash('✓', '#15803d', res.deduped ? `已投过了 #${res.seq}` : `已投递 #${res.seq}`);
+    flash('✓', '#15803d', res.deduped ? t.alreadySent(res.seq) : t.sent(res.seq));
     return res;
   } catch (err) {
     flash('✗', '#b91c1c', err.message);
     chrome.notifications.create({
-      type: 'basic', iconUrl: 'icon.png', title: 'dropit 投递失败', message: err.message,
+      type: 'basic', iconUrl: 'icon.png', title: t.failedTitle, message: err.message,
     });
     throw err;
   }
@@ -39,9 +40,9 @@ export async function drop(payload) {
 function flash(text, color, title) {
   chrome.action.setBadgeText({ text });
   chrome.action.setBadgeBackgroundColor({ color });
-  chrome.action.setTitle({ title: `dropit：${title}` });
+  chrome.action.setTitle({ title: `dropit: ${title}` });
   setTimeout(() => {
     chrome.action.setBadgeText({ text: '' });
-    chrome.action.setTitle({ title: '投进 dropit' });
+    chrome.action.setTitle({ title: t.actionTitle });
   }, 2500);
 }

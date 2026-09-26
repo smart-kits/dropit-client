@@ -4,19 +4,9 @@
  * No host_permissions: plain CORS requests are enough. Fewer permissions means
  * users install it more readily, and store review is faster.
  */
-const DEFAULT_ENDPOINTS = ['https://dropit.realeye.top'];
+import { t } from './i18n.js';
 
-// Error messages shown to the user, keyed by the API error code
-const MESSAGES = {
-  INVALID_TOKEN: 'token 无效，请重新配对',
-  DEVICE_REVOKED: '设备已被移除，请重新配对',
-  SCOPE_INSUFFICIENT: '这个 token 只能投递',
-  DEVICE_LIMIT_REACHED: '设备数已达上限，先移除一台',
-  PAIRING_CODE_INVALID: '配对码无效',
-  PAIRING_CODE_EXPIRED: '配对码已过期，请重新生成',
-  RATE_LIMITED: '投递过于频繁',
-  QUOTA_EXCEEDED: '队列已满，等旧内容过期',
-};
+const DEFAULT_ENDPOINTS = ['https://dropit.realeye.top'];
 
 // Each browser is its own device, so storage.local — never sync
 export const store = {
@@ -42,7 +32,7 @@ export async function api(method, path, body, auth = true) {
       const data = await res.json().catch(() => ({}));
       if (base !== endpoints[0]) await store.set({ endpoints: [base, ...endpoints.filter((e) => e !== base)] });
       if (!res.ok) {
-        const err = new Error(MESSAGES[data.error] ?? `请求失败 HTTP ${res.status}`);
+        const err = new Error(t.errors[data.error] ?? t.httpFailed(res.status));
         Object.assign(err, { code: data.error, data, handled: true });
         throw err;
       }
@@ -52,7 +42,7 @@ export async function api(method, path, body, auth = true) {
       lastErr = err;
     }
   }
-  throw new Error('网络不可用');
+  throw new Error(t.offline);
 }
 
 /** 200 and 409 (already sent today) both count as success */

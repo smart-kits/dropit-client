@@ -15,10 +15,10 @@ Not yet on the Chrome Web Store. Load it unpacked:
 
 ## First run
 
-Click the dropit icon. You'll be asked whether this is your first device (这是你的第一台设备吗？):
+Click the dropit icon. You'll be asked *Is this your first device?*
 
-- **First device** → 是，创建新账号 (*Yes, create a new account*)
-- **Already using dropit** → generate a pairing code on another device (e.g. `dropit code`), type it in, then 加入 (*Join*)
+- **First device** → *Yes, create a new account*
+- **Already using dropit** → generate a pairing code on another device (e.g. `dropit code`), type it in, then *Join*
 
 ## Usage
 
@@ -28,14 +28,14 @@ Click the dropit icon. You'll be asked whether this is your first device (这是
 | Right-click a link | The link address |
 | Right-click an image | The image **address** (not the file) |
 | Right-click the page | The page address |
-| Icon → 投当前页面 (*Send this page*) | The current page address |
+| Icon → *Send this page* | The current page address |
 
 **Feedback you can trust:**
 
 - **Success** — a green ✓ badge for 2.5 s. Sending the same thing again on the same day also counts as success; it is recognized and not stored twice.
 - **Failure** — a red ✗ badge **and** a system notification with the reason. Being offline is never shown as success.
 
-To disconnect this browser: icon → 在这个浏览器上退出 (*Sign out on this browser*).
+To disconnect this browser: icon → *Sign out on this browser*.
 
 ## Permissions
 
@@ -67,7 +67,7 @@ No build step — edit a file and reload the extension.
 
 - Send-only. To receive, use the [Obsidian plugin](https://github.com/smart-kits/dropit-obsidian) or `dropit watch`.
 - Images are sent as addresses, not files.
-- The interface is Chinese only for now.
+- The interface follows your language: English by default, Simplified Chinese when your browser is set to Chinese.
 
 ## License
 

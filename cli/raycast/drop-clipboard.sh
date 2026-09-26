@@ -2,9 +2,9 @@
 # Raycast Script Command — send the clipboard to dropit
 #
 # @raycast.schemaVersion 1
-# @raycast.title 投进 dropit
+# @raycast.title Send to dropit
 # @raycast.mode compact
 # @raycast.icon 📥
 # @raycast.packageName dropit
-# @raycast.description 把剪贴板内容投进 dropit
+# @raycast.description Send the clipboard to dropit
 pbpaste | dropit send

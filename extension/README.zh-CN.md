@@ -67,7 +67,7 @@ extension/
 
 - 只投不收。接收请用 [Obsidian 插件](https://github.com/smart-kits/dropit-obsidian/blob/main/README.zh-CN.md) 或 `dropit watch`。
 - 图片投的是地址，不是文件。
-- 界面目前只有中文。
+- 界面语言跟随浏览器：默认英文，浏览器设为中文时显示简体中文。
 
 ## 许可
 

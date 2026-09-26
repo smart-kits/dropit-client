@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "dropit" },
+  "extDescription": { "message": "右键或点图标，把当前页、选中的字、链接投进你自己的 dropit。" },
+  "actionTitle": { "message": "投进 dropit" }
+}
