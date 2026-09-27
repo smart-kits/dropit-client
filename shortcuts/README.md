@@ -5,24 +5,26 @@
 The main way to send from iPhone and iPad: the **share sheet** and **Back Tap**.
 Share a link or text, feel a short vibration — it's in your queue.
 
-It is two shortcuts, built with Apple's Shortcuts app:
+## Install (one tap)
 
-| Shortcut | Purpose | Run from |
-|---|---|---|
-| **dropit pair** | Run once to pair this device and save its token | Manually |
-| **dropit** | Send. Nothing to choose, nothing to confirm | Share sheet · Back Tap · Home Screen |
+1. On the iPhone or iPad, open **https://dropit.realeye.top** in Safari and tap **Install the shortcut**, then **Add Shortcut**.
+2. Pair it: on a device that already uses dropit, show a pairing code with its QR code
+   (web inbox → *Add a device → Show pairing code*). Scan it with the iPhone camera,
+   then tap **Set up the shortcut**. Shortcuts opens and says *Paired*.
 
-Pairing is a separate shortcut on purpose: the send path must never ask a question.
+That's it — share anything to **dropit**, or bind it to Back Tap (below).
+The shortcut gets its own **send-only** device (`ingest_only`): if its token ever leaked, it
+could not read your items, pair devices or change settings. The browser used for pairing stays signed out.
 
-> A one-tap install link is not available yet — for now, build the two shortcuts by hand
-> with the steps below. You can build them on a Mac: the Shortcuts app syncs them to your
-> iPhone through iCloud, and a keyboard makes this much faster.
-
-In the steps, **`{API}`** is the dropit service address — the same one your other clients use.
-You'll find it in the CLI config (`~/.config/dropit/config.json`, first entry of `endpoints`)
-or in Obsidian under *Settings → dropit → Server address*.
+The installed file is built by [`build.py`](./build.py) (`python3 shortcuts/build.py` on a Mac signs it).
+With no input — Home Screen or Back Tap — it sends the clipboard.
 
 ---
+
+## Build it yourself
+
+If you'd rather build the shortcuts by hand, here are the steps. You can build them on a Mac:
+the Shortcuts app syncs them to your iPhone through iCloud.
 
 ## 1 · dropit pair (run once)
 
@@ -35,7 +37,7 @@ or in Obsidian under *Settings → dropit → Server address*.
 | 5 | 　Ask for Input | Text, prompt `Pairing code` |
 | 6 | 　Get Contents of URL | `{API}/v1/pair/claim` · POST · JSON<br>`{"code": Provided Input, "device_name":"iPhone", "scope":"ingest_only"}` |
 | 7 | Get Dictionary Value | Key `token`, from the previous result |
-| 8 | Save File | To `iCloud Drive/Shortcuts/dropit.token`, **overwrite if the file exists** |
+| 8 | Save File | To `iCloud Drive/Shortcuts/dropit-token.txt`, **overwrite if the file exists** |
 | 9 | Show Notification | `dropit: paired` |
 
 - Get the pairing code from another device — `dropit code` in the CLI, or *Settings → dropit → Pairing code* in Obsidian. It's 6 characters, valid for 5 minutes, and forgiving about case, spaces, dashes and `0`/`O`, `1`/`I`/`l`.
@@ -51,30 +53,32 @@ Create a new shortcut. In *Details*, turn on **Show in Share Sheet** and accept 
 
 | # | Action | Settings |
 |---|---|---|
-| 1 | Get File | `iCloud Drive/Shortcuts/dropit.token` — **turn off** *Error If Not Found* |
+| 1 | Get File | `iCloud Drive/Shortcuts/dropit-token.txt` — **turn off** *Error If Not Found* |
 | 2 | If | *File* **does not have any value** → Show Notification `Run “dropit pair” first` → Stop |
-| 3 | Get Current Date | — |
-| 4 | Dictionary | Four keys, see below |
-| 5 | Get Contents of URL | `{API}/v1/ingest` · POST · JSON (the dictionary from step 4)<br>Header `Authorization` = `Bearer ` + the file from step 1 |
-| 6 | If | *Contents of URL* **has any value** → Vibrate; **Otherwise** → Show Notification `dropit: send failed` |
+| 3 | Dictionary | Three keys, see below |
+| 4 | Get Contents of URL | `{API}/v1/ingest` · POST · JSON (the dictionary from step 3)<br>Header `Authorization` = `Bearer ` + the file from step 1 |
+| 5 | Get Dictionary Value | Key `seq`, from *Contents of URL* |
+| 6 | If | *Dictionary Value* **has any value** → Vibrate; **Otherwise** → Show Notification `dropit: send failed` |
 
-The dictionary in step 4:
+The dictionary in step 3:
 
 | Key | Value |
 |---|---|
 | `kind` | `url` or `text` |
 | `raw` | Shortcut Input |
-| `client_ts` | Current Date → formatted as a **Unix timestamp**, × 1000 (milliseconds) |
 | `source` | `ios-shortcut` |
 
-No hashing and no date formatting are needed — duplicate detection is handled for you.
+No hashing and no timestamps are needed — duplicate detection and the time are handled for you.
+
+Check `seq`, not just "has any value": an error also comes back as a response (`{"error": …}`), so
+checking for any value would vibrate on failures too. Success — and a same-day duplicate — carries `seq`.
 
 ### Back Tap
 
 *Settings → Accessibility → Touch → Back Tap → Double Tap →* `dropit`.
 
 For apps that don't offer a share sheet, make a copy that reads the **Clipboard** instead
-(replace `raw` in step 4 with *Clipboard*): copy, then double-tap the back of your phone.
+(replace `raw` in step 3 with *Clipboard*): copy, then double-tap the back of your phone.
 
 ---
 
@@ -83,16 +87,14 @@ For apps that don't offer a share sheet, make a copy that reads the **Clipboard*
 | What happens | Meaning | What to do |
 |---|---|---|
 | One short vibration | Sent. Sending the same thing again on the same day also counts as success | — |
-| Notification `dropit: send failed` | No network, or the token is no longer valid | Check your connection; if it persists, run *dropit pair* again |
-| Notification `Run “dropit pair” first` | Not paired yet, or iCloud removed the token file | Run *dropit pair* |
-
-Shortcuts can't read HTTP status codes, so "offline" and "invalid token" look the same on the phone.
-That's a deliberate trade-off: nothing extra on the send path.
+| Notification `Send failed: …` | The server refused it; the code says why (e.g. `INVALID_TOKEN`, `RATE_LIMITED`) | For token errors, pair again |
+| Shortcuts shows an error | No network | Check your connection |
+| Notification `Not paired yet` | Not paired yet, or iCloud removed the token file | Pair again (step 2 of Install) |
 
 ## Limitations
 
 - Text and links only; files and photos aren't supported by the shortcut yet — use the [CLI](../cli/) for files.
-- These steps have not yet been verified end-to-end on a device. If a step doesn't match what you see, please open an issue.
+- The one-tap shortcut and these steps have not yet been verified end-to-end on a device. If something doesn't match what you see, please open an issue.
 
 ## License
 

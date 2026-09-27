@@ -31,7 +31,7 @@ and the easiest to verify.
 |---|---|---|
 | CLI | macOS / Linux terminal | ✅ yes |
 | Browser extension | Chrome / Edge | ⚠️ partly — loading it is 👤 user |
-| iOS Shortcuts | iPhone / iPad | ❌ no — hand the user the guide, with `{API}` filled in |
+| iOS Shortcuts | iPhone / iPad | ❌ no — 👤 the user installs it in one tap; you can check the device slot |
 | Obsidian plugin | Obsidian vault | ✅ mostly — see [dropit-obsidian/AGENTS.md](https://github.com/smart-kits/dropit-obsidian/blob/main/AGENTS.md) |
 
 ### A · CLI
@@ -103,14 +103,13 @@ arrived (e.g. with `dropit watch`).
 
 ### C · iOS Shortcuts
 
-Agents can't build shortcuts. Give the user [shortcuts/README.md](./shortcuts/README.md)
-and replace every `{API}` placeholder with the service address from the CLI config:
+👤 **User**, on the iPhone or iPad: open https://dropit.realeye.top in Safari →
+**Install the shortcut** → **Add Shortcut**. Details in [shortcuts/README.md](./shortcuts/README.md).
 
-```bash
-node -e 'console.log(require(require("os").homedir()+"/.config/dropit/config.json").endpoints[0])'
-```
-
-Then run `dropit code` and give the user the pairing code for the *dropit pair* shortcut (it has a Chinese name if they followed [the Chinese guide](./shortcuts/README.zh-CN.md)).
+To pair it, the user needs a QR code from a device that already uses dropit: the web inbox's
+*Add a device → Show pairing code*. They scan it with the iPhone camera and tap
+**Set up the shortcut** — no code to type. The shortcut becomes its own send-only device, so check
+`dropit me` first: on a plan with a device limit, a full account must free a slot (`dropit revoke <id>`).
 
 ### Updating and uninstalling
 
