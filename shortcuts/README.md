@@ -7,7 +7,7 @@ Share a link or text, feel a short vibration — it's in your queue.
 
 ## Install (one tap)
 
-1. On the iPhone or iPad, open **https://dropit.realeye.top** in Safari and tap **Install the shortcut**, then **Add Shortcut**.
+1. On the iPhone or iPad, open **https://dropit.smart-kits.xyz** in Safari and tap **Install the shortcut**, then **Add Shortcut**.
 2. Pair it: on a device that already uses dropit, show a pairing code with its QR code
    (web inbox → *Add a device → Show pairing code*). Scan it with the iPhone camera,
    then tap **Set up the shortcut**. Shortcuts opens and says *Paired*.

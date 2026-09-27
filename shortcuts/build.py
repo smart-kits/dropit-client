@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the dropit shortcut for iPhone / iPad.
 
-    python3 shortcuts/build.py [--api https://dropit.realeye.top] [--out shortcuts/dropit.shortcut]
+    python3 shortcuts/build.py [--api https://dropit.smart-kits.xyz] [--out shortcuts/dropit.shortcut]
 
 Writes an unsigned shortcut, then signs it with macOS `shortcuts sign --mode anyone`
 so it can be installed with one tap. Signing needs macOS 12+ signed in to iCloud.
@@ -115,7 +115,7 @@ def build(api):
         action('documentpicker.open', UUID=get_file, WFGetFilePath=TOKEN_FILE,
                WFFileErrorIfNotFound=False, WFShowFilePicker=False),
         *if_block(ref_output(get_file, 'File'), HAS_NO_VALUE, then=[
-            notify('Not paired yet: open dropit.realeye.top on this device. · 还没配对：在这台设备上打开 dropit.realeye.top。'),
+            notify('Not paired yet: open dropit.smart-kits.xyz on this device. · 还没配对：在这台设备上打开 dropit.smart-kits.xyz。'),
             action('exit'),
         ]),
         # 3 · What to send: the shared item, or the clipboard when there is none.
@@ -157,7 +157,7 @@ def build(api):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--api', default='https://dropit.realeye.top')
+    ap.add_argument('--api', default='https://dropit.smart-kits.xyz')
     ap.add_argument('--out', default='shortcuts/dropit.shortcut')
     args = ap.parse_args()
     unsigned = args.out.replace('.shortcut', '.unsigned.shortcut')

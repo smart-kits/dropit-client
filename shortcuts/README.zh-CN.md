@@ -7,7 +7,7 @@ iPhone 和 iPad 上最主要的投递入口：**分享面板**和**轻点背面*
 
 ## 安装（点一下）
 
-1. 在 iPhone 或 iPad 上用 Safari 打开 **https://dropit.realeye.top**，点「**安装快捷指令**」，再点「**添加快捷指令**」。
+1. 在 iPhone 或 iPad 上用 Safari 打开 **https://dropit.smart-kits.xyz**，点「**安装快捷指令**」，再点「**添加快捷指令**」。
 2. 配对：在已经用上 dropit 的设备上生成配对码和二维码（Web 收件箱 →「加一台设备 → 生成配对码」），
    用 iPhone 相机扫码，点「**设置快捷指令**」。快捷指令会打开并提示「配对完成」。
 

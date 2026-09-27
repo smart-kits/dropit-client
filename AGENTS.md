@@ -103,7 +103,7 @@ arrived (e.g. with `dropit watch`).
 
 ### C · iOS Shortcuts
 
-👤 **User**, on the iPhone or iPad: open https://dropit.realeye.top in Safari →
+👤 **User**, on the iPhone or iPad: open https://dropit.smart-kits.xyz in Safari →
 **Install the shortcut** → **Add Shortcut**. Details in [shortcuts/README.md](./shortcuts/README.md).
 
 To pair it, the user needs a QR code from a device that already uses dropit: the web inbox's
