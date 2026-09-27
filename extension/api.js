@@ -6,7 +6,7 @@
  */
 import { t } from './i18n.js';
 
-const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz', 'https://dropit.realeye.top'];
+const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
 
 // Each browser is its own device, so storage.local — never sync
 export const store = {

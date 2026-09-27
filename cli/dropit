@@ -16,7 +16,7 @@ const os = require('node:os');
 const readline = require('node:readline');
 
 const CONFIG = path.join(os.homedir(), '.config', 'dropit', 'config.json');
-const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz', 'https://dropit.realeye.top'];
+const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
 const HEARTBEAT_MS = 60_000;
 const STALE_MS = 150_000;
 const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
