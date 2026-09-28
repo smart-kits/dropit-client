@@ -5,7 +5,7 @@
 **发给自己 —— 从任何设备投，在每台设备收。**
 
 看到一条链接、想记一句话、手边一个文件：按一下就进队列，回到另一台设备上它已经在那儿了。
-内容保留 30 天，随时可以重新拉取。
+内容保留 14 天（付费版 30 天），随时可以重新拉取。
 
 这个仓库是 dropit 的开源客户端。Obsidian 插件在单独的仓库：
 [smart-kits/dropit-obsidian](https://github.com/smart-kits/dropit-obsidian)。

@@ -113,7 +113,7 @@ pbpaste | dropit send
 | `Invalid token` / `This device was removed` | The token is invalid or this device was revoked | `dropit pair <code>` again |
 | `Device limit reached` | You've reached the device limit | `dropit devices`, then `dropit revoke <id>` one you no longer use |
 | `Sending too fast` | Too many sends in a short time | Wait a moment and retry |
-| `Storage is full` | Your storage is full | Wait for old items to expire (30 days) |
+| `Storage is full` | Your storage is full | Wait for old items to expire (14 days, 30 on paid plans) |
 | `Network unavailable (tried N addresses)` | No service address was reachable | Check your connection |
 | `Upload failed …` | A file upload failed — reported, never silently dropped | Retry `dropit send -f` |
 

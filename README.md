@@ -5,7 +5,7 @@
 **Send things to yourself — from any device, to every device.**
 
 See a link, jot down a thought, grab a file: one tap drops it into your queue,
-and it's already waiting on your other devices. Items stay for 30 days and can be
+and it's already waiting on your other devices. Items stay for 14 days (30 on paid plans) and can be
 pulled again at any time.
 
 This repository holds the open-source dropit clients. The Obsidian plugin lives in
