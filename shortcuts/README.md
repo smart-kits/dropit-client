@@ -90,7 +90,7 @@ For apps that don't offer a share sheet, make a copy that reads the **Clipboard*
 ## Limitations
 
 - Text and links only; files and photos aren't supported by the shortcut yet — use the [CLI](../cli/) for files.
-- The one-tap shortcut and these steps have not yet been verified end-to-end on a device. If something doesn't match what you see, please open an issue.
+- The one-tap shortcut has been verified on an iPhone (iOS 26.6.1): pairing, sending from the share sheet, and running it directly. The build-it-yourself steps above have not been walked through on a device yet. If something doesn't match what you see, please open an issue.
 
 ## License
 

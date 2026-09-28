@@ -99,12 +99,22 @@ def notify(*body):
                   WFNotificationActionSound=True)
 
 
+def as_text(uid, ref):
+    """A Text action holding `ref`. Every If tests one of these, never the input or a variable:
+    on iOS 26 an If whose input is the Shortcut Input or a named variable fails with
+    "choose a value for each parameter" (ConditionalAction code 1), while an If on a Text
+    action's output runs. Verified on a device, iOS 26.6.1."""
+    return action('gettext', UUID=uid, WFTextActionText=text(ref))
+
+
 def build(api):
     token_from_input, get_file, clipboard, post, seq, err = (new_id() for _ in range(6))
+    input_text, token_text, seq_text = (new_id() for _ in range(3))
     actions = [
         # 1 · Pairing handoff from the web inbox: save the token, send nothing.
-        *if_block(ref_input(), BEGINS_WITH, string=PAIR_PREFIX, then=[
-            action('text.replace', UUID=token_from_input, WFInput=text(ref_input()),
+        as_text(input_text, ref_input()),
+        *if_block(ref_output(input_text, 'Text'), BEGINS_WITH, string=PAIR_PREFIX, then=[
+            action('text.replace', UUID=token_from_input, WFInput=text(ref_output(input_text, 'Text')),
                    WFReplaceTextFind=PAIR_PREFIX, WFReplaceTextReplace=''),
             action('documentpicker.save', WFInput=attachment(ref_output(token_from_input, 'Updated Text')),
                    WFAskWhereToSave=False, WFFileDestinationPath=TOKEN_FILE, WFSaveFileOverwrite=True),
@@ -114,25 +124,27 @@ def build(api):
         # 2 · Load the token.
         action('documentpicker.open', UUID=get_file, WFGetFilePath=TOKEN_FILE,
                WFFileErrorIfNotFound=False, WFShowFilePicker=False),
-        *if_block(ref_output(get_file, 'File'), HAS_NO_VALUE, then=[
+        as_text(token_text, ref_output(get_file, 'File')),
+        *if_block(ref_output(token_text, 'Text'), HAS_NO_VALUE, then=[
             notify('Not paired yet: open dropit.smart-kits.xyz on this device. · 还没配对：在这台设备上打开 dropit.smart-kits.xyz。'),
             action('exit'),
         ]),
         # 3 · What to send: the shared item, or the clipboard when there is none.
-        action('setvariable', WFVariableName='raw', WFInput=attachment(ref_input())),
-        *if_block(ref_input(), HAS_NO_VALUE, then=[
+        action('setvariable', WFVariableName='raw', WFInput=attachment(ref_output(input_text, 'Text'))),
+        *if_block(ref_output(input_text, 'Text'), HAS_NO_VALUE, then=[
             action('getclipboard', UUID=clipboard),
             action('setvariable', WFVariableName='raw', WFInput=attachment(ref_output(clipboard, 'Clipboard'))),
         ]),
         # 4 · Send. No choices, no confirmation.
         action('downloadurl', UUID=post, WFURL=f'{api}/v1/ingest', WFHTTPMethod='POST', WFHTTPBodyType='JSON',
                ShowHeaders=True,
-               WFHTTPHeaders=dictionary([('Authorization', ('Bearer ', ref_output(get_file, 'File')))]),
+               WFHTTPHeaders=dictionary([('Authorization', ('Bearer ', ref_output(token_text, 'Text')))]),
                WFJSONValues=dictionary([('kind', 'text'), ('raw', (ref_var('raw'),)), ('source', 'ios-shortcut')])),
         # 5 · Success carries `seq` (a same-day duplicate does too). Anything else is a loud failure.
         action('getvalueforkey', UUID=seq, WFInput=attachment(ref_output(post, 'Contents of URL')),
                WFGetDictionaryValueType='Value', WFDictionaryKey='seq'),
-        *if_block(ref_output(seq, 'Dictionary Value'), HAS_VALUE, then=[
+        as_text(seq_text, ref_output(seq, 'Dictionary Value')),
+        *if_block(ref_output(seq_text, 'Text'), HAS_VALUE, then=[
             action('vibrate'),
         ], otherwise=[
             action('getvalueforkey', UUID=err, WFInput=attachment(ref_output(post, 'Contents of URL')),
