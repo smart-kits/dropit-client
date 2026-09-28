@@ -51,9 +51,13 @@ const T = {
     folder: (dir) => `Receiving into ${dir}`,
     noWebSocket: 'Node.js < 22 has no global WebSocket — caught up, but real-time push is unavailable.',
     pullFailed: (msg) => `Pull failed: ${msg}`,
-    downloadFailed: (seq, status) => `Download failed #${seq}: HTTP ${status}`,
+    downloadFailed: (seq, why) => `Download failed #${seq}: ${why}`,
+    missingFile: (name) => `This file is no longer available (it expired or was removed): ${name}`,
+    retryHint: (seq) => `To fetch it again: dropit watch --from ${seq}`,
+    badFlag: (flag) => `${flag} needs a positive number`,
     wsConnected: 'Real-time push connected',
-    wsNotIncluded: 'Real-time push is not included in your plan — caught up with current items.',
+    wsNotIncluded: 'Caught up. Real-time push is not in your plan (new accounts get it for 14 days), '
+      + 'so watch stops here; run it again to pick up new items.',
     wsFailed: (msg) => `Real-time connection failed: ${msg}`,
     me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} devices · ${mb} MB · `
       + `real-time ${m.ws_available ? 'available' : 'unavailable'}`,
@@ -67,6 +71,8 @@ const T = {
   dropit send <text|link>   Or pipe it in: pbpaste | dropit send
   dropit send -f <file>     Send a file — images, PDFs, videos and more
   dropit watch [folder]     Receive into a local folder, in real time (default ~/dropit)
+      --from <#>            …pulling again from item #<#>
+      --days <n>            …pulling again the last <n> days
   dropit me                 Show plan and usage
   dropit devices            List devices
   dropit revoke <device_id> Revoke a device
@@ -99,9 +105,12 @@ Language: English by default; set DROPIT_LANG=zh for Simplified Chinese.
     folder: (dir) => `落地目录 ${dir}`,
     noWebSocket: 'Node.js < 22，没有全局 WebSocket —— 已补齐，实时推送不可用。',
     pullFailed: (msg) => `拉取失败：${msg}`,
-    downloadFailed: (seq, status) => `下载失败 #${seq} HTTP ${status}`,
+    downloadFailed: (seq, why) => `下载失败 #${seq}：${why}`,
+    missingFile: (name) => `这个文件已经取不到了（过期或已删除）：${name}`,
+    retryHint: (seq) => `重新拉取：dropit watch --from ${seq}`,
+    badFlag: (flag) => `${flag} 后面要跟一个正整数`,
     wsConnected: '实时推送已连接',
-    wsNotIncluded: '当前套餐不含实时推送，已补齐当前内容。',
+    wsNotIncluded: '已补齐。当前套餐不含实时推送（新账号有 14 天体验期），watch 就此退出；再运行一次即可接着收新内容。',
     wsFailed: (msg) => `实时连接失败：${msg}`,
     me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} 台设备 · ${mb} MB · `
       + `实时推送${m.ws_available ? '可用' : '不可用'}`,
@@ -115,6 +124,8 @@ Language: English by default; set DROPIT_LANG=zh for Simplified Chinese.
   dropit send <文本|链接>    也可以从管道读：pbpaste | dropit send
   dropit send -f <文件>      投文件 —— 图片、PDF、视频等
   dropit watch [目录]        实时收到本地文件夹（默认 ~/dropit）
+      --from <序号>          …并从第 <序号> 条起重新拉取
+      --days <天数>          …并重新拉取最近 <天数> 天
   dropit me                 查看套餐和用量
   dropit devices            列出设备
   dropit revoke <device_id> 吊销一台设备
@@ -228,19 +239,40 @@ async function sendFile(cfg, file) {
   }).catch((err) => die(t.uploadFailedNet(err.message)));
   if (!put.ok) die(t.uploadFailedHttp(put.status));   // fail loudly, never pretend it worked
 
-  await api(cfg, 'POST', `/v1/ingest/blob/${start.seq}/done`);
-  console.log(`✓ #${start.seq} ${path.basename(file)} ${(stat.size / 1024).toFixed(0)} KB`);
+  // The number from the first step is a placeholder while uploading; the item's real # comes back here.
+  const done = await api(cfg, 'POST', `/v1/ingest/blob/${start.seq}/done`);
+  console.log(`✓ #${done.seq} ${path.basename(file)} ${(stat.size / 1024).toFixed(0)} KB`);
 }
 
 /** Local-folder consumer: writes incoming items as files, in real time */
+/** `--name <positive number>` out of args (removed from them), or null when absent */
+function numberFlag(args, name) {
+  const i = args.indexOf(name);
+  if (i < 0) return null;
+  const n = Number(args[i + 1]);
+  args.splice(i, 2);
+  if (!Number.isInteger(n) || n < 1) throw new Error(t.badFlag(name));
+  return n;
+}
+
 async function watch(args) {
   const cfg = needToken();
+  const from = numberFlag(args, '--from');
+  const days = numberFlag(args, '--days');
   const dir = path.resolve(args[0] ?? cfg.folder ?? path.join(os.homedir(), 'dropit'));
   fs.mkdirSync(dir, { recursive: true });
   save({ ...cfg, folder: dir });
   console.log(t.folder(dir));
 
-  const state = { cursor: cfg.cursor ?? 0, syncing: false, socket: null, retry: 0, lastBeat: 0 };
+  // Pulling again from a point: files already in the folder are kept (writeItem skips them),
+  // so this fills in what's missing. The server's snapshot of this device's position only moves
+  // forward on its own, so it's reset too.
+  const state = { cursor: cfg.cursor ?? 0, since: 0, syncing: false, socket: null, retry: 0, lastBeat: 0 };
+  if (from || days) {
+    state.cursor = from ? from - 1 : 0;
+    state.since = days ? Date.now() - days * 86_400_000 : 0;
+    await api(cfg, 'POST', '/v1/cursor/reset', { to_seq: state.cursor });
+  }
   const sync = () => pullInto(dir, state);
 
   await sync();
@@ -248,7 +280,8 @@ async function watch(args) {
     console.log(t.noWebSocket);
     return;
   }
-  connect(state, sync);
+  // Without real-time there's nothing to wait for: catching up once is all a watch can do.
+  if (await connect(state, sync) === 'not-included') return;
   setInterval(() => heartbeat(state, sync), HEARTBEAT_MS);
   process.on('SIGINT', () => { state.socket?.close(); process.exit(0); });
 }
@@ -259,13 +292,18 @@ async function pullInto(dir, state) {
   try {
     for (let hasMore = true; hasMore; ) {
       const cfg = load();
-      const page = await api(cfg, 'GET', `/v1/pull?after=${state.cursor}&limit=200`);
-      for (const item of page.items) await writeItem(dir, item);
+      const since = state.since ? `&since=${state.since}` : '';
+      const page = await api(cfg, 'GET', `/v1/pull?after=${state.cursor}&limit=200${since}`);
+      for (const item of page.items) {
+        await writeItem(dir, item);
+        state.cursor = item.seq;                   // item by item: a failure stops exactly there
+      }
       state.cursor = page.next_after;              // advance only after writing: a duplicate beats a lost item
       save({ ...cfg, cursor: state.cursor });
       hasMore = page.has_more;
     }
   } catch (err) {
+    save({ ...load(), cursor: state.cursor });    // keep what did get written
     console.error(t.pullFailed(err.message));
   } finally {
     state.syncing = false;
@@ -278,10 +316,25 @@ async function writeItem(dir, item) {
     const name = `${stamp}-${item.seq}-${sanitize(item.meta?.filename ?? 'file')}`;
     const target = path.join(dir, name);
     if (fs.existsSync(target)) return;
-    const res = await fetch(item.url);
-    if (!res.ok) return console.error(t.downloadFailed(item.seq, res.status));
-    fs.writeFileSync(target, Buffer.from(await res.arrayBuffer()));
-    return console.log(`↓ ${name}`);
+    // A failed download leaves a note in its place and moves on: stopping would hold back everything
+    // after it, and a network that can't reach the file store never recovers on its own. The note says
+    // how to fetch it again; when a later pull succeeds, the note goes.
+    const note = path.join(dir, `${stamp}-${item.seq}.md`);
+    let reason;
+    try {
+      const res = await fetch(item.url);
+      if (res.ok) {
+        fs.writeFileSync(target, Buffer.from(await res.arrayBuffer()));
+        fs.rmSync(note, { force: true });
+        return console.log(`↓ ${name}`);
+      }
+      reason = res.status === 404 ? t.missingFile(name) : t.downloadFailed(item.seq, `HTTP ${res.status}`);
+    } catch (err) {
+      reason = t.downloadFailed(item.seq, err.message);
+    }
+    fs.writeFileSync(note, `---\ndropit_seq: ${item.seq}\nkind: ${item.kind}\nsource: ${item.source}\n---\n\n`
+      + `${reason}\n\n${t.retryHint(item.seq)}\n`);
+    return console.error(reason);
   }
   const target = path.join(dir, `${stamp}-${item.seq}.md`);
   if (fs.existsSync(target)) return;
@@ -305,7 +358,10 @@ async function connect(state, sync) {
     socket.onclose = () => { state.socket = null; reconnect(state, sync); };
     socket.onerror = () => socket.close();
   } catch (err) {
-    if (err.code === 'WS_REQUIRES_PAID') return console.log(t.wsNotIncluded);
+    if (err.code === 'WS_REQUIRES_PAID') {
+      console.log(t.wsNotIncluded);
+      return 'not-included';
+    }
     console.error(t.wsFailed(err.message));
     reconnect(state, sync);
   }
