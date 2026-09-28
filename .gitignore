@@ -4,3 +4,4 @@
 **/config.json
 .DS_Store
 shortcuts/*.unsigned.shortcut
+__pycache__/
