@@ -15,10 +15,10 @@ Not yet on the Chrome Web Store. Load it unpacked:
 
 ## First run
 
-Click the dropit icon. You'll be asked *Is this your first device?*
+Click the dropit icon. It opens on *Join with a pairing code*:
 
-- **First device** → *Yes, create a new account*
 - **Already using dropit** → generate a pairing code on another device (e.g. `dropit code`), type it in, then *Join*
+- **First device** → the small *Create a new account* link under the form
 
 ## Usage
 

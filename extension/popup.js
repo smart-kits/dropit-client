@@ -23,6 +23,7 @@ $('create').onclick = guard(async () => {
   adopt(await api('POST', '/v1/accounts', { device_name: t.deviceName(navigator.platform) }, false));
 });
 
+$('code').onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.isComposing) $('claim').click(); };
 $('claim').onclick = guard(async () => {
   const code = $('code').value.trim().toUpperCase();
   if (!code) return;

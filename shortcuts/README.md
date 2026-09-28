@@ -30,20 +30,16 @@ the Shortcuts app syncs them to your iPhone through iCloud.
 
 | # | Action | Settings |
 |---|---|---|
-| 1 | Choose from Menu | Prompt: `Is this your first device?` · Two items: `Yes, create a new account` / `No, I have a pairing code` |
-| 2 | └ **Yes** branch | |
-| 3 | 　Get Contents of URL | `{API}/v1/accounts` · POST · JSON `{"device_name":"iPhone"}` |
-| 4 | └ **No** branch | |
-| 5 | 　Ask for Input | Text, prompt `Pairing code` |
-| 6 | 　Get Contents of URL | `{API}/v1/pair/claim` · POST · JSON<br>`{"code": Provided Input, "device_name":"iPhone", "scope":"ingest_only"}` |
-| 7 | Get Dictionary Value | Key `token`, from the previous result |
-| 8 | Save File | To `iCloud Drive/Shortcuts/dropit-token.txt`, **overwrite if the file exists** |
-| 9 | Show Notification | `dropit: paired` |
+| 1 | Ask for Input | Text, prompt `Pairing code` |
+| 2 | Get Contents of URL | `{API}/v1/pair/claim` · POST · JSON<br>`{"code": Provided Input, "device_name":"iPhone", "scope":"ingest_only"}` |
+| 3 | Get Dictionary Value | Key `token`, from the previous result |
+| 4 | Save File | To `iCloud Drive/Shortcuts/dropit-token.txt`, **overwrite if the file exists** |
+| 5 | Show Notification | `dropit: paired` |
 
 - Get the pairing code from another device — `dropit code` in the CLI, or *Settings → dropit → Pairing code* in Obsidian. It's 6 characters, valid for 5 minutes, and forgiving about case, spaces, dashes and `0`/`O`, `1`/`I`/`l`.
-- Instead of *Ask for Input* you can use **Scan QR Code** on the pairing QR code; pass the scanned text to `code` as-is.
+- Instead of *Ask for Input* (step 1) you can use **Scan QR Code** on the pairing QR code; pass the scanned text to `code` as-is.
 - Joining with a code gives the phone a **send-only** (`ingest_only`) token on purpose: if it ever leaked, it could not read your items, pair new devices or change settings.
-- The *Yes* branch creates an account with a `full` token, because your first device must be able to issue pairing codes for the others.
+- It only **joins** an account. The shortcut can't receive items or issue pairing codes, so an account created from it would have no way to read anything or add another device. Create the account on another client first — only have an iPhone? Use the web inbox in Safari, then set up the shortcut from its *Add a device*.
 
 ---
 

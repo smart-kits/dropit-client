@@ -47,13 +47,14 @@ Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/READM
 
 1. **设置第一台设备**，这一步会创建你的账号。
    - 命令行：`dropit pair`
-   - Obsidian：设置 → dropit → 是，创建新账号 → 创建
-   - 浏览器扩展：点图标 → 是，创建新账号
+   - Obsidian：设置 → dropit → 第一次用 dropit？ → 创建新账号
+   - 浏览器扩展：点图标 → 表单下面的小字链接「创建新账号」
 2. **在这台设备上生成配对码**，5 分钟内有效。
    - 命令行：`dropit code`
    - Obsidian：设置 → dropit → 配对码 → 生成
 3. **在其他设备上用配对码加入。**
    - 命令行：`dropit pair <配对码>`
+   - Obsidian：设置 → dropit → 配对码 → 填入 → 加入
    - 浏览器扩展：点图标 → 输入配对码 → 加入
    - iOS：运行「dropit 配对」快捷指令
 4. **投一条试试** —— `dropit send "你好"`、在网页上右键、或者在手机上分享 —— 看它送达。

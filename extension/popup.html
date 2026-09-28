@@ -10,6 +10,9 @@
   button { font: inherit; width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 7px;
            border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
   button.cta { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .first { color: var(--dim); font-size: 12px; margin: 10px 0 0; }
+  .first button { width: auto; padding: 0; margin: 0 0 0 4px; border: 0; background: none; color: var(--fg);
+                  font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
   input { font: inherit; width: 100%; padding: 7px 9px; margin-bottom: 6px; border-radius: 7px;
           border: 1px solid var(--line); background: var(--card); color: var(--fg); box-sizing: border-box; }
   p { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
@@ -17,12 +20,14 @@
   [hidden] { display: none !important; }
 </style>
 
+<!-- Joining is the usual case. Creating an account by mistake splits someone's items across two
+     accounts, so it is a quiet link under the join form, not a button next to it. -->
 <div id="setup" hidden>
   <h1 data-i18n="setupTitle"></h1>
-  <button class="cta" id="create" data-i18n="create"></button>
   <input id="code" maxlength="10">
-  <button id="claim" data-i18n="claim"></button>
+  <button class="cta" id="claim" data-i18n="claim"></button>
   <p data-i18n="setupNote"></p>
+  <p class="first"><span data-i18n="firstTime"></span><button id="create" data-i18n="create"></button></p>
 </div>
 
 <div id="main" hidden>

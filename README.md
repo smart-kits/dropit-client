@@ -50,13 +50,14 @@ The CLI also powers Raycast, Alfred and the macOS Services menu — see [cli/](.
 
 1. **Set up your first device.** This creates your account.
    - CLI: `dropit pair`
-   - Obsidian: *Settings → dropit → Yes, create a new account → Create*
-   - Browser extension: click the icon → *Yes, create a new account*
+   - Obsidian: *Settings → dropit → First time using dropit? → Create a new account*
+   - Browser extension: click the icon → the *Create a new account* link under the form
 2. **Generate a pairing code** on that device. It is valid for 5 minutes.
    - CLI: `dropit code`
    - Obsidian: *Settings → dropit → Pairing code → Generate*
 3. **Join from every other device** with that code.
    - CLI: `dropit pair <code>`
+   - Obsidian: *Settings → dropit → Pairing code* → enter the code → *Join*
    - Browser extension: click the icon → enter the code → *Join*
    - iOS: run the *dropit pair* shortcut
 4. **Send something** — `dropit send "hello"`, right-click a page, or share from your phone — and watch it arrive.
