@@ -9,6 +9,12 @@ for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t.ht
 $('code').placeholder = t.html.codePlaceholder;
 const say = (text) => { $('msg').textContent = text; };
 
+// A new issue with the version and browser filled in — never anything from this account
+const version = chrome.runtime.getManifest().version;
+$('issue').href = 'https://github.com/smart-kits/dropit-client/issues/new'
+  + `?title=${encodeURIComponent(`[Chrome extension ${version}] `)}`
+  + `&body=${encodeURIComponent(t.issueBody(`Extension: ${version} · ${navigator.userAgent}`))}`;
+
 const guard = (fn) => async () => {
   try { await fn(); } catch (err) { say(err.message); }
 };

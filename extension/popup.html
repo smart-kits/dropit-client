@@ -17,6 +17,8 @@
           border: 1px solid var(--line); background: var(--card); color: var(--fg); box-sizing: border-box; }
   p { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
   #msg { color: var(--accent); min-height: 18px; font-size: 12px; margin-top: 8px; }
+  .foot { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); text-align: center; }
+  .foot a { color: var(--dim); }
   [hidden] { display: none !important; }
 </style>
 
@@ -38,4 +40,7 @@
 </div>
 
 <div id="msg"></div>
+<!-- The public repository: see the code, or say what went wrong -->
+<p class="foot"><a id="source" href="https://github.com/smart-kits/dropit-client" target="_blank" rel="noopener" data-i18n="source"></a>
+  · <a id="issue" target="_blank" rel="noopener" data-i18n="issue"></a></p>
 <script type="module" src="popup.js"></script>

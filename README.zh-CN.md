@@ -67,6 +67,11 @@ Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/READM
 - token 分两种权限：`full`（投、收、配对新设备）和 `ingest_only`（只投）。浏览器扩展和 iPhone 快捷指令用配对码加入时拿的是 `ingest_only`。
 - 设备丢了？在任意一台 `full` 设备上吊销它：先 `dropit devices`，再 `dropit revoke <device_id>`。
 
+## 问题和建议
+
+[提一个 issue](https://github.com/smart-kits/dropit-client/issues)。每个客户端里也有入口：浏览器扩展在弹窗底部，
+Web 收件箱在页面底部，命令行在 `dropit help` 的最后一行，iOS 快捷指令在首页它那一项里。issue 是公开的，不要贴 token（`dk_` 开头）。
+
 ## 参与贡献
 
 - 第一次提交前先打开提交前密钥扫描，保证 token 永远进不了仓库：

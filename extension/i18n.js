@@ -39,7 +39,10 @@ const EN = {
     page: 'Send this page',
     unpair: 'Sign out on this browser',
     mainNote: 'Right-click selected text, a link or an image to send it directly.',
+    source: 'Source code',
+    issue: 'Report a problem or idea',
   },
+  issueBody: (env) => `What happened, or what you'd like:\n\n\n---\n${env}\n\nPlease don't paste a token (dk_…) or anything private: issues are public.`,
 };
 
 const ZH = {
@@ -79,7 +82,10 @@ const ZH = {
     page: '投当前页面',
     unpair: '在这个浏览器上退出',
     mainNote: '选中文字、链接、图片可以直接右键投递。',
+    source: '源代码',
+    issue: '反馈问题或建议',
   },
+  issueBody: (env) => `发生了什么，或者你希望怎样：\n\n\n---\n${env}\n\n请不要贴 token（dk_ 开头）或私人内容：issue 是公开的。`,
 };
 
 export const STRINGS = { en: EN, zh: ZH };

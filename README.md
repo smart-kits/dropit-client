@@ -70,6 +70,12 @@ Pairing codes are 6 characters and forgiving: case, spaces, dashes, and `0`/`O` 
 - Tokens come in two scopes: `full` (send, receive, pair new devices) and `ingest_only` (send only). The browser extension and the iPhone shortcut use `ingest_only` when joining with a code.
 - Lost a device? Revoke it from any `full` device: `dropit devices`, then `dropit revoke <device_id>`.
 
+## Problems and ideas
+
+[Open an issue](https://github.com/smart-kits/dropit-client/issues). Each client links there too: the
+browser extension at the bottom of its popup, the web inbox at the bottom of the page, the CLI at the end of
+`dropit help`, and the iOS shortcut under its entry on the home page. Issues are public: never paste a token (`dk_…`).
+
 ## Contributing
 
 - Enable the pre-commit secret scan before your first commit, so a token can never land in the repository:

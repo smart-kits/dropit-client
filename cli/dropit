@@ -81,6 +81,7 @@ const T = {
   dropit revoke <device_id> Revoke a device
 
 Language: English by default; set DROPIT_LANG=zh for Simplified Chinese.
+Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/issues
 `,
   },
   zh: {
@@ -137,6 +138,7 @@ Language: English by default; set DROPIT_LANG=zh for Simplified Chinese.
   dropit revoke <device_id> 吊销一台设备
 
 语言：默认英文；设置 DROPIT_LANG=zh 使用简体中文。
+源代码，以及问题和建议：https://github.com/smart-kits/dropit-client/issues
 `,
   },
 };
