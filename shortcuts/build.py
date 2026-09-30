@@ -275,7 +275,7 @@ def send_files(api, token_text, count_text):
     now, stamp, stamp_enc, batch = (new_id() for _ in range(4))
     loop, item_type, item_type_text, named, blank, name, name_text, name_enc = (new_id() for _ in range(8))
     post, seq, seq_text, err, err_text, msg, line, failed, lang_text = (new_id() for _ in range(9))
-    label_key, label, some_failed, sent, offline = (new_id() for _ in range(5))
+    label_key, label, some_failed, sent, offline, mark, fresh, fresh_count, fresh_text, repeat = (new_id() for _ in range(10))
     item, index = ref_var('Repeat Item'), ref_var('Repeat Index')
     return [
         action('date', UUID=now, WFDateActionMode='Current Date'),
@@ -308,10 +308,16 @@ def send_files(api, token_text, count_text):
         action('getvalueforkey', UUID=seq, WFInput=attachment(ref_output(post, 'Contents of URL')),
                WFGetDictionaryValueType='Value', WFDictionaryKey='seq'),
         as_text(seq_text, ref_output(seq, 'Dictionary Value')),
-        *if_empty(ref_output(seq_text, 'Text'), then=[
-            action('getvalueforkey', UUID=err, WFInput=attachment(ref_output(post, 'Contents of URL')),
-                   WFGetDictionaryValueType='Value', WFDictionaryKey='error'),
-            as_text(err_text, ref_output(err, 'Dictionary Value')),
+        action('getvalueforkey', UUID=err, WFInput=attachment(ref_output(post, 'Contents of URL')),
+               WFGetDictionaryValueType='Value', WFDictionaryKey='error'),
+        as_text(err_text, ref_output(err, 'Dictionary Value')),
+        # A repeat within the minute also carries `seq` (409 DEDUPED): count only the new ones, one mark each
+        *if_empty(ref_output(seq_text, 'Text'), otherwise=[
+            *if_empty(ref_output(err_text, 'Text'), then=[
+                action('gettext', UUID=mark, WFTextActionText=text(ref_var('fresh'), 'x')),
+                action('setvariable', WFVariableName='fresh', WFInput=attachment(ref_output(mark, 'Text'))),
+            ]),
+        ], then=[
             *say(msg, 'error:', ref_output(err_text, 'Text')),
             *if_empty(ref_output(msg, 'Text'), then=[
                 *say(offline, 'offline'),
@@ -325,8 +331,16 @@ def send_files(api, token_text, count_text):
         action('repeat.each', GroupingIdentifier=loop, WFControlFlowMode=2),
         as_text(failed, ref_var('failed')),
         *if_empty(ref_output(failed, 'Text'), then=[
+          as_text(fresh, ref_var('fresh')),
+          *if_empty(ref_output(fresh, 'Text'), then=[
+            # every one was sent a moment ago already
+            *say(repeat, 'repeat'),
+            notice(ref_output(repeat, 'Text'), sound=False),
+          ], otherwise=[
             action('vibrate'),
-            # "3 photo/video sent" · "已发送 3 张照片/视频" — named after the last item's type
+            action('count', UUID=fresh_count, WFCountType='Characters', Input=attachment(ref_output(fresh, 'Text'))),
+            as_text(fresh_text, ref_output(fresh_count, 'Count')),
+            # "3 photo/video sent" · "已发送 3 张照片/视频" — the new ones, named after the last item's type
             *say(label_key, 'label:', ref_var('type')),
             *if_empty(ref_output(label_key, 'Text'), then=[
                 *say(label, 'label:'),
@@ -337,10 +351,11 @@ def send_files(api, token_text, count_text):
             *say(sent, 'sent'),
             as_text(lang_text, ref_var('lang')),
             *if_block(ref_output(lang_text, 'Text'), BEGINS_WITH, string='zh', then=[
-                notice(ref_output(sent, 'Text'), ' ', ref_output(count_text, 'Text'), ' ', ref_var('label'), sound=False),
+                notice(ref_output(sent, 'Text'), ' ', ref_output(fresh_text, 'Text'), ' ', ref_var('label'), sound=False),
             ], otherwise=[
-                notice(ref_output(count_text, 'Text'), ' ', ref_var('label'), ' ', ref_output(sent, 'Text'), sound=False),
+                notice(ref_output(fresh_text, 'Text'), ' ', ref_var('label'), ' ', ref_output(sent, 'Text'), sound=False),
             ]),
+          ]),
         ], otherwise=[
             *say(some_failed, 'some_failed'),
             notice(ref_output(some_failed, 'Text'), '\n', ref_output(failed, 'Text')),

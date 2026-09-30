@@ -41,7 +41,7 @@ The CLI also powers Raycast, Alfred and the macOS Services menu — see [cli/](.
 - **One step to send.** No forms, no choices on the send path — share, right-click or type one command.
 - **Real-time delivery.** Receivers get new items over a live connection and catch up automatically after being offline.
 - **Nothing gets lost.** Receivers advance their position only after an item is safely written; a crash means a duplicate at worst, never a gap.
-- **Duplicate-safe.** Sending the same thing twice on the same day is recognized and not stored twice.
+- **Duplicate-safe.** The same thing sent twice in a row within a minute (a double tap, a retry) is stored once. Sent again later, it arrives again.
 - **Every device is separate.** Each device is paired on its own and can be revoked on its own. Send-only devices (browser, phone) cannot read your history.
 - **Minimal permissions.** The browser extension requests no host permissions at all.
 - **No build step, no dependencies.** The CLI is a single Node.js file; the extension loads as-is.

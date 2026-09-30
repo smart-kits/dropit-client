@@ -32,7 +32,7 @@ Click the dropit icon. It opens on *Join with a pairing code*:
 
 **Feedback you can trust:**
 
-- **Success** — a green ✓ badge for 2.5 s. Sending the same thing again on the same day also counts as success; it is recognized and not stored twice.
+- **Success** — a green ✓ badge for 2.5 s. Sending the same thing again within a minute also counts as success; it is recognized and not stored twice.
 - **Failure** — a red ✗ badge **and** a system notification with the reason. Being offline is never shown as success.
 
 To disconnect this browser: icon → *Sign out on this browser*.

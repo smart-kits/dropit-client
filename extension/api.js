@@ -45,7 +45,7 @@ export async function api(method, path, body, auth = true) {
   throw new Error(t.offline);
 }
 
-/** 200 and 409 (already sent today) both count as success */
+/** 200 and 409 (the same thing sent a moment ago) both count as success */
 export async function send({ kind, raw, source = 'chrome-extension' }) {
   try {
     return await api('POST', '/v1/ingest', { kind, raw, source, client_ts: Date.now() });
