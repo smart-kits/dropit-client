@@ -29,12 +29,28 @@ Instructions for agents are in [AGENTS.md](./AGENTS.md).
 
 | Client | Platform | Sends | Receives | Guide |
 |---|---|:-:|:-:|---|
-| **CLI** | macOS · Linux (Node.js ≥ 18) | ✅ text, links, files | ✅ into a local folder | [cli/](./cli/) |
+| **iOS Shortcut** | iPhone · iPad | ✅ text, links, photos, videos, files | — | [shortcuts/](./shortcuts/) |
 | **Browser extension** | Chrome · Edge | ✅ pages, links, selected text | — | [extension/](./extension/) |
-| **iOS Shortcuts** | iPhone · iPad | ✅ share sheet, Back Tap | — | [shortcuts/](./shortcuts/) |
-| **Obsidian plugin** | Desktop · mobile | — | ✅ as notes in your vault | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian) |
+| **CLI** | macOS · Linux (Node.js ≥ 18) | ✅ text, links, files | ✅ into a local folder | [cli/](./cli/) |
+| **Obsidian plugin** | Desktop · mobile | ✅ selected text, notes, files | ✅ as notes in your vault | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian) |
+| **Web inbox** | Any browser, at [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) | ✅ text, links, up to 5 files at once | ✅ in the page | — |
 
 The CLI also powers Raycast, Alfred and the macOS Services menu — see [cli/](./cli/).
+
+## What can I send, and how?
+
+| On | Text | A link | Photos and videos | Files (PDF, Excel, …) |
+|---|---|---|---|---|
+| **iPhone / iPad** | In any app: select → *Share* → **dropit** | *Share* → **dropit** (Safari, any app) | *Photos* → pick one or several → *Share* → **dropit** | *Files* → press and hold → *Share* → **dropit** |
+| **Chrome / Edge** | Select → right-click → *Send selected text* | Right-click the link; or the toolbar icon → *Send this page* | Right-click → sends the image's **address** | — |
+| **Terminal** | `dropit send "hello"` · `pbpaste \| dropit send` | `dropit send https://…` | `dropit send -f photo.jpg` | `dropit send -f report.pdf` |
+| **Obsidian** | Select → right-click → *Send to dropit* | — | Right-click it in the file list | Right-click a note or files (several at once) |
+| **Any browser** | Type in the web inbox → press the stamp | Same | Pick, drag or paste (up to 5) | Same |
+
+- **Nothing to choose.** Send, and it's on your other devices a few seconds later: in Obsidian as notes, in the web inbox, or in the CLI's folder.
+- **Size:** a single file up to 5 MB on the free plan, 100 MB on the paid plan. Long videos pass that easily.
+- **On the iPhone, a notification says what went** ("3 photo/video sent") or why not. In a web page, a PDF goes as its link; save it to *Files* first to send the PDF itself.
+- **Sent twice by accident?** The same thing twice in a row within a minute is kept once.
 
 ## Features
 

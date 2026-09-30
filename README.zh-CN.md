@@ -26,12 +26,28 @@
 
 | 客户端 | 平台 | 投 | 收 | 说明 |
 |---|---|:-:|:-:|---|
-| **命令行** | macOS · Linux（Node.js ≥ 18） | ✅ 文本、链接、文件 | ✅ 落到本地文件夹 | [cli/](./cli/README.zh-CN.md) |
+| **iOS 快捷指令** | iPhone · iPad | ✅ 文字、链接、照片、视频、文件 | — | [shortcuts/](./shortcuts/README.zh-CN.md) |
 | **浏览器扩展** | Chrome · Edge | ✅ 页面、链接、选中的字 | — | [extension/](./extension/README.zh-CN.md) |
-| **iOS 快捷指令** | iPhone · iPad | ✅ 分享面板、轻点背面 | — | [shortcuts/](./shortcuts/README.zh-CN.md) |
-| **Obsidian 插件** | 桌面 · 移动 | — | ✅ 落成 vault 里的笔记 | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian/blob/main/README.zh-CN.md) |
+| **命令行** | macOS · Linux（Node.js ≥ 18） | ✅ 文本、链接、文件 | ✅ 落到本地文件夹 | [cli/](./cli/README.zh-CN.md) |
+| **Obsidian 插件** | 桌面 · 移动 | ✅ 选中的字、笔记、文件 | ✅ 落成 vault 里的笔记 | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian/blob/main/README.zh-CN.md) |
+| **Web 收件箱** | 任意浏览器，打开 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) | ✅ 文字、链接、一次最多 5 个文件 | ✅ 就在页面里 | — |
 
 Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/README.zh-CN.md)。
+
+## 能发什么、怎么发
+
+| 在哪 | 文字 | 链接 | 照片和视频 | 文件（PDF、Excel……） |
+|---|---|---|---|---|
+| **iPhone / iPad** | 任意 App 里选中 →「共享」→ **dropit** | 「共享」→ **dropit**（Safari 或任意 App） | 「照片」里选一张或几张 →「共享」→ **dropit** | 「文件」App 里长按 →「共享」→ **dropit** |
+| **Chrome / Edge** | 选中 → 右键 →「把选中的字投进 dropit」 | 在链接上右键；或点工具栏图标 →「投当前页面」 | 右键 → 发的是图片的**地址** | — |
+| **终端** | `dropit send "你好"` · `pbpaste \| dropit send` | `dropit send https://…` | `dropit send -f photo.jpg` | `dropit send -f report.pdf` |
+| **Obsidian** | 选中 → 右键 →「发到 dropit」 | — | 在文件列表里右键它 | 右键一篇笔记或几个文件（可多选） |
+| **任意浏览器** | 在 Web 收件箱里输入 → 按邮戳 | 同左 | 选文件、拖进来或粘贴（最多 5 个） | 同左 |
+
+- **不用做任何选择。** 发出去，几秒后就在你的其他设备上：Obsidian 里是笔记，Web 收件箱里，或命令行的文件夹里。
+- **大小：** 单个文件免费版最大 5 MB，付费版 100 MB。长视频很容易超过。
+- **iPhone 上会弹通知**告诉你发出了什么（「已发送 3 张照片/视频」），或者为什么没发出去。网页里的 PDF 发的是它的链接；想发 PDF 本身，先存到「文件」App。
+- **不小心发了两次？** 1 分钟内紧挨着发同样的内容，只算一次。
 
 ## 特性
 
