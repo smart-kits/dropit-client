@@ -3,7 +3,7 @@
 **English** · [简体中文](./README.zh-CN.md)
 
 The main way to send from iPhone and iPad: the **share sheet** and **Back Tap**.
-Share a link or text, feel a short vibration — it's in your queue.
+Share photos, videos, files, a link or some text; a notification says what went — "3 photo/video sent".
 
 ## Install (one tap)
 
@@ -17,7 +17,13 @@ The shortcut gets its own **send-only** device (`ingest_only`): if its token eve
 could not read your items, pair devices or change settings. The browser used for pairing stays signed out.
 
 The installed file is built by [`build.py`](./build.py) (`python3 shortcuts/build.py` on a Mac signs it).
-With no input — Home Screen or Back Tap — it sends the clipboard.
+
+- **Photos, videos, files, PDFs** are uploaded one by one, as they are. Several shared at once arrive as one delivery.
+- **Text, links, notes** are sent as text. A PDF open in a web page goes as its link; to send the PDF itself, save it to Files first and share it from there.
+- **No input** (Home Screen, Back Tap) sends the clipboard. Coming from the share sheet, it never falls back to the clipboard.
+- The same thing sent twice in a row within a minute counts once (a double tap); sent again later, or with something in between, it arrives again.
+- If it's already paired, pairing again asks before replacing.
+- It speaks English, or Chinese when the phone is set to Chinese.
 
 ---
 
@@ -82,15 +88,19 @@ For apps that don't offer a share sheet, make a copy that reads the **Clipboard*
 
 | What happens | Meaning | What to do |
 |---|---|---|
-| One short vibration | Sent. Sending the same thing again on the same day also counts as success | — |
-| Notification `Send failed: …` | The server refused it; the code says why (e.g. `INVALID_TOKEN`, `RATE_LIMITED`) | For token errors, pair again |
+| A vibration and `… sent` | Sent: how many, and what (photos/videos, files, PDFs, text, a link) | — |
+| `Already sent a moment ago` | The same thing twice in a row within a minute; it wasn't sent again | Wait a minute to send it again |
+| `Couldn't send: …` / `Some didn't go: …` | Refused; the reason follows (too large for your plan, storage full, pair again…) | Do what it says; to pair again, repeat step 2 of Install |
+| `Couldn't reach dropit, or the file is over 100 MB` | No answer from the service: no network, or the file is too large | Check the connection; a single file can be up to 100 MB |
 | Shortcuts shows an error | No network | Check your connection |
 | Notification `Not paired yet` | Not paired yet, or iCloud removed the token file | Pair again (step 2 of Install) |
 
 ## Limitations
 
-- Text and links only; files and photos aren't supported by the shortcut yet — use the [CLI](../cli/) for files.
-- The one-tap shortcut has been verified on an iPhone (iOS 26.6.1): pairing, sending from the share sheet, and running it directly. The build-it-yourself steps above have not been walked through on a device yet. If something doesn't match what you see, please open an issue.
+- A single file can be up to 100 MB (5 MB on the free plan). Long videos pass that easily.
+- PDFs and JSON files don't come with their names, so they're named after when they were sent (`dropit 09-30 15.08.pdf`). Photos and other files keep theirs.
+- Verified on devices: pairing and sending text on iOS 26.6.1; sharing photos (one and several), a video, a PDF, Excel and JSON on iOS 27. The build-it-yourself steps above cover text and links only, and haven't been walked through on a device.
+- Something wrong, or an idea? [Open an issue](https://github.com/smart-kits/dropit-client/issues/new?title=%5BiOS%20Shortcut%5D%20). Issues are public: never paste a token.
 
 ## License
 
