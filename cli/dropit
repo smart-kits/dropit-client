@@ -59,7 +59,7 @@ const T = {
     retryHint: (seq) => `To fetch it again: dropit watch --from ${seq}`,
     badFlag: (flag) => `${flag} needs a positive number`,
     wsConnected: 'Real-time push connected',
-    wsNotIncluded: 'Caught up. Real-time push is not in your plan (new accounts get it for 14 days), '
+    wsNotIncluded: 'Caught up. Real-time push is not in your plan (new accounts get it for 10 days), '
       + 'so watch stops here; run it again to pick up new items.',
     wsFailed: (msg) => `Real-time connection failed: ${msg}`,
     me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} devices · ${mb} MB · `
@@ -117,7 +117,7 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     retryHint: (seq) => `重新拉取：dropit watch --from ${seq}`,
     badFlag: (flag) => `${flag} 后面要跟一个正整数`,
     wsConnected: '实时推送已连接',
-    wsNotIncluded: '已补齐。当前套餐不含实时推送（新账号有 14 天体验期），watch 就此退出；再运行一次即可接着收新内容。',
+    wsNotIncluded: '已补齐。当前套餐不含实时推送（新账号有 10 天体验期），watch 就此退出；再运行一次即可接着收新内容。',
     wsFailed: (msg) => `实时连接失败：${msg}`,
     me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} 台设备 · ${mb} MB · `
       + `实时推送${m.ws_available ? '可用' : '不可用'}`,

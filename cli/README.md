@@ -57,7 +57,7 @@ connected and writes new items the moment they arrive.
 - **A failed download doesn't hold up the rest.** It leaves a `YYYY-MM-DD-<seq>.md` note saying why, and receiving goes on. `dropit watch --from <seq>` fetches it again and replaces the note.
 - **Pull again from a point.** `--from <seq>` starts again from that item; `--days <n>` pulls the last *n* days again. Files already in the folder are kept, so this fills in what's missing.
 - **Stays alive across sleep.** A heartbeat every 60 s detects dead connections (after sleep/wake, a socket often looks open but receives nothing) and reconnects with backoff from 1 s up to 60 s.
-- **Without real-time push** (Node.js < 22, or not included in your plan — new accounts get it for 14 days), `watch` catches up once and tells you why it stopped. Run it again, or on a schedule, to pick up new items.
+- **Without real-time push** (Node.js < 22, or not included in your plan — new accounts get it for 10 days), `watch` catches up once and tells you why it stopped. Run it again, or on a schedule, to pick up new items.
 
 ### Keep `watch` running (macOS launchd)
 
@@ -113,7 +113,7 @@ pbpaste | dropit send
 | `Invalid token` / `This device was removed` | The token is invalid or this device was revoked | `dropit pair <code>` again |
 | `Device limit reached` | You've reached the device limit | `dropit devices`, then `dropit revoke <id>` one you no longer use |
 | `Sending too fast` | Too many sends in a short time | Wait a moment and retry |
-| `Storage is full` | Your storage is full | Wait for old items to expire (14 days, 30 on paid plans) |
+| `Storage is full` | Your storage is full | Wait for old items to expire (1 day after sending, 10 on paid plans) |
 | `Network unavailable (tried N addresses)` | No service address was reachable | Check your connection |
 | `Upload failed …` | A file upload failed — reported, never silently dropped | Retry `dropit send -f` |
 

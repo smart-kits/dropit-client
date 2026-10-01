@@ -5,8 +5,8 @@
 **Send things to yourself — from any device, to every device.**
 
 See a link, jot down a thought, grab a file: one tap drops it into your queue,
-and it's already waiting on your other devices. Items stay for 14 days (30 on paid plans) and can be
-pulled again at any time.
+and it's already waiting on your other devices. Items stay for 1 day after they're sent (10 days on paid plans) — dropit delivers, it doesn't store —
+and can be pulled again until then.
 
 This repository holds the open-source dropit clients. The Obsidian plugin lives in
 its own repository: [smart-kits/dropit-obsidian](https://github.com/smart-kits/dropit-obsidian).
