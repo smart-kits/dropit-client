@@ -59,6 +59,11 @@ const T = {
     retryHint: (seq) => `To fetch it again: dropit watch --from ${seq}`,
     badFlag: (flag) => `${flag} needs a positive number`,
     wsConnected: 'Real-time push connected',
+    wsConnectedTrial: (left) => `Real-time push connected · trial: ${left}`,
+    daysLeft: (n) => (n < 1 ? 'less than a day left' : `${n} day${n === 1 ? '' : 's'} left`),
+    wsTrialEnding: 'Real-time push ends in less than a day (new accounts get it for 10 days). After that, watch catches up and exits.',
+    wsTrialOver: 'Caught up. The 10-day real-time trial has ended, so watch exits here; run it again to catch up on new items.',
+    wsTrialFull: 'Caught up. Today\'s real-time spots are full — watch waits and reconnects a little after midnight UTC.',
     wsNotIncluded: 'Caught up. Real-time push is not in your plan (new accounts get it for 10 days), '
       + 'so watch stops here; run it again to pick up new items.',
     wsFailed: (msg) => `Real-time connection failed: ${msg}`,
@@ -117,6 +122,11 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     retryHint: (seq) => `重新拉取：dropit watch --from ${seq}`,
     badFlag: (flag) => `${flag} 后面要跟一个正整数`,
     wsConnected: '实时推送已连接',
+    wsConnectedTrial: (left) => `实时推送已连接 · 体验${left}`,
+    daysLeft: (n) => (n < 1 ? '不到 1 天' : `还剩 ${n} 天`),
+    wsTrialEnding: '实时推送体验不到 1 天就结束了（新账号有 10 天）。之后 watch 补齐一次就退出。',
+    wsTrialOver: '已补齐。10 天的实时推送体验已结束，watch 就此退出；再运行一次即可接着收新内容。',
+    wsTrialFull: '已补齐。今天的实时名额满了 —— watch 等到 UTC 零点过后自动重连。',
     wsNotIncluded: '已补齐。当前套餐不含实时推送（新账号有 10 天体验期），watch 就此退出；再运行一次即可接着收新内容。',
     wsFailed: (msg) => `实时连接失败：${msg}`,
     me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} 台设备 · ${mb} MB · `
@@ -275,7 +285,7 @@ async function watch(args) {
   // Pulling again from a point: files already in the folder are kept (writeItem skips them),
   // so this fills in what's missing. The server's snapshot of this device's position only moves
   // forward on its own, so it's reset too.
-  const state = { cursor: cfg.cursor ?? 0, since: 0, syncing: false, socket: null, retry: 0, lastBeat: 0 };
+  const state = { cursor: cfg.cursor ?? 0, since: 0, syncing: false, socket: null, retry: 0, lastBeat: 0, until: null, off: null };
   if (from || days) {
     state.cursor = from ? from - 1 : 0;
     state.since = days ? Date.now() - days * 86_400_000 : 0;
@@ -288,8 +298,8 @@ async function watch(args) {
     console.log(t.noWebSocket);
     return;
   }
-  // Without real-time there's nothing to wait for: catching up once is all a watch can do.
-  if (await connect(state, sync) === 'not-included') return;
+  // Without real-time there's nothing to wait for: catching up once is all a watch can do (stopRealtime exits).
+  await connect(state, sync);
   setInterval(() => heartbeat(state, sync), HEARTBEAT_MS);
   process.on('SIGINT', () => { state.socket?.close(); process.exit(0); });
 }
@@ -354,34 +364,93 @@ async function writeItem(dir, item) {
 // ── Real-time (same liveness logic as the Obsidian plugin) ──────────────
 
 async function connect(state, sync) {
-  if (state.socket) return;
+  if (state.socket || state.off) return;
   const cfg = load();
   try {
-    const { ticket } = await api(cfg, 'POST', '/v1/ws/ticket');
+    const { ticket, realtime_until: until } = await api(cfg, 'POST', '/v1/ws/ticket');
+    state.until = until ?? null;                 // null = paid, always on; otherwise the end of the trial
+    state.ticketDay = Math.floor(Date.now() / 86_400_000);   // the trial's real-time is granted per UTC day
     const base = (cfg.endpoints ?? DEFAULT_ENDPOINTS)[0].replace(/^http/, 'ws').replace(/\/$/, '');
     const socket = new WebSocket(`${base}/v1/ws?ticket=${encodeURIComponent(ticket)}`);
     state.socket = socket;
-    socket.onopen = () => { state.retry = 0; state.lastBeat = Date.now(); console.log(t.wsConnected); };
-    socket.onmessage = (ev) => { state.lastBeat = Date.now(); if (ev.data !== 'pong') sync(); };
-    socket.onclose = () => { state.socket = null; reconnect(state, sync); };
+    socket.onopen = () => {
+      state.retry = 0;
+      state.lastBeat = Date.now();
+      console.log(state.until == null ? t.wsConnected : t.wsConnectedTrial(trialLeft(state.until)));
+    };
+    socket.onmessage = (ev) => {
+      state.lastBeat = Date.now();
+      if (ev.data === 'pong') return;
+      // The last push of a day whose real-time spots ran out says so; the server then closes the socket.
+      let msg = null;
+      try { msg = JSON.parse(ev.data); } catch { /* not JSON: an older server's message */ }
+      // Off right away, so the close that follows doesn't reconnect; the notice waits for the catch-up it announces
+      if (msg?.end === 'trial_full') state.off = 'trial_full';
+      const pulled = sync();
+      if (msg?.end === 'trial_full') pulled.finally(() => stopRealtime(state, sync, 'trial_full'));
+    };
+    socket.onclose = () => { if (state.socket === socket) state.socket = null; reconnect(state, sync); };
     socket.onerror = () => socket.close();
   } catch (err) {
-    if (err.code === 'WS_REQUIRES_PAID') {
-      console.log(t.wsNotIncluded);
-      return 'not-included';
-    }
+    if (err.code === 'WS_REQUIRES_PAID') return stopRealtime(state, sync, err.data?.reason);
     console.error(t.wsFailed(err.message));
     reconnect(state, sync);
   }
 }
 
+/**
+ * Real-time is off. trial_full: spots are counted per UTC day, so wait and reconnect a little after midnight
+ * (spread over ten minutes). Otherwise (trial over, or not in the plan) there's nothing to wait for: exit.
+ */
+function stopRealtime(state, sync, why) {
+  state.off = why ?? 'plan';
+  const socket = state.socket;
+  state.socket = null;
+  socket?.close();
+  if (why !== 'trial_full') {
+    console.log(why === 'trial_over' ? t.wsTrialOver : t.wsNotIncluded);
+    process.exit(0);                             // also when it happens on a reconnect, not just at start
+  }
+  console.log(t.wsTrialFull);
+  const DAY = 86_400_000;
+  clearTimeout(state.retryTimer);                // one retry, however many times today said no
+  state.retryTimer = setTimeout(() => { state.off = null; connect(state, sync); }, DAY - (Date.now() % DAY) + Math.random() * 600_000);
+  return 'full';
+}
+
+/** "3 days left" — counts whole days up, under a day says so */
+function trialLeft(until) {
+  const left = until - Date.now();
+  return t.daysLeft(left < 86_400_000 ? 0 : Math.ceil(left / 86_400_000));
+}
+
 function reconnect(state, sync) {
+  if (state.off) return;
   const delay = BACKOFF_MS[Math.min(state.retry++, BACKOFF_MS.length - 1)];
   setTimeout(() => connect(state, sync), delay).unref?.();
 }
 
 /** After sleep/wake a socket often goes stale while readyState still says OPEN — ping and time it. */
 function heartbeat(state, sync) {
+  if (state.off) return;
+  // While on the trial, ask for a fresh ticket (a) a little after each UTC midnight — real-time is granted per day and
+  // a socket can stay open for days — and (b) when the trial ends by the local clock, at most hourly: the server decides,
+  // since the plan may have been upgraded meanwhile (a ticket with no end), or it really ended (403 trial_over → exit).
+  if (state.until != null && state.socket) {
+    const now = Date.now();
+    const left = state.until - now;
+    if (left > 0 && left < 86_400_000 && !state.warned) { state.warned = true; console.log(t.wsTrialEnding); }
+    state.jitter ??= Math.random() * 600_000;
+    const newDay = Math.floor((now - state.jitter) / 86_400_000) > state.ticketDay;
+    const ended = left <= 0 && now - (state.recheckAt ?? 0) > 3_600_000;
+    if (newDay || ended) {
+      if (ended) state.recheckAt = now;
+      const socket = state.socket;
+      state.socket = null;
+      socket.close();
+      return void connect(state, sync);
+    }
+  }
   if (!state.socket) return void connect(state, sync);
   if (Date.now() - state.lastBeat > STALE_MS) return void state.socket.close();
   try { state.socket.send('ping'); } catch { state.socket.close(); }
