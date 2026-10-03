@@ -41,9 +41,11 @@ parity('extension', ext.STRINGS.en, ext.STRINGS.zh);
 const locale = (l) => JSON.parse(readFileSync(new URL(`../extension/_locales/${l}/messages.json`, import.meta.url)));
 parity('extension _locales', locale('en'), locale('zh_CN'));
 
-const html = readFileSync(new URL('../extension/popup.html', import.meta.url), 'utf8');
-const used = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
-ok('extension: every data-i18n key exists', used.every((k) => k in ext.STRINGS.en.html), diff(used, Object.keys(ext.STRINGS.en.html)));
+for (const page of ['popup.html', 'grant.html']) {
+  const html = readFileSync(new URL(`../extension/${page}`, import.meta.url), 'utf8');
+  const used = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
+  ok(`extension ${page}: every data-i18n key exists`, used.every((k) => k in ext.STRINGS.en.html), diff(used, Object.keys(ext.STRINGS.en.html)));
+}
 
 console.log(`\n${fail === 0 ? '✅' : '🛑'}  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

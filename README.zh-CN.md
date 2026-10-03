@@ -27,7 +27,7 @@
 | 客户端 | 平台 | 投 | 收 | 说明 |
 |---|---|:-:|:-:|---|
 | **iOS 快捷指令** | iPhone · iPad | ✅ 文字、链接、照片、视频、文件 | — | [shortcuts/](./shortcuts/README.zh-CN.md) |
-| **浏览器扩展** | Chrome · Edge | ✅ 页面、链接、选中的字 | — | [extension/](./extension/README.zh-CN.md) |
+| **浏览器扩展** | Chrome · Edge | ✅ 页面、链接、选中的字、图片、文件、截图 | — | [extension/](./extension/README.zh-CN.md) |
 | **命令行** | macOS · Linux（Node.js ≥ 18） | ✅ 文本、链接、文件 | ✅ 落到本地文件夹 | [cli/](./cli/README.zh-CN.md) |
 | **Obsidian 插件** | 桌面 · 移动 | ✅ 选中的字、笔记、文件 | ✅ 落成 vault 里的笔记 | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian/blob/main/README.zh-CN.md) |
 | **Web 收件箱** | 任意浏览器，打开 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) | ✅ 文字、链接、一次最多 5 个文件 | ✅ 就在页面里 | — |
@@ -39,7 +39,7 @@ Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/READM
 | 在哪 | 文字 | 链接 | 照片和视频 | 文件（PDF、Excel……） |
 |---|---|---|---|---|
 | **iPhone / iPad** | 任意 App 里选中 →「共享」→ **dropit** | 「共享」→ **dropit**（Safari 或任意 App） | 「照片」里选一张或几张 →「共享」→ **dropit** | 「文件」App 里长按 →「共享」→ **dropit** |
-| **Chrome / Edge** | 选中 → 右键 →「把选中的字投进 dropit」 | 在链接上右键；或点工具栏图标 →「投当前页面」 | 右键 → 发的是图片的**地址** | — |
+| **Chrome / Edge** | 选中 → 右键 →「把选中的字投进 dropit」；或 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | 在链接上右键；或点图标 → <kbd>回车</kbd> 投这个页面 | 右键 →「把这张图片投进 dropit」（文件）或「把图片链接投进 dropit」；截图粘贴进弹窗 | 右键指向文件的链接；在弹窗里粘贴或选文件 |
 | **终端** | `dropit send "你好"` · `pbpaste \| dropit send` | `dropit send https://…` | `dropit send -f photo.jpg` | `dropit send -f report.pdf` |
 | **Obsidian** | 选中 → 右键 →「发到 dropit」 | — | 在文件列表里右键它 | 右键一篇笔记或几个文件（可多选） |
 | **任意浏览器** | 在 Web 收件箱里输入 → 按邮戳 | 同左 | 选文件、拖进来或粘贴（最多 5 个） | 同左 |
@@ -56,7 +56,7 @@ Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/READM
 - **不丢内容。** 接收端只在内容安全落盘之后才推进进度；中途崩溃最多重复一条，绝不漏一条。
 - **自动去重。** 1 分钟内紧挨着投两次同样的内容（连点、重试），只存一份；隔一会儿再投，照常送达。
 - **每台设备独立。** 每台设备单独配对、可单独吊销。只投不收的设备（浏览器、手机）读不到你的任何历史内容。
-- **权限最小。** 浏览器扩展不申请任何 host 权限。
+- **权限最小。** 浏览器扩展安装时不申请任何网站权限。图片和文件按页面平时加载的方式去取；只有不让这样取的网站，才就那一个网站问一次。
 - **无构建、无依赖。** 命令行是单个 Node.js 文件；扩展直接加载即可。
 
 ## 开始使用

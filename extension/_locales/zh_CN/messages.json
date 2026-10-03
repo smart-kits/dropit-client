@@ -1,5 +1,6 @@
 {
   "extName": { "message": "dropit" },
-  "extDescription": { "message": "右键或点图标，把当前页、选中的字、链接投进你自己的 dropit。" },
-  "actionTitle": { "message": "投进 dropit" }
+  "extDescription": { "message": "右键、快捷键或点图标，把页面、选中的字、链接、图片和截图投进你自己的 dropit。" },
+  "actionTitle": { "message": "投进 dropit" },
+  "cmdDropNow": { "message": "直接投：有选中投选中，没有就投这个页面" }
 }

@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>dropit</title>
+<link rel="stylesheet" href="popup.css">
+<body class="window grant">
+<!-- One question, asked only when a site won't let the page hand over a file: may dropit read this one site? -->
+<header>
+  <p class="wordmark"><img src="icon-32.png" alt="">dropit</p>
+</header>
+<!-- A plain paper panel: the stripe is only for things that take drops -->
+<section class="panel setup">
+  <h1 id="title"></h1>
+  <p data-i18n="grantNote"></p>
+  <div class="row">
+    <button class="solid" id="allow" data-i18n="grantAllow"></button>
+    <button class="link" id="cancel" data-i18n="grantCancel"></button>
+  </div>
+  <div class="returned" id="returned" role="alert" hidden><b data-i18n="returned"></b><span></span></div>
+</section>
+<script type="module" src="grant.js"></script>
+</body>

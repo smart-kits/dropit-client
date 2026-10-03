@@ -1,5 +1,6 @@
 {
   "extName": { "message": "dropit" },
-  "extDescription": { "message": "Send the current page, a link or selected text to your dropit with a right-click." },
-  "actionTitle": { "message": "Send to dropit" }
+  "extDescription": { "message": "Send a page, selected text, a link, an image or a screenshot to your own dropit — right-click, a shortcut, or the toolbar." },
+  "actionTitle": { "message": "Send to dropit" },
+  "cmdDropNow": { "message": "Send the selection, or this page, right away" }
 }

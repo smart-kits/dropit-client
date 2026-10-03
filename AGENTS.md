@@ -98,8 +98,9 @@ git clone https://github.com/smart-kits/dropit-client.git ~/.dropit-client   # s
 3. Click the dropit icon → either create an account (first device) or enter a pairing code
 
 To produce a pairing code for the extension from a paired CLI, run `dropit code` and give the
-user the result. Verify by asking the user to right-click any page → send it, then check it
-arrived (e.g. with `dropit watch`).
+user the result. Verify by asking the user to click the dropit icon and press Enter (sends the current page), then check it
+arrived (e.g. with `dropit watch`). Shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> opens the popup,
+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> sends the selection (or the page) right away.
 
 ### C · iOS Shortcuts
 
@@ -144,4 +145,4 @@ Messages are shown in English unless `LANG` (or `DROPIT_LANG`) is Chinese. For p
   internals to docs or comments. Clients talk to the API; that's all they need to know.
 - **No build step, no dependencies.** Keep the CLI a single file and the extension loadable as-is.
 - **Interface text is bilingual.** Strings live in `T` (CLI) and `extension/i18n.js` (+ `_locales/` for the manifest), each with `en` and `zh`. Add every new string to both.
-- **Test before pushing:** `node test/i18n.test.mjs` and `node --check cli/dropit`.
+- **Test before pushing:** `node test/i18n.test.mjs`, `node test/extension.test.mjs`, `node test/cli-render.test.mjs` and `node --check cli/dropit`.
