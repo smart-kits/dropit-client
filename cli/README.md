@@ -53,6 +53,8 @@ connected and writes new items the moment they arrive.
 | Text or link | `YYYY-MM-DD-<seq>.md`, with front matter (`dropit_seq`, `kind`, `source`, `created`) |
 | File | `YYYY-MM-DD-<seq>-<original name>` |
 
+The `.md` body is Markdown: a link sent with its page title becomes `[title](url)`, followed by the page description as a quote; anything sent from a web page ends with a `— [page title](url)` line (the site's host name when there's no title). Files are saved exactly as sent, without the source page.
+
 - **Nothing is skipped.** Progress advances item by item, only after a file is written. If `watch` is interrupted, the next run picks up exactly where it stopped; existing files are never overwritten.
 - **A failed download doesn't hold up the rest.** It leaves a `YYYY-MM-DD-<seq>.md` note saying why, and receiving goes on. `dropit watch --from <seq>` fetches it again and replaces the note.
 - **Pull again from a point.** `--from <seq>` starts again from that item; `--days <n>` pulls the last *n* days again. Files already in the folder are kept, so this fills in what's missing.

@@ -357,8 +357,49 @@ async function writeItem(dir, item) {
   const target = path.join(dir, `${stamp}-${item.seq}.md`);
   if (fs.existsSync(target)) return;
   fs.writeFileSync(target, `---\ndropit_seq: ${item.seq}\nkind: ${item.kind}\nsource: ${item.source}\n`
-    + `created: ${new Date(item.created_at).toISOString()}\n---\n\n${item.raw}\n`);
+    + `created: ${new Date(item.created_at).toISOString()}\n---\n\n${markdownOf(item)}\n`);
   console.log(`↓ ${path.basename(target)}`);
+}
+
+// ── Markdown body of a text or link item ────────────────────────────────
+
+const HTTP_URL = /^https?:\/\/\S+$/i;
+
+/** Link text: no brackets or line breaks; a backslash is escaped so it can't swallow the closing `]`. */
+const linkText = (s) => String(s ?? '').replace(/[[\]]/g, '').replace(/\s*[\r\n]+\s*/g, ' ').trim()
+  .replace(/\\/g, '\\\\');
+
+/** Link target: wrapped in <…> when it has spaces, brackets or backslashes, which would end or bend a bare one. */
+function linkTarget(url) {
+  const u = url.replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+  return /[\s()<>\\]/.test(u) ? `<${u.replace(/[\\<>]/g, '\\$&')}>` : u;
+}
+
+/** Host name of an http(s) URL, or null when it isn't one. */
+function httpHost(url) {
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return null;
+  try { return new URL(url).hostname || null; } catch { return null; }
+}
+
+/**
+ * What goes under the front matter.
+ *   A link with a title    → [title](url), then the description as a quote
+ *   Anything with a source → its body, then "— [source title](source url)" (the host name when untitled)
+ * Items with neither come out exactly as sent.
+ */
+function markdownOf(item) {
+  const meta = item.meta ?? {};
+  let body = `${item.raw}`;
+  const url = String(item.raw ?? '').trim();
+  const title = linkText(meta.title);
+  if (title && HTTP_URL.test(url)) {               // kind 'url' or not: only a lone http(s) address becomes a link
+    body = `[${title}](${linkTarget(url)})`;
+    const desc = String(meta.description ?? '').trim();
+    if (desc) body += `\n\n${desc.split(/\r?\n/).map((l) => `> ${l}`.trimEnd()).join('\n')}`;
+  }
+  const host = httpHost(meta.from?.url);
+  if (host) body = `${body.trimEnd()}\n\n— [${linkText(meta.from.title) || linkText(host)}](${linkTarget(meta.from.url)})`;
+  return body;
 }
 
 // ── Real-time (same liveness logic as the Obsidian plugin) ──────────────
@@ -518,5 +559,5 @@ if (require.main === module) {
   if (!COMMANDS[cmd]) die(t.usage);
   COMMANDS[cmd](args).catch((err) => die(err.message));
 } else {
-  module.exports = { T, pickLang };               // for tests
+  module.exports = { T, pickLang, markdownOf };   // for tests
 }
