@@ -17,6 +17,15 @@ const isHttp = (url) => {
   try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
 };
 
+/**
+ * The service addresses to try, in order: the ones that worked before, then the built-in ones.
+ * A stored list used to be all that was tried, so a browser paired on an address that later went away
+ * stayed offline until it was paired again.
+ */
+export function endpointList(stored, defaults) {
+  return [...new Set([...(Array.isArray(stored) ? stored : []), ...defaults])];
+}
+
 /** Control characters and runs of whitespace (newlines included) become one space — as the service does */
 export const squash = (s) => String(s ?? '').replace(/[\u0000-\u001f\u007f\s]+/g, ' ').trim();
 

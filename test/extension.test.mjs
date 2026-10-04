@@ -6,7 +6,7 @@
  */
 import {
   META_BUDGET, FROM_URL_MAX, BATCH_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 
@@ -146,6 +146,14 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   eq('E14 selection on a page without an address', intentOf({ text: 'q', fromSelection: true, page: { url: 'chrome://x' } }),
     { type: 'text', kind: 'text', from: null });
   eq('E14 files and selected text', intentOf({ text: 'q', files: [file], fromSelection: true, page }).from, { url: 'https://a.com/p', title: 'Page' });
+}
+
+// Service addresses: what worked before first, the built-in ones always still tried
+{
+  const D = ['https://dropit.smart-kits.xyz'];
+  eq('endpoints: nothing stored → built-in', endpointList(undefined, D), D);
+  eq('endpoints: an old stored address no longer strands the browser', endpointList(['https://old.example'], D), ['https://old.example', ...D]);
+  eq('endpoints: no duplicates, order kept', endpointList(['https://dropit.smart-kits.xyz', 'https://b.example'], D), ['https://dropit.smart-kits.xyz', 'https://b.example']);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

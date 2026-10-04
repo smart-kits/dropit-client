@@ -5,7 +5,7 @@
  * users install it more readily, and store review is faster.
  */
 import { t } from './i18n.js';
-import { errorText } from './payload.js';
+import { errorText, endpointList } from './payload.js';
 
 const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
 const SOURCE = 'chrome-extension';
@@ -27,7 +27,7 @@ export const authLost = (err) => AUTH_LOST.includes(err?.code);
  */
 export async function api(method, path, body, { auth = true, type } = {}) {
   const cfg = await store.get();
-  const endpoints = cfg.endpoints?.length ? cfg.endpoints : DEFAULT_ENDPOINTS;
+  const endpoints = endpointList(cfg.endpoints, DEFAULT_ENDPOINTS);
   const blob = body instanceof Blob;
   let lastErr;
   for (const base of endpoints) {
