@@ -7,4 +7,6 @@
 # @raycast.icon 📎
 # @raycast.packageName dropit
 # @raycast.argument1 { "type": "text", "placeholder": "File path" }
-dropit send -f "$1"
+# Raycast starts scripts with a short PATH: add where the installer and Homebrew put dropit and node
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+dropit send -f "${1/#\~/$HOME}"   # a path typed as ~/… isn't expanded inside quotes
