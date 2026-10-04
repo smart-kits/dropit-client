@@ -77,12 +77,12 @@ If the user wants to receive on this machine too:
 dropit watch ~/dropit              # Ctrl-C to stop; the item above appears as a .md file
 ```
 
-To keep `watch` running at login on macOS, use the launchd snippet in
-[cli/README.md](./cli/README.md#keep-watch-running-macos-launchd) — replace
-`/usr/local/bin/dropit` with the output of `command -v dropit`.
+To keep `watch` running at login, use the launch agent (macOS) or user service (Linux) in
+[cli/README.md](./cli/README.md#keep-it-running) — replace its paths with the output of
+`command -v dropit` and `dirname "$(command -v node)"`.
 
 **Optional integrations**: Raycast, the macOS Services menu and Alfred are described in
-[cli/README.md](./cli/README.md#integrations). Raycast only needs 👤 the user to add the
+[cli/README.md](./cli/README.md#from-anywhere-on-your-mac). Raycast only needs 👤 the user to add the
 `cli/raycast/` directory.
 
 ### B · Browser extension
