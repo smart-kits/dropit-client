@@ -117,24 +117,35 @@ export const FILE_EXT = ['pdf', 'zip', 'rar', '7z', 'gz', 'tgz', 'tar', 'dmg', '
   'mp4', 'mov', 'webm', 'mkv', 'm4v', 'mp3', 'm4a', 'wav', 'flac', 'ogg'];
 const FILE_LINKS = FILE_EXT.flatMap((e) => [`*://*/*.${e}`, `*://*/*.${e}?*`]);
 
+// Every context the page menu can show for; "Send this page" is offered in all of them
+const PAGE_CONTEXTS = ['page', 'frame', 'selection', 'link', 'editable', 'image', 'video', 'audio'];
+
 /**
- * Context menu items. Several that apply at once are folded by Chrome into one "dropit" submenu.
- * `title` is a key into the interface strings.
+ * Context menu items: one "dropit" entry, opening onto what fits where the user right-clicked —
+ * the specific things first, "Send this page" always last. `title` is a key into the interface strings.
+ * (Chrome's own PDF viewer shows no extension items at all; there the icon and the shortcut send the PDF.)
  */
 export const MENUS = [
-  { id: 'selection', title: 'menuSelection', contexts: ['selection'] },
-  { id: 'link', title: 'menuLink', contexts: ['link'] },
-  { id: 'link-file', title: 'menuLinkFile', contexts: ['link'], targetUrlPatterns: FILE_LINKS },
+  { id: 'dropit', title: 'menuParent', contexts: PAGE_CONTEXTS },
+  { id: 'selection', parentId: 'dropit', title: 'menuSelection', contexts: ['selection'] },
   // Image bytes: any source (http, data:, blob:) — the protocol is sorted out after the click
-  { id: 'image', title: 'menuImage', contexts: ['image'] },
-  { id: 'image-link', title: 'menuImageLink', contexts: ['image'], targetUrlPatterns: HTTP },
+  { id: 'image', parentId: 'dropit', title: 'menuImage', contexts: ['image'] },
+  { id: 'image-link', parentId: 'dropit', title: 'menuImageLink', contexts: ['image'], targetUrlPatterns: HTTP },
   // Streaming players use blob: sources with nothing to download: only a real file gets the file item
-  { id: 'video', title: 'menuVideo', contexts: ['video'], targetUrlPatterns: HTTP },
-  { id: 'audio', title: 'menuAudio', contexts: ['audio'], targetUrlPatterns: HTTP },
-  { id: 'media-page', title: 'menuPage', contexts: ['video', 'audio'] },
-  { id: 'page', title: 'menuPage', contexts: ['page'] },
-  { id: 'action-page', title: 'menuPage', contexts: ['action'] },
+  { id: 'video', parentId: 'dropit', title: 'menuVideo', contexts: ['video'], targetUrlPatterns: HTTP },
+  { id: 'audio', parentId: 'dropit', title: 'menuAudio', contexts: ['audio'], targetUrlPatterns: HTTP },
+  { id: 'link', parentId: 'dropit', title: 'menuLink', contexts: ['link'] },
+  { id: 'link-file', parentId: 'dropit', title: 'menuLinkFile', contexts: ['link'], targetUrlPatterns: FILE_LINKS },
+  { id: 'page', parentId: 'dropit', title: 'menuPage', contexts: PAGE_CONTEXTS },
+  // Right-clicking the toolbar icon: one item, no submenu
+  { id: 'action-page', title: 'menuPageTop', contexts: ['action'] },
 ];
+
+/** A PDF open in Chrome's viewer: sending "this page" sends the file */
+export function isPdf(url, contentType) {
+  if (contentType === 'application/pdf') return true;
+  try { return /\.pdf$/i.test(new URL(url).pathname); } catch { return false; }
+}
 
 /** Batch markers for n things sent together, or null for one */
 export function groupsFor(n, id = randomId()) {
@@ -157,7 +168,15 @@ export function intentOf({ text = '', files = [], fromSelection = false, page = 
   const body = text.trim() ? text : '';
   if (files.length) return { type: 'batch', text: body, files, from: body && fromSelection ? fromMeta(page.url, page.title) : null };
   if (body) return { type: 'text', kind: kindOf(body), from: fromSelection ? fromMeta(page.url, page.title) : null };
-  return { type: 'page' };
+  return { type: page.url && isPdf(page.url, page.contentType) ? 'pdf' : 'page' };
+}
+
+/** "#71" or "#71–#73" */
+export function seqRange(seqs) {
+  const s = seqs.filter((n) => Number.isInteger(n));
+  if (!s.length) return '';
+  const lo = Math.min(...s), hi = Math.max(...s);
+  return lo === hi ? `#${lo}` : `#${lo}–#${hi}`;
 }
 
 /** "5 MB", "1.5 MB" */

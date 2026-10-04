@@ -6,7 +6,7 @@
  */
 import {
   META_BUDGET, FROM_URL_MAX, BATCH_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 
@@ -97,7 +97,16 @@ eq('E8 data: address', fileNameOf('data:image/png;base64,AAAA'), null);
   ok('E9 file links with and without a query', by['link-file'].targetUrlPatterns.includes('*://*/*.pdf')
     && by['link-file'].targetUrlPatterns.includes('*://*/*.pdf?*'));
   eq('E9 every extension has both patterns', by['link-file'].targetUrlPatterns.length, FILE_EXT.length * 2);
-  ok('E9 streamed media can still send the page', by['media-page'].contexts.includes('video') && by['media-page'].contexts.includes('audio'));
+  // One "dropit" entry everywhere on the page; what fits opens under it, "Send this page" always last
+  const page = MENUS.filter((m) => m.parentId === 'dropit');
+  ok('E9 every page item sits under the one dropit entry', MENUS.filter((m) => !m.parentId && m.id !== 'dropit').every((m) => m.contexts.join() === 'action'));
+  const offered = (ctx) => page.filter((m) => m.contexts.includes(ctx)).map((m) => m.id);
+  eq('E9 selected text → text, page', offered('selection'), ['selection', 'page']);
+  eq('E9 image → image, image link, page', offered('image'), ['image', 'image-link', 'page']);
+  eq('E9 link → link, (linked file), page', offered('link'), ['link', 'link-file', 'page']);
+  eq('E9 video → video file (real files only), page', offered('video'), ['video', 'page']);
+  eq('E9 blank page → page', offered('page'), ['page']);
+  ok('E9 the parent covers every child context', page.every((m) => m.contexts.every((c) => by.dropit.contexts.includes(c))));
   ok('E9 every menu title exists in both languages', MENUS.every((m) =>
     typeof STRINGS.en[m.title] === 'string' && typeof STRINGS.zh[m.title] === 'string'), MENUS.map((m) => m.title).join());
   eq('E9 ids are unique', new Set(MENUS.map((m) => m.id)).size, MENUS.length);
@@ -116,6 +125,8 @@ for (const [lang, t] of Object.entries(STRINGS)) {
   eq(`E12 ${lang} storage full`, errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, t), t.quotaBytes);
   ok(`E12 ${lang} unknown code`, errorText('NOPE', {}, 500, t).includes('500'));
 }
+eq('isPdf', [isPdf('https://a.com/r.PDF'), isPdf('https://a.com/r.pdf?x=1'), isPdf('https://a.com/pdf/123'), isPdf('x', 'application/pdf')], [true, true, false, true]);
+eq('seqRange', [seqRange([71]), seqRange([71, 72, 73]), seqRange([])], ['#71', '#71–#73', '']);
 eq('mb', [mb(5 << 20), mb(100 << 20), mb(1.5 * 1048576)], ['5 MB', '100 MB', '1.5 MB']);
 eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['11 B', '14 KB', '2.3 MB']);
 
@@ -146,6 +157,9 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   eq('E14 selection on a page without an address', intentOf({ text: 'q', fromSelection: true, page: { url: 'chrome://x' } }),
     { type: 'text', kind: 'text', from: null });
   eq('E14 files and selected text', intentOf({ text: 'q', files: [file], fromSelection: true, page }).from, { url: 'https://a.com/p', title: 'Page' });
+  eq('E14 empty on a PDF → the PDF file', intentOf({ page: { url: 'https://a.com/x/report.pdf' } }), { type: 'pdf' });
+  eq('E14 empty in the PDF viewer (by content type) → the PDF file', intentOf({ page: { url: 'https://a.com/get?id=1', contentType: 'application/pdf' } }), { type: 'pdf' });
+  eq('E14 text typed on a PDF tab is still text', intentOf({ text: 'note', page: { url: 'https://a.com/r.pdf' } }).type, 'text');
 }
 
 // Service addresses: what worked before first, the built-in ones always still tried
@@ -154,6 +168,28 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   eq('endpoints: nothing stored → built-in', endpointList(undefined, D), D);
   eq('endpoints: an old stored address no longer strands the browser', endpointList(['https://old.example'], D), ['https://old.example', ...D]);
   eq('endpoints: no duplicates, order kept', endpointList(['https://dropit.smart-kits.xyz', 'https://b.example'], D), ['https://dropit.smart-kits.xyz', 'https://b.example']);
+}
+
+// A dropped connection (a flaky proxy) is tried again — but never for joining or creating an account
+{
+  globalThis.chrome = { storage: { local: { get: async () => ({ token: 't', endpoints: ['https://a.example'] }), set: async () => {}, remove: async () => {} } } };
+  const { api } = await import('../extension/api.js');
+  const seen = [];
+  let drops = 2;
+  globalThis.fetch = async (url, init) => {
+    seen.push(`${init.method} ${url}`);
+    if (drops-- > 0) throw new TypeError('Failed to fetch');
+    return new Response(JSON.stringify({ plan: 'free' }), { status: 200 });
+  };
+  const me = await api('GET', '/v1/me');
+  ok('a read gets through after two dropped connections, on the same address', me.plan === 'free'
+    && seen.length === 3 && seen.every((x) => x === 'GET https://a.example/v1/me'), JSON.stringify(seen));
+  seen.length = 0;
+  globalThis.fetch = async (url, init) => { seen.push(`${init.method} ${url}`); throw new TypeError('Failed to fetch'); };
+  let err = null;
+  try { await api('POST', '/v1/accounts', {}, { auth: false }); } catch (e) { err = e; }
+  ok('creating an account is sent once per address, never repeated', err?.code === 'OFFLINE'
+    && seen.length === 2 && seen[0] === 'POST https://a.example/v1/accounts', JSON.stringify(seen));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

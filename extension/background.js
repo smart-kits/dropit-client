@@ -1,7 +1,7 @@
 import { store, sendText, sendFile, me, authLost } from './api.js';
 import { t } from './i18n.js';
-import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb } from './payload.js';
-import { readPage, readSelection, fetchStart, fetchChunk, fetchDrop } from './page.js';
+import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb, isPdf } from './payload.js';
+import { readPage, readSelection, fetchStart, fetchChunk, fetchDrop, showToast } from './page.js';
 
 const NAVY = '#1f4e9e';   // arrived
 const RED = '#c8102e';    // failed, or not set up
@@ -16,30 +16,42 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(badge);
 chrome.storage.onChanged.addListener((changes) => { if ('token' in changes) badge(); });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => run(() => fromMenu(info, tab)));
+chrome.contextMenus.onClicked.addListener((info, tab) => run(() => fromMenu(info, tab), tab));
 chrome.commands.onCommand.addListener((command, tab) => {
-  if (command === 'drop-now') run(() => dropNow(tab));
+  if (command === 'drop-now') run(() => dropNow(tab), tab);
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
   // The popup sends on its own, then closes: the badge outlives it here
   if (msg?.type === 'flash') flash(msg.ok, msg.title);
   // The access window got permission for a site: fetch the file again, now as the extension
-  if (msg?.type === 'retry-file') run(() => fileFromHere(msg.job));
+  if (msg?.type === 'retry-file') run(() => fileFromHere(msg.job), msg.job.tabId ? { id: msg.job.tabId } : null);
 });
 
-/** Success is quiet, failure is loud — never pretend a send worked while offline */
-async function run(fn) {
+/**
+ * Say how it went where the user is looking: a short note on the page (the toolbar badge alone was missed,
+ * and can't be seen when the icon isn't pinned). Pages that can't show one (chrome://, the store) get a
+ * system notification instead — for a success only when the badge can't be seen either.
+ * Never pretend a send worked while offline.
+ */
+async function run(fn, tab) {
   try {
     const res = await fn();
-    if (res?.pending) return;          // waiting for the user in the access window
-    if (res) flash(true, res.deduped ? t.alreadySent(res.seq) : t.sent(res.seq));
+    if (res?.pending || !res) return;          // waiting in the access window, or opened the join form
+    const title = res.deduped ? t.alreadySent(res.seq) : t.sent(res.seq);
+    flash(true, title);
+    if (!(await inPage(tab, showToast, [t.toastSent(title), false])) && !(await onToolbar())) notify('dropit', title);
   } catch (err) {
     console.warn('dropit:', err);
     if (authLost(err)) return notify(t.revokedTitle, t.revoked);
     flash(false, err.message);
-    notify(t.failedTitle, err.message);
+    if (!(await inPage(tab, showToast, [t.toastFailed(err.message), true]))) notify(t.failedTitle, err.message);
   }
+}
+
+/** Is the icon on the toolbar, where the badge shows? (When unsure, assume it is.) */
+async function onToolbar() {
+  try { return (await chrome.action.getUserSettings()).isOnToolbar !== false; } catch { return true; }
 }
 
 async function fromMenu(info, tab) {
@@ -57,7 +69,7 @@ async function fromMenu(info, tab) {
     case 'audio':
       if (/^blob:/i.test(info.srcUrl) && info.mediaType !== 'image') throw new Error(t.noFile);
       return fileFromPage(info.srcUrl, tab, info.frameId);
-    default: return sendPage(tab);   // page, media-page, action-page
+    default: return sendPage(tab);   // page, action-page
   }
 }
 
@@ -72,11 +84,23 @@ function sendSelection(text, tab) {
   return sendText({ kind: 'text', raw: text, meta: fitMeta({ from: fromMeta(tab?.url, tab?.title) }) });
 }
 
-/** The page: address, title, and the description its author wrote */
+/** The page: address, title, and the description its author wrote. A PDF open in the viewer is sent as the file. */
 async function sendPage(tab) {
   if (!tab?.url) throw new Error(t.noPageUrl);
   const page = (await inPage(tab, readPage)) ?? { title: tab.title };
+  if (isPdf(tab.url, page.contentType)) return sendPdf(tab);
   return sendText({ kind: 'url', raw: tab.url, meta: fitMeta(pageMeta(page)) });
+}
+
+/** The click (or shortcut) lent this tab's site to the extension, so it can fetch the PDF itself */
+async function sendPdf(tab) {
+  const job = { url: tab.url, from: null, tabId: tab.id, referrer: tab.url };
+  try {
+    return await fileFromHere(job);
+  } catch (err) {
+    if (err.code === 'FETCH_BLOCKED' && /^https?:/i.test(tab.url)) return withAccess(job);
+    throw err;
+  }
 }
 
 /**
@@ -84,7 +108,7 @@ async function sendPage(tab) {
  * let the page read it, ask for access to that one site and fetch it as the extension.
  */
 async function fileFromPage(url, tab, frameId) {
-  const job = { url, from: fromMeta(tab?.url, tab?.title) };
+  const job = { url, from: fromMeta(tab?.url, tab?.title), tabId: tab?.id, referrer: tab?.url };
   if (/^data:/i.test(url)) return fileFromHere(job);
   const limit = (await me().catch(() => null))?.item_bytes_limit;
   const got = await inPage(tab, fetchStart, [url, limit], frameId);
@@ -107,9 +131,9 @@ async function fileFromHere(job) {
   const limit = (await me().catch(() => null))?.item_bytes_limit;
   let res;
   try {
-    res = await fetch(job.url, { credentials: 'include' });
+    res = await asFromPage(job, () => fetch(job.url, { credentials: 'include' }));
   } catch {
-    throw new Error(t.fetchFailed);
+    throw Object.assign(new Error(t.fetchFailed), { code: 'FETCH_BLOCKED' });
   }
   if (!res.ok) throw new Error(t.hotlinked);
   if (limit && Number(res.headers.get('content-length') || 0) > limit) {
@@ -126,6 +150,30 @@ function upload(blob, { type, disposition }, { url, from }) {
   return sendFile(blob, { name: fileNameOf(url, disposition), mime: type || blob.type || 'application/octet-stream', from });
 }
 
+/**
+ * Fetch as the extension but with the page as the referrer, the way the page itself would have asked:
+ * image hosts that only serve their own pages (Douban answers 418 without one) then hand the file over.
+ * A session rule for this one address and this one request, removed right after.
+ */
+let ruleId = 0;
+async function asFromPage({ url, referrer }, fn) {
+  if (!/^https?:/i.test(referrer ?? '') || !chrome.declarativeNetRequest) return fn();
+  const id = 1000 + (ruleId = (ruleId + 1) % 1000);
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [id],
+    addRules: [{
+      id, priority: 1,
+      action: { type: 'modifyHeaders', requestHeaders: [{ header: 'referer', operation: 'set', value: referrer }] },
+      condition: { urlFilter: `|${url}|`, resourceTypes: ['xmlhttprequest', 'other'], tabIds: [chrome.tabs.TAB_ID_NONE] },
+    }],
+  });
+  try {
+    return await fn();
+  } finally {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [id] }).catch(() => {});
+  }
+}
+
 /** Copy a file the page downloaded into this worker, a few MB per message */
 async function bringOut(tab, frameId, { id, size, type }) {
   const parts = [];
@@ -137,22 +185,18 @@ async function bringOut(tab, frameId, { id, size, type }) {
   return new Blob(parts, { type });
 }
 
+/**
+ * Ask for this one site in a small window of our own, with one button. Asking from here directly was
+ * unreliable after a right-click (in a real browser nothing showed), and the window always works.
+ */
 async function withAccess(job) {
   const { protocol, host } = new URL(job.url);
-  const origins = [`${protocol}//${host}/*`];
-  if (await chrome.permissions.contains({ origins })) return fileFromHere(job);
-  try {
-    if (await chrome.permissions.request({ origins })) return fileFromHere(job);
-    throw new Error(t.accessDenied);
-  } catch (err) {
-    if (err.message === t.accessDenied) throw err;
-    // Not allowed outside a click on an extension page: open a small window with one button
-    await chrome.windows.create({
-      url: `grant.html?job=${encodeURIComponent(JSON.stringify(job))}`,
-      type: 'popup', width: 420, height: 260, focused: true,
-    });
-    return { pending: true };
-  }
+  if (await chrome.permissions.contains({ origins: [`${protocol}//${host}/*`] })) return fileFromHere(job);
+  await chrome.windows.create({
+    url: `grant.html?job=${encodeURIComponent(JSON.stringify(job))}`,
+    type: 'popup', width: 420, height: 260, focused: true,
+  });
+  return { pending: true };
 }
 
 /** Run one of page.js's functions in a frame; null when the page doesn't allow scripts (chrome://, the store…) */

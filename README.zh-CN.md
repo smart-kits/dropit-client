@@ -39,7 +39,7 @@ Raycast、Alfred、macOS 服务菜单都基于命令行，见 [cli/](./cli/READM
 | 在哪 | 文字 | 链接 | 照片和视频 | 文件（PDF、Excel……） |
 |---|---|---|---|---|
 | **iPhone / iPad** | 任意 App 里选中 →「共享」→ **dropit** | 「共享」→ **dropit**（Safari 或任意 App） | 「照片」里选一张或几张 →「共享」→ **dropit** | 「文件」App 里长按 →「共享」→ **dropit** |
-| **Chrome / Edge** | 选中 → 右键 →「把选中的字投进 dropit」；或 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | 在链接上右键；或点图标 → <kbd>回车</kbd> 投这个页面 | 右键 →「把这张图片投进 dropit」（文件）或「把图片链接投进 dropit」；截图粘贴进弹窗 | 右键指向文件的链接；在弹窗里粘贴或选文件 |
+| **Chrome / Edge** | 选中 → 右键 → **dropit** ›「投选中的文字」；或 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | 在链接上右键；或点图标 → <kbd>回车</kbd> 投这个页面 | 右键 → **dropit** ›「投这张图片」（文件）或「投图片链接」；截图粘贴进弹窗 | 右键指向文件的链接；在弹窗里粘贴或选文件 |
 | **终端** | `dropit send "你好"` · `pbpaste \| dropit send` | `dropit send https://…` | `dropit send -f photo.jpg` | `dropit send -f report.pdf` |
 | **Obsidian** | 选中 → 右键 →「发到 dropit」 | — | 在文件列表里右键它 | 右键一篇笔记或几个文件（可多选） |
 | **任意浏览器** | 在 Web 收件箱里输入 → 按邮戳 | 同左 | 选文件、拖进来或粘贴（最多 5 个） | 同左 |

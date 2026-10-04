@@ -28,20 +28,23 @@ Until this browser is joined, the icon shows a red **!**. Click it: it opens on 
 | Type or paste in the box, <kbd>Enter</kbd> | The text (a lone address is sent as a link). <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line |
 | Paste a screenshot or a copied file into the box | The file. Several files (plus any text) arrive together as one batch, up to 16 |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Right away, nothing opens: the selection if there is one, otherwise this page |
-| Right-click selected text | The text, with its line breaks |
-| Right-click a link | The link address. A link to a file (PDF, ZIP, image, video…) also offers *Send the linked file* |
-| Right-click an image | *Send this image* sends the image file; *Send image link* sends its address |
-| Right-click a video or audio | *Send this video* sends the file when the page plays a real file; streaming players (YouTube and the like) have no file, so only *Send this page* is offered |
-| Right-click the page, or the toolbar icon | This page |
+| Right-click anywhere on a page | One **dropit** entry, opening onto what fits there — the specific things first, *Send this page* always last |
+| … on selected text | *Send selected text* (with its line breaks) |
+| … on a link | *Send this link*; a link to a file (PDF, ZIP, image, video…) also offers *Send the linked file* |
+| … on an image | *Send this image* sends the file; *Send image link* sends its address |
+| … on a video or audio | *Send this video* when the page plays a real file. Streaming players (YouTube, Bilibili…) split a video into hundreds of pieces with no single file, so there is only *Send this page* |
+| A PDF open in Chrome's viewer | Chrome shows no extension items inside its PDF viewer: click the icon and press <kbd>Enter</kbd>, or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> — both send **the PDF file** |
+| Right-click the toolbar icon | *Send this page to dropit* |
 
 Selected text, images and files carry a short note of **where they came from**: the page's address and title, nothing else.
 
-Change the shortcuts at `chrome://extensions/shortcuts`. When more than one item applies, Chrome folds them into a *dropit* submenu.
-
+Change the shortcuts at `chrome://extensions/shortcuts`. 
 **Feedback you can trust:**
 
-- **Success** — the popup closes and the icon shows a blue ✓ for 2.5 s. Sending the same thing again within a minute also counts as success; it is recognized and not stored twice.
-- **Failure** — in the popup, a red RETURNED mark with the reason, and what you wrote stays in the box. From a right-click or a shortcut, a red ✗ **and** a system notification. Being offline is never shown as success.
+- **In the popup** — while sending, the stamp is pressed and the envelope's stripes run; a batch counts up (*Sending 2 of 3…*). Then the popup **stays open**: *✓ Sent #71 · 14:07* under the box, the box cleared for the next one. A failure is a red RETURNED mark with the reason, and what you wrote stays.
+- **From a right-click or a shortcut** — a short note at the top of the page: *dropit · Sent #71*, or in red *dropit · Returned: …* (5 s). On pages that can't show one (chrome://, the Web Store) a failure becomes a system notification.
+- The icon also shows a blue ✓ or a red ✗ for 2.5 s. Sending the same thing again within a minute counts as success; it is recognized and not stored twice. Being offline is never shown as success.
+- A dropped connection (a flaky proxy) is retried twice before it counts as a failure.
 - **Too large** — checked before downloading: a file over your plan's limit is refused without being fetched first.
 
 To disconnect this browser: popup → *Sign out on this browser*. If this browser is removed from your account elsewhere, the extension notices on its next send, says so, and goes back to *Join*.
@@ -53,7 +56,8 @@ To disconnect this browser: popup → *Sign out on this browser*. If this browse
 | `contextMenus` | The right-click items |
 | `activeTab` + `scripting` | Only on the tab you act on, at the moment you act: read its title, description and selection, and fetch the image or file you right-clicked |
 | `storage` | This browser's token and settings |
-| `notifications` | Say why a right-click send failed |
+| `notifications` | Say how a send went where the page can't show it (chrome://, the Web Store) |
+| `declarativeNetRequestWithHostAccess` | Only for a site you allowed: when the extension has to fetch a file itself, it sends the page you were on as the referrer, the way the page would — some image hosts refuse anything else. No warning at install; it can't touch any site you haven't allowed |
 | Optional: one site at a time | See below |
 
 **No host permissions at install** — the extension can't read any website until you act on it.

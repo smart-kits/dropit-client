@@ -32,14 +32,14 @@ export async function api(method, path, body, { auth = true, type } = {}) {
   let lastErr;
   for (const base of endpoints) {
     try {
-      const res = await fetch(base.replace(/\/$/, '') + path, {
+      const res = await fetchRetrying(base.replace(/\/$/, '') + path, {
         method,
         headers: {
           ...(auth && cfg.token ? { authorization: `Bearer ${cfg.token}` } : {}),
           ...(body ? { 'content-type': blob ? (type || body.type || 'application/octet-stream') : 'application/json' } : {}),
         },
         body: body ? (blob ? body : JSON.stringify(body)) : undefined,
-      });
+      }, retriable(method, path));
       const data = await res.json().catch(() => ({}));
       if (base !== endpoints[0]) await store.set({ endpoints: [base, ...endpoints.filter((e) => e !== base)] });
       if (!res.ok) {
@@ -55,6 +55,22 @@ export async function api(method, path, body, { auth = true, type } = {}) {
     }
   }
   throw Object.assign(new Error(t.offline), { code: 'OFFLINE', cause: lastErr });
+}
+
+// A connection dropped on the way (a flaky proxy) is tried again on the same address after these waits
+const RETRY_MS = [400, 1200];
+/** Safe to send twice: reads, and sends (the service recognizes a repeat within a minute). Never joining or creating an account. */
+const retriable = (method, path) => method === 'GET' || path.startsWith('/v1/ingest');
+
+async function fetchRetrying(url, init, retry) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      if (!retry || attempt >= RETRY_MS.length) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_MS[attempt]));
+    }
+  }
 }
 
 /** 200 and 409 (the same thing sent a moment ago) both count as success */

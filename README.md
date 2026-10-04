@@ -42,7 +42,7 @@ The CLI also powers Raycast, Alfred and the macOS Services menu — see [cli/](.
 | On | Text | A link | Photos and videos | Files (PDF, Excel, …) |
 |---|---|---|---|---|
 | **iPhone / iPad** | In any app: select → *Share* → **dropit** | *Share* → **dropit** (Safari, any app) | *Photos* → pick one or several → *Share* → **dropit** | *Files* → press and hold → *Share* → **dropit** |
-| **Chrome / Edge** | Select → right-click → *Send selected text*; or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Right-click the link; or click the icon → <kbd>Enter</kbd> sends this page | Right-click → *Send this image* (the file) or *Send image link*; paste a screenshot into the popup | Right-click a link to a file; paste or choose files in the popup |
+| **Chrome / Edge** | Select → right-click → **dropit** › *Send selected text*; or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Right-click the link; or click the icon → <kbd>Enter</kbd> sends this page | Right-click → **dropit** › *Send this image* (the file) or *Send image link*; paste a screenshot into the popup | Right-click a link to a file; paste or choose files in the popup |
 | **Terminal** | `dropit send "hello"` · `pbpaste \| dropit send` | `dropit send https://…` | `dropit send -f photo.jpg` | `dropit send -f report.pdf` |
 | **Obsidian** | Select → right-click → *Send to dropit* | — | Right-click it in the file list | Right-click a note or files (several at once) |
 | **Any browser** | Type in the web inbox → press the stamp | Same | Pick, drag or paste (up to 5) | Same |

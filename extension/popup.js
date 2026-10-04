@@ -1,6 +1,6 @@
 import { api, store, sendText, sendFile, me, authLost } from './api.js';
 import { t, lang } from './i18n.js';
-import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, BATCH_MAX } from './payload.js';
+import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, BATCH_MAX } from './payload.js';
 import { readPage, readSelection } from './page.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,7 +19,8 @@ $('issue').href = 'https://github.com/smart-kits/dropit-client/issues/new'
   + `?title=${encodeURIComponent(`[Chrome extension ${version}] `)}`
   + `&body=${encodeURIComponent(t.issueBody(`Extension: ${version} · ${navigator.userAgent}`))}`;
 
-const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, busy: false };
+// status: File → 'busy' | 'done' while a batch is going out
+const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, busy: false, status: new Map() };
 
 // ── First run ───────────────────────────────────────────────────────────
 
@@ -67,14 +68,20 @@ function returned(message) {
   box.querySelector('span').textContent = message ?? '';
 }
 
+/** The line under the box: what Enter will send, how sending is going, or what was just sent */
+function say(text, done = false) {
+  $('will').textContent = text;
+  $('will').classList.toggle('done', done);
+}
+
 /** Say what Enter will send; there is never a choice to make */
 function explain() {
   const intent = intentOf(state);
   const host = (() => { try { return new URL(state.page.url).hostname; } catch { return ''; } })();
-  $('will').textContent =
-    intent.type === 'batch' ? t.willBatch(state.files.length, !!intent.text)
+  say(intent.type === 'batch' ? t.willBatch(state.files.length, !!intent.text)
     : intent.type === 'text' ? (intent.from ? t.willTextFrom(host) : t.willText)
-    : state.page.url ? t.willPage(state.page.title || host || state.page.url) : '';
+    : intent.type === 'pdf' ? t.willPdf(fileNameOf(state.page.url) ?? host)
+    : state.page.url ? t.willPage(state.page.title || host || state.page.url) : '');
 }
 
 function grow() {
@@ -131,19 +138,25 @@ function drawFiles() {
   list.hidden = !state.files.length;
   list.replaceChildren(...state.files.map((f, k) => {
     const li = document.createElement('li');
+    const status = state.status.get(f) ?? '';
+    li.dataset.state = status;
+    const mark = Object.assign(document.createElement('span'), { className: 'st', textContent: status === 'done' ? '✓' : status === 'busy' ? '↑' : '' });
     const name = Object.assign(document.createElement('span'), { className: 'fn', textContent: f.name, title: f.name });
     const size = Object.assign(document.createElement('span'), { className: 'sz', textContent: fileSize(f.size) });
-    const x = Object.assign(document.createElement('button'), { type: 'button', className: 'x', textContent: '×' });
+    const x = Object.assign(document.createElement('button'), { type: 'button', className: 'x', textContent: '×', hidden: state.busy });
     x.setAttribute('aria-label', t.removeFile(f.name));
     x.onclick = () => { state.files.splice(k, 1); drawFiles(); explain(); compose.focus(); };
-    li.append(name, size, x);
+    li.append(mark, name, size, x);
     return li;
   }));
 }
 
 // Pasted screenshots are all called image.png: let the service name them by time instead
 const nameOf = (f) => (/^image\.(png|jpe?g|gif|webp)$/i.test(f.name) ? undefined : f.name);
+const clockNow = () => new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+// The popup stays open after sending: it says how it went in place and clears what went out,
+// so the next thing can be sent straight away (the toolbar badge shows ✓ too)
 $('send-form').onsubmit = async (ev) => {
   ev.preventDefault();
   if (state.busy) return;
@@ -151,57 +164,108 @@ $('send-form').onsubmit = async (ev) => {
   if (intent.type === 'page' && !state.page.url) return compose.focus();
   busy(true);
   returned(null);
+  say(t.sendingNow);
   try {
-    const res = await send(intent);
-    // Hand the ✓ to the background before closing: a message still in flight dies with the popup
-    await chrome.runtime.sendMessage({ type: 'flash', ok: true, title: res.deduped ? t.alreadySent(res.seq) : t.sent(res.seq) }).catch(() => {});
-    window.close();
-  } catch (err) {
-    if (authLost(err)) return render(err.message);
-    returned(err.message);
+    const out = await send(intent);
+    if (out.pending) {                     // asking for a site in the small window, which sends from there
+      busy(false);
+      return say(t.grantOpened(out.host));
+    }
+    const { seqs, deduped } = out;
+    chrome.runtime.sendMessage({ type: 'flash', ok: true, title: deduped ? t.alreadySent(seqs[0]) : t.sent(seqs.at(-1)) }).catch(() => {});
+    Object.assign(state, { text: '', files: [], fromSelection: false });
+    state.status.clear();
+    compose.value = '';
     busy(false);
+    drawFiles();
+    grow();
+    say(deduped ? `✓ ${t.alreadySent(seqs[0])}` : t.sentLine(seqRange(seqs), clockNow()), true);
+    compose.focus();
+  } catch (err) {
+    busy(false);
+    if (authLost(err)) return render(err.message);
+    drawFiles();
+    explain();
+    returned(err.done ? t.partlySent(err.done, err.total, err.message) : err.message);
   }
 };
 
 async function send(intent) {
   if (intent.type === 'page') {
-    return sendText({ kind: 'url', raw: state.page.url, meta: fitMeta(pageMeta(state.page)) });
+    const res = await sendText({ kind: 'url', raw: state.page.url, meta: fitMeta(pageMeta(state.page)) });
+    return { seqs: [res.seq], deduped: res.deduped };
   }
+  if (intent.type === 'pdf') return sendPdf(state.page.url);
   if (intent.type === 'text') {
     const raw = intent.kind === 'url' ? state.text.trim() : state.text;
-    return sendText({ kind: intent.kind, raw, meta: fitMeta(intent.from ? { from: intent.from } : null) });
+    const res = await sendText({ kind: intent.kind, raw, meta: fitMeta(intent.from ? { from: intent.from } : null) });
+    return { seqs: [res.seq], deduped: res.deduped };
   }
-  // Text and files as one batch. Check everything before sending anything.
+  // Text and files as one batch, one after the other, with progress. Check everything before sending anything.
   const limit = (await me().catch(() => null))?.item_bytes_limit;
   const big = limit && state.files.find((f) => f.size > limit);
   if (big) throw new Error(`${big.name}: ${t.tooLarge(mb(limit))}`);
-  const count = (intent.text ? 1 : 0) + state.files.length;
-  if (count > BATCH_MAX) throw new Error(t.batchTooLarge(BATCH_MAX));
-  const groups = groupsFor(count);
-  let res;
-  if (intent.text) {
-    const group = groups.shift();
-    const kind = intentOf({ text: intent.text }).kind;
-    res = await sendText({ kind, raw: kind === 'url' ? intent.text.trim() : intent.text,
-      meta: fitMeta({ ...(intent.from ? { from: intent.from } : {}), ...(group ? { group } : {}) }) });
-    // Sent: a retry after a later failure must not send it again
-    state.text = compose.value = '';
-    state.fromSelection = false;
+  const items = [...(intent.text ? [{ text: intent.text }] : []), ...state.files.map((file) => ({ file }))];
+  if (items.length > BATCH_MAX) throw new Error(t.batchTooLarge(BATCH_MAX));
+  const groups = groupsFor(items.length);
+  const seqs = [];
+  for (const [k, it] of items.entries()) {
+    say(t.sendingOf(k + 1, items.length));
+    if (it.file) { state.status.set(it.file, 'busy'); drawFiles(); }
+    try {
+      let res;
+      if (it.text) {
+        const kind = intentOf({ text: it.text }).kind;
+        res = await sendText({ kind, raw: kind === 'url' ? it.text.trim() : it.text,
+          meta: fitMeta({ ...(intent.from ? { from: intent.from } : {}), ...(groups[k] ? { group: groups[k] } : {}) }) });
+      } else {
+        res = await sendFile(it.file, { name: nameOf(it.file), mime: it.file.type, group: groups[k] });
+        state.status.set(it.file, 'done');
+        drawFiles();
+      }
+      seqs.push(res.seq);
+    } catch (err) {
+      // What went through stays sent: take it out, so trying again doesn't send it twice
+      if (k > 0 && intent.text) { state.text = compose.value = ''; state.fromSelection = false; }
+      state.files = state.files.filter((f) => state.status.get(f) !== 'done');
+      state.status.clear();
+      throw Object.assign(err, { done: k, total: items.length });
+    }
   }
-  while (state.files.length) {
-    const file = state.files[0];
-    res = await sendFile(file, { name: nameOf(file), mime: file.type, group: groups.shift() });
-    state.files.shift();
-    drawFiles();
-  }
-  return res;
+  return { seqs };
 }
 
+/**
+ * The PDF this tab shows, as a file. Opening the popup lent this tab's site to the extension, which is
+ * usually enough; a site that still refuses gets the one-site question in the small window.
+ */
+async function sendPdf(url) {
+  const limit = (await me().catch(() => null))?.item_bytes_limit;
+  let res;
+  try {
+    res = await fetch(url, { credentials: 'include' });
+  } catch {
+    const job = { url, from: null, tabId: state.tab?.id };
+    await chrome.windows.create({ url: `grant.html?job=${encodeURIComponent(JSON.stringify(job))}`, type: 'popup', width: 420, height: 260, focused: true });
+    return { pending: true, host: new URL(url).host };
+  }
+  if (!res.ok) throw new Error(t.httpFailed(res.status));
+  if (limit && Number(res.headers.get('content-length') || 0) > limit) { res.body?.cancel(); throw new Error(t.tooLarge(mb(limit))); }
+  const blob = await res.blob();
+  if (limit && blob.size > limit) throw new Error(t.tooLarge(mb(limit)));
+  const out = await sendFile(blob, { name: fileNameOf(url, res.headers.get('content-disposition')), mime: blob.type || 'application/pdf' });
+  return { seqs: [out.seq], deduped: out.deduped };
+}
+
+/** Sending: the stamp is pressed, the envelope's stripes run, nothing can be changed until it's done */
 function busy(on) {
   state.busy = on;
   $('send').setAttribute('aria-busy', String(on));
   $('send').disabled = on;
   $('stamp-word').textContent = on ? t.html.sending : t.html.stamp;
+  $('send-form').classList.toggle('sending', on);
+  compose.readOnly = on;
+  $('choose').disabled = on;
 }
 
 // ── Opening ─────────────────────────────────────────────────────────────
