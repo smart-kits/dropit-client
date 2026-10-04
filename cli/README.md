@@ -30,7 +30,8 @@ dropit send < notes.txt            # a text file's contents
 dropit send -f photo.jpg           # a file: image, video, PDF, anything
 ```
 
-- **One file per command.** For several: `for f in *.png; do dropit send -f "$f"; done`.
+- **Several files at once:** `dropit send -f *.png` — up to 10, sent as one batch that arrives together.
+  More than 10 and nothing is sent; a missing file is caught before anything goes.
 - **Big files stream** from disk; they aren't read into memory first. Your plan sets the size limit per file.
 - **Sent twice by accident?** The same thing twice in a row within a minute is kept once — you see `Already sent (#41)`.
 - **Scripts can rely on it:** success exits `0`; any failure prints the reason to stderr and exits `1`.
@@ -182,18 +183,18 @@ Then join your account:
 ```bash
 dropit pair K7M2QX     # with a code from a device you already use (web inbox: Devices; Obsidian: Settings → dropit)
 dropit pair            # only on your very first device: creates the account
-dropit me              # free · 2/3 devices · 1.2/30 MB · real-time available
+dropit me              # free · 2/3 devices · 1.2/30 MB · files up to 5 MB · real-time trial: 3 days left
 ```
 
-> On a machine that's already joined, plain `dropit pair` creates **another** account and switches to it.
-> To join an existing account, always give the code.
+> On a machine that's already joined, plain `dropit pair` stops and says so — it won't switch you to a new, empty account.
+> To join another account, give its code. To really start a separate account here, `dropit pair --new`.
 
 ## Your account from here
 
 | Command | Does |
 |---|---|
 | `dropit code` | A 6-character code for a new device, valid 5 minutes — type it there, or `dropit pair <code>` on another terminal |
-| `dropit me` | Plan, devices used, space used, whether real-time is on |
+| `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time is on |
 | `dropit devices` | Every device on your account, with its ID |
 | `dropit revoke <device_id>` | Removes a device at once and frees its slot — a lost laptop, an old phone |
 
@@ -207,7 +208,7 @@ Pairing codes are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix
 | `Invalid token` · `This device was removed` | This machine was removed from your account | Get a new code, `dropit pair <code>` |
 | `Invalid pairing code` · `Pairing code expired` | Wrong, used or older than 5 minutes | Generate a fresh one |
 | `Device limit reached` | Your plan's device count is used up | `dropit devices`, then `dropit revoke <id>` one you don't use |
-| `Request failed: HTTP 413` | The file is over your plan's size limit | Send a smaller file, or a link to it |
+| `Larger than 5 MB, the most one item can be` | The file is over your plan's size limit | Send a smaller file, or a link to it |
 | `Network unavailable (tried N addresses)` | No connection, or a proxy is blocking it | Check the network or proxy |
 | `Node.js < 22 has no global WebSocket` | Real-time needs Node.js 22+ | Upgrade Node.js, or run `watch` on a schedule |
 

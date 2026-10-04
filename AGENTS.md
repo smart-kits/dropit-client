@@ -145,4 +145,4 @@ Messages are shown in English unless `LANG` (or `DROPIT_LANG`) is Chinese. For p
   internals to docs or comments. Clients talk to the API; that's all they need to know.
 - **No build step, no dependencies.** Keep the CLI a single file and the extension loadable as-is.
 - **Interface text is bilingual.** Strings live in `T` (CLI) and `extension/i18n.js` (+ `_locales/` for the manifest), each with `en` and `zh`. Add every new string to both.
-- **Test before pushing:** `node test/i18n.test.mjs`, `node test/extension.test.mjs`, `node test/cli-render.test.mjs` and `node --check cli/dropit`.
+- **Test before pushing:** `node test/i18n.test.mjs`, `node test/extension.test.mjs`, `node test/cli-render.test.mjs`, `node test/cli-logic.test.mjs` and `node --check cli/dropit`.

@@ -13,6 +13,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const crypto = require('node:crypto');
 const readline = require('node:readline');
 
 const CONFIG = path.join(os.homedir(), '.config', 'dropit', 'config.json');
@@ -20,6 +21,7 @@ const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
 const HEARTBEAT_MS = 60_000;
 const STALE_MS = 150_000;
 const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
+const FILES_MAX = 10;                        // files sent together — the same in every client
 
 // ── Language ────────────────────────────────────────────────────────────
 // English by default; Simplified Chinese when the environment asks for it.
@@ -39,8 +41,15 @@ const T = {
       PAIRING_LIMITED: 'Too many wrong pairing codes from this network today. Check the code on the other device and try again tomorrow',
       TURNSTILE_REQUIRED: 'Quite a few accounts were created on this network today. Create this one in the browser at dropit.smart-kits.xyz, then join it here with a pairing code',
       QUOTA_EXCEEDED: 'Storage is full — wait for old items to expire',
-      BLOB_UNAVAILABLE: 'File uploads are not available right now',
+      PAYLOAD_TOO_LARGE: 'Too large to send',
+      GLOBAL_CIRCUIT_OPEN: 'dropit is not taking new items right now — try again later',
+      BLOB_UNAVAILABLE: "Files can't be sent right now — try again later",
     },
+    tooLarge: (size) => `Larger than ${size}, the most one item can be`,
+    rateHour: 'Sending too fast — try again within the hour',
+    rateDay: (time) => `Today's sends are used up — back at ${time}`,
+    quotaItems: 'Too many items waiting — wait for old ones to expire',
+    quotaBytes: 'Storage is full — wait for old items to expire',
     httpFailed: (status) => `Request failed: HTTP ${status}`,
     offline: (n, msg) => `Network unavailable (tried ${n} address${n === 1 ? '' : 'es'}): ${msg}`,
     joined: 'Joined your account',
@@ -49,6 +58,10 @@ const T = {
     nothingToSend: 'Nothing to send. Usage: dropit send <text or link>, or pipe text in',
     alreadySent: (seq) => `Already sent (#${seq})`,
     fileNotFound: (f) => `File not found: ${f}`,
+    notAFile: (f) => `Not a file: ${f}`,
+    noFiles: 'No file given. Usage: dropit send -f <file…>',
+    tooManyFiles: (n, max) => `${n} files — at most ${max} can go together. Nothing was sent`,
+    batchStopped: (done, n) => `Stopped: ${done} of ${n} sent`,
     uploadFailedNet: (msg) => `Upload failed (network unavailable, or the upload URL expired): ${msg}`,
     uploadFailedHttp: (status) => `Upload failed: HTTP ${status}`,
     folder: (dir) => `Receiving into ${dir}`,
@@ -67,17 +80,24 @@ const T = {
     wsNotIncluded: 'Caught up. Real-time push is not in your plan (new accounts get it for 10 days), '
       + 'so watch stops here; run it again to pick up new items.',
     wsFailed: (msg) => `Real-time connection failed: ${msg}`,
-    me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} devices · ${mb} MB · `
-      + `real-time ${m.ws_available ? 'available' : 'unavailable'}`,
+    meDevices: (used, limit) => `${used}/${limit} devices`,
+    meFiles: (size) => `files up to ${size}`,
+    rtOn: 'real-time available',
+    rtOff: 'real-time unavailable',
+    rtTrial: (left) => `real-time trial: ${left}`,
+    rtTrialOver: 'real-time trial ended',
     cursor: 'cursor',
     revoked: 'Revoked — the device slot is free again',
+    alreadyJoined: 'This machine is already joined to an account. To join another account: dropit pair <code>. '
+      + 'To start a separate new account anyway: dropit pair --new',
     notPaired: 'Not paired yet. On your first device run `dropit pair`; on the others, `dropit pair <code>`',
     usage: `dropit — send things to yourself
 
   dropit pair [code]        No code: create an account. With a code: join an existing one
+  dropit pair --new         Start a separate new account on a machine that's already joined
   dropit code               Generate a pairing code for a new device
   dropit send <text|link>   Or pipe it in: pbpaste | dropit send
-  dropit send -f <file>     Send a file — images, PDFs, videos and more
+  dropit send -f <file…>    Send files — images, PDFs, videos and more; up to 10 go as one batch
   dropit watch [folder]     Receive into a local folder, in real time (default ~/dropit)
       --from <#>            …pulling again from item #<#>
       --days <n>            …pulling again the last <n> days
@@ -102,8 +122,15 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
       PAIRING_LIMITED: '这个网络今天输错配对码的次数太多了。核对一下另一台设备上的码，明天再试',
       TURNSTILE_REQUIRED: '这个网络今天建的账号较多。请在浏览器里打开 dropit.smart-kits.xyz 建号，再在这里用配对码加入',
       QUOTA_EXCEEDED: '空间已满，等旧内容过期',
-      BLOB_UNAVAILABLE: '暂时不能传文件',
+      PAYLOAD_TOO_LARGE: '内容太大，投不了',
+      GLOBAL_CIRCUIT_OPEN: 'dropit 暂时不收新内容，稍后再试',
+      BLOB_UNAVAILABLE: '文件暂时投不了，稍后再试',
     },
+    tooLarge: (size) => `超过了单条上限 ${size}`,
+    rateHour: '投得太快了，这一小时内再试',
+    rateDay: (time) => `今天的投递次数用完了，${time} 恢复`,
+    quotaItems: '积压的内容太多了，等旧内容过期',
+    quotaBytes: '空间已满，等旧内容过期',
     httpFailed: (status) => `请求失败 HTTP ${status}`,
     offline: (n, msg) => `网络不可用（试过 ${n} 个地址）：${msg}`,
     joined: '已加入账号',
@@ -112,6 +139,10 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     nothingToSend: '没有内容可投。用法：dropit send <文本或链接>，或从管道读入',
     alreadySent: (seq) => `已投过了（#${seq}）`,
     fileNotFound: (f) => `找不到文件：${f}`,
+    notAFile: (f) => `不是文件：${f}`,
+    noFiles: '没有给文件。用法：dropit send -f <文件…>',
+    tooManyFiles: (n, max) => `${n} 个文件 —— 一次最多 ${max} 个。一个都没发`,
+    batchStopped: (done, n) => `已停下：${n} 个里发出了 ${done} 个`,
     uploadFailedNet: (msg) => `上传失败（网络不可用，或上传地址已过期）：${msg}`,
     uploadFailedHttp: (status) => `上传失败 HTTP ${status}`,
     folder: (dir) => `落地目录 ${dir}`,
@@ -129,17 +160,24 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     wsTrialFull: '已补齐。今天的实时名额满了 —— watch 等到 UTC 零点过后自动重连。',
     wsNotIncluded: '已补齐。当前套餐不含实时推送（新账号有 10 天体验期），watch 就此退出；再运行一次即可接着收新内容。',
     wsFailed: (msg) => `实时连接失败：${msg}`,
-    me: (m, mb) => `${m.plan} · ${m.devices_used}/${m.devices_limit ?? '∞'} 台设备 · ${mb} MB · `
-      + `实时推送${m.ws_available ? '可用' : '不可用'}`,
+    meDevices: (used, limit) => `${used}/${limit} 台设备`,
+    meFiles: (size) => `单个文件最大 ${size}`,
+    rtOn: '实时推送可用',
+    rtOff: '实时推送不可用',
+    rtTrial: (left) => `实时推送体验期：${left}`,
+    rtTrialOver: '实时推送体验已结束',
     cursor: '游标',
     revoked: '已吊销，名额已释放',
+    alreadyJoined: '这台机器已经加入了一个账号。要加入另一个账号：dropit pair <配对码>。'
+      + '确实要另建一个新账号：dropit pair --new',
     notPaired: '还没配对。第一台设备运行 `dropit pair`，之后的设备运行 `dropit pair <配对码>`',
     usage: `dropit —— 发给自己
 
   dropit pair [配对码]      不带配对码：创建账号；带配对码：加入已有账号
+  dropit pair --new         已加入账号的机器上，另建一个新账号
   dropit code               生成配对码，给新设备用
   dropit send <文本|链接>    也可以从管道读：pbpaste | dropit send
-  dropit send -f <文件>      投文件 —— 图片、PDF、视频等
+  dropit send -f <文件…>     投文件 —— 图片、PDF、视频等；最多 10 个，作为一批
   dropit watch [目录]        实时收到本地文件夹（默认 ~/dropit）
       --from <序号>          …并从第 <序号> 条起重新拉取
       --days <天数>          …并重新拉取最近 <天数> 天
@@ -191,7 +229,7 @@ async function api(cfg, method, path_, body, auth = true) {
         save(cfg);
       }
       if (!res.ok) {
-        const err = new Error(t.errors[data.error] ?? t.httpFailed(res.status));
+        const err = new Error(errorText(data.error, data, res.status));
         Object.assign(err, { code: data.error, status: res.status, data });
         throw err;
       }
@@ -206,10 +244,21 @@ async function api(cfg, method, path_, body, auth = true) {
 
 // ── Commands ────────────────────────────────────────────────────────────
 
-/** First run: with a pairing code, join an existing account; without one, create a new account. */
+/**
+ * What `dropit pair` does here: with a code, join that account; without one, create an account —
+ * but only on a machine that hasn't joined yet, or when asked for with --new. A plain `dropit pair`
+ * on a joined machine would quietly switch it to a brand-new, empty account.
+ */
+function pairAction(args, hasToken) {
+  const code = args.find((a) => a !== '--new');
+  if (code) return { action: 'join', code };
+  return hasToken && !args.includes('--new') ? { action: 'refuse' } : { action: 'create' };
+}
+
 async function pair(args) {
   const cfg = load();
-  const code = args[0];
+  const { action, code } = pairAction(args, Boolean(cfg.token));
+  if (action === 'refuse') die(t.alreadyJoined);
   const name = `CLI · ${os.hostname()}`;
   const res = code
     ? await api(cfg, 'POST', '/v1/pair/claim', { code: code.trim().toUpperCase(), device_name: name, scope: 'full' }, false)
@@ -227,8 +276,8 @@ async function newCode() {
 
 async function send(args) {
   const cfg = needToken();
-  const fileFlag = args.indexOf('-f');
-  if (fileFlag !== -1) return sendFile(cfg, args[fileFlag + 1]);
+  const files = filesOf(args);
+  if (files) return sendFiles(cfg, files);
 
   const raw = args.length ? args.join(' ') : await readStdin();
   if (!raw.trim()) die(t.nothingToSend);
@@ -238,13 +287,63 @@ async function send(args) {
   console.log(res.deduped === true ? t.alreadySent(res.seq) : `✓ #${res.seq}`);
 }
 
+/** The files after `-f` (`dropit send -f *.png`), or null when there's no -f. */
+function filesOf(args) {
+  const i = args.indexOf('-f');
+  return i === -1 ? null : args.slice(i + 1);
+}
+
+/** Why these files can't be sent, checked before any is: none given, too many, or one that isn't there. */
+function filesProblem(files, isFile = fileState, tt = t) {
+  if (!files.length) return tt.noFiles;
+  if (files.length > FILES_MAX) return tt.tooManyFiles(files.length, FILES_MAX);
+  for (const f of files) {
+    const state = isFile(f);
+    if (state !== 'file') return state === 'missing' ? tt.fileNotFound(f) : tt.notAFile(f);
+  }
+  return null;
+}
+
+function fileState(f) {
+  try { return fs.statSync(f).isFile() ? 'file' : 'other'; } catch { return 'missing'; }
+}
+
+/** Batch marks for n files: none for one, otherwise {id, i, n} with i counting from 1 — the receiver shows them together. */
+function groupsFor(n, id = crypto.randomBytes(12).toString('base64url')) {
+  if (n < 2) return Array.from({ length: n }, () => null);
+  return Array.from({ length: n }, (_, k) => ({ id, i: k + 1, n }));
+}
+
+/**
+ * One after the other, a line each. A failure stops there: what went through stays sent,
+ * the reason is printed with the file's name, and the exit code is 1.
+ */
+async function sendFiles(cfg, files) {
+  const problem = filesProblem(files);
+  if (problem) die(problem);
+  // Several files: check the sizes first, so a file that's too big doesn't stop the batch halfway
+  if (files.length > 1) {
+    const limit = (await api(cfg, 'GET', '/v1/me').catch(() => null))?.item_bytes_limit;
+    const big = limit && files.find((f) => fs.statSync(f).size > limit);
+    if (big) die(`${path.basename(big)}: ${t.tooLarge(mb(limit))}`);
+  }
+  const groups = groupsFor(files.length);
+  for (const [k, file] of files.entries()) {
+    try {
+      await sendFile(cfg, file, groups[k]);
+    } catch (err) {
+      if (files.length === 1) die(err.message);
+      die(`${path.basename(file)}: ${err.message}\n${t.batchStopped(k, files.length)}`);
+    }
+  }
+}
+
 /** Three-step upload: request an upload URL → PUT the file → confirm */
-async function sendFile(cfg, file) {
-  if (!file || !fs.existsSync(file)) die(t.fileNotFound(file));
+async function sendFile(cfg, file, group) {
   const stat = fs.statSync(file);
   const start = await api(cfg, 'POST', '/v1/ingest/blob', {
     kind: kindOf(file), filename: path.basename(file), size: stat.size,
-    mime: mimeOf(file), source: 'cli', client_ts: Date.now(),
+    mime: mimeOf(file), source: 'cli', client_ts: Date.now(), ...(group ? { group } : {}),
   }).catch((err) => (err.code === 'DEDUPED' ? err.data : Promise.reject(err)));
   if (start.deduped) return console.log(t.alreadySent(start.seq));
 
@@ -254,8 +353,8 @@ async function sendFile(cfg, file) {
     headers: { 'content-type': mimeOf(file), 'content-length': String(stat.size) },
     body: fs.createReadStream(file),
     duplex: 'half',
-  }).catch((err) => die(t.uploadFailedNet(err.message)));
-  if (!put.ok) die(t.uploadFailedHttp(put.status));   // fail loudly, never pretend it worked
+  }).catch((err) => { throw new Error(t.uploadFailedNet(err.message)); });
+  if (!put.ok) throw new Error(t.uploadFailedHttp(put.status));   // fail loudly, never pretend it worked
 
   // The number from the first step is a placeholder while uploading; the item's real # comes back here.
   const done = await api(cfg, 'POST', `/v1/ingest/blob/${start.seq}/done`);
@@ -460,9 +559,9 @@ function stopRealtime(state, sync, why) {
 }
 
 /** "3 days left" — counts whole days up, under a day says so */
-function trialLeft(until) {
-  const left = until - Date.now();
-  return t.daysLeft(left < 86_400_000 ? 0 : Math.ceil(left / 86_400_000));
+function trialLeft(until, tt = t, now = Date.now()) {
+  const left = until - now;
+  return tt.daysLeft(left < 86_400_000 ? 0 : Math.ceil(left / 86_400_000));
 }
 
 function reconnect(state, sync) {
@@ -498,8 +597,26 @@ function heartbeat(state, sync) {
 }
 
 async function me() {
-  const m = await api(needToken(), 'GET', '/v1/me');
-  console.log(t.me(m, `${(m.bytes_used / 1048576).toFixed(1)}/${(m.bytes_limit / 1048576).toFixed(0)}`));
+  console.log(meLine(await api(needToken(), 'GET', '/v1/me')));
+}
+
+/**
+ * "free · 1/3 devices · 0.0/30 MB · files up to 5 MB · real-time trial: 3 days left".
+ * realtime_until: null = always on; a time = the trial's end (passed or not). An answer without it
+ * (an older service) falls back to ws_available; one without item_bytes_limit leaves that part out.
+ */
+function meLine(m, tt = t, now = Date.now()) {
+  const until = m.realtime_until;
+  const rt = until === undefined ? (m.ws_available ? tt.rtOn : tt.rtOff)
+    : until === null ? tt.rtOn
+      : until > now ? tt.rtTrial(trialLeft(until, tt, now)) : tt.rtTrialOver;
+  return [
+    m.plan,
+    tt.meDevices(m.devices_used, m.devices_limit ?? '∞'),
+    `${(m.bytes_used / 1048576).toFixed(1)}/${(m.bytes_limit / 1048576).toFixed(0)} MB`,
+    ...(m.item_bytes_limit ? [tt.meFiles(mb(m.item_bytes_limit))] : []),
+    rt,
+  ].join(' · ');
 }
 
 async function devices() {
@@ -533,6 +650,31 @@ const OTHER = { '.pdf': 'application/pdf', '.md': 'text/markdown', '.txt': 'text
 const ext = (f) => path.extname(f).toLowerCase();
 const mimeOf = (f) => IMAGE[ext(f)] ?? OTHER[ext(f)] ?? 'application/octet-stream';
 const kindOf = (f) => (IMAGE[ext(f)] ? 'image' : ext(f) === '.mp4' || ext(f) === '.mov' ? 'video' : 'file');
+/** "5 MB", "1.5 MB" */
+const mb = (n) => {
+  const v = n / 1048576;
+  return `${Number.isInteger(v) ? v : v.toFixed(1)} MB`;
+};
+
+/** A local "HH:MM" `seconds` from now */
+const clock = (seconds, now) => {
+  const d = new Date(now + seconds * 1000);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+/**
+ * The sentence for an error answer from the service. Numbers come from the answer, never from here;
+ * an answer without the detail fields (an older service) gets the plain sentence for its code.
+ */
+function errorText(code, data = {}, status, tt = t, now = Date.now()) {
+  if (code === 'PAYLOAD_TOO_LARGE' && data.field === 'size' && data.limit) return tt.tooLarge(mb(data.limit));
+  if (code === 'RATE_LIMITED' && data.window === 'day') return tt.rateDay(clock(data.retry_after ?? 0, now));
+  if (code === 'RATE_LIMITED' && data.window === 'hour') return tt.rateHour;
+  if (code === 'QUOTA_EXCEEDED' && data.field === 'items') return tt.quotaItems;
+  if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return tt.quotaBytes;
+  return tt.errors[code] ?? tt.httpFailed(status);
+}
+
 const sanitize = (name) => name.replace(/[/\\:*?"<>|]/g, '_').slice(0, 120);
 
 function needToken() {
@@ -559,5 +701,7 @@ if (require.main === module) {
   if (!COMMANDS[cmd]) die(t.usage);
   COMMANDS[cmd](args).catch((err) => die(err.message));
 } else {
-  module.exports = { T, pickLang, markdownOf };   // for tests
+  module.exports = {                             // for tests
+    T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX,
+  };
 }
