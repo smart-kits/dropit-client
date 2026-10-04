@@ -43,7 +43,7 @@ that device, and every client's install steps are under *Devices*.
 **Sending**
 
 - Type or paste into the envelope, press <kbd>Enter</kbd> (or the red stamp). <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line.
-- **Drop files anywhere on the page**, paste a screenshot, or *Attach files* — up to 5 at a time, sent with the text as one delivery.
+- **Drop files anywhere on the page**, paste a screenshot, or *Attach files* — up to 10 at a time, sent with the text as one delivery.
 - A failed send is stamped **RETURNED** with the reason and stays on the envelope; nothing you wrote is lost.
 
 **Receiving**
@@ -122,7 +122,7 @@ Issues are public — never paste a key (`dk_…`).
   ```
 
 - Run the tests before you push (no dependencies): `node test/i18n.test.mjs`, `node test/extension.test.mjs`,
-  `node test/cli-render.test.mjs`.
+  `node test/cli-render.test.mjs`, `node test/cli-logic.test.mjs`.
 - Every interface string lives in an English and a Chinese table; add both, or the test fails.
 - Commit messages are in English. Docs come in pairs: `README.md` (English) and `README.zh-CN.md` (简体中文) — update both.
 

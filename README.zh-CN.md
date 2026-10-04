@@ -40,7 +40,7 @@
 **投**
 
 - 在信封里打字或粘贴，按<kbd>回车</kbd>（或点红色邮票）。<kbd>Shift</kbd>+<kbd>回车</kbd> 换行。
-- **把文件拖到页面任意位置**、粘贴截图，或者点「选文件」—— 一次最多 5 个，和文字一起作为一整份投出。
+- **把文件拖到页面任意位置**、粘贴截图，或者点「选文件」—— 一次最多 10 个，和文字一起作为一整份投出。
 - 没投成的会盖上红色「**退回**」章并写明原因，留在信封上；你写的东西一个字都不会丢。
 
 **收**
@@ -114,7 +114,7 @@ issue 是公开的 —— 千万别贴钥匙（`dk_…`）。
   git config core.hooksPath .githooks
   ```
 
-- 推送前跑测试（没有依赖）：`node test/i18n.test.mjs`、`node test/extension.test.mjs`、`node test/cli-render.test.mjs`。
+- 推送前跑测试（没有依赖）：`node test/i18n.test.mjs`、`node test/extension.test.mjs`、`node test/cli-render.test.mjs`、`node test/cli-logic.test.mjs`。
 - 每条界面文案都在英文和中文两张表里；两边都要加，不然测试会失败。
 - 提交信息用英文。文档成对：`README.md`（英文）和 `README.zh-CN.md`（简体中文）—— 两份都要改。
 

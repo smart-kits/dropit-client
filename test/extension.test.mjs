@@ -5,7 +5,7 @@
  *   node test/extension.test.mjs
  */
 import {
-  META_BUDGET, FROM_URL_MAX, BATCH_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
+  META_BUDGET, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
   fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
@@ -135,11 +135,12 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   eq('E13 one thing has no batch', groupsFor(1), [null]);
   const two = groupsFor(2, 'abcdefgh');
   eq('E13 two', two, [{ id: 'abcdefgh', i: 1, n: 2 }, { id: 'abcdefgh', i: 2, n: 2 }]);
-  const max = groupsFor(BATCH_MAX);
+  eq('E13 at most 10 files at a time, as in every client', FILES_MAX, 10);
+  const max = groupsFor(16);
   ok('E13 sixteen share one id', max.length === 16 && new Set(max.map((g) => g.id)).size === 1 && max[15].i === 16);
   ok('E13 random id fits the service rule', /^[A-Za-z0-9_-]{6,32}$/.test(max[0].id), max[0].id);
   let threw = null;
-  try { groupsFor(BATCH_MAX + 1); } catch (err) { threw = err.code; }
+  try { groupsFor(17); } catch (err) { threw = err.code; }
   eq('E13 seventeen is refused before sending', threw, 'BATCH_TOO_LARGE');
 }
 

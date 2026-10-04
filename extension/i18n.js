@@ -26,7 +26,7 @@ const EN = {
   rateDay: (time) => `Today's sends are used up — back at ${time}`,
   quotaItems: 'Too many items waiting — wait for old ones to expire',
   quotaBytes: 'Storage is full — wait for old items to expire',
-  batchTooLarge: (max) => `At most ${max} things at once`,
+  batchTooLarge: (max) => `At most ${max} files at once`,
 
   menuParent: 'dropit',
   menuSelection: 'Send selected text',
@@ -123,7 +123,7 @@ const ZH = {
   rateDay: (time) => `今天的投递次数用完了，${time} 恢复`,
   quotaItems: '积压的内容太多了，等旧内容过期',
   quotaBytes: '空间已满，等旧内容过期',
-  batchTooLarge: (max) => `一次最多 ${max} 样`,
+  batchTooLarge: (max) => `一次最多 ${max} 个文件`,
 
   menuParent: 'dropit',
   menuSelection: '投选中的文字',

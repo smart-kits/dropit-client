@@ -31,7 +31,7 @@ Click the dropit icon, or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>. It
   Edit it first if you like.
 - **Paste anything**: text, a link (sent as a link), a screenshot, files copied in Finder (<kbd>⌘</kbd><kbd>V</kbd>).
   Or *Choose files*.
-- **Several at once** — some text and up to 16 files — arrive together as one delivery.
+- **Several at once** — some text and up to 10 files — arrive together as one delivery.
 - <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line. <kbd>Enter</kbd> that picks a word in an input method never sends.
 
 While it sends, the stamp stays pressed, the envelope's red-and-blue stripes run, and a batch counts up

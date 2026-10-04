@@ -9,7 +9,8 @@ export const META_BUDGET = 2000;
 export const TITLE_MAX = 200;           // characters
 export const DESCRIPTION_MAX = 300;     // characters
 export const FROM_URL_MAX = 1024;       // bytes; a longer source address is left out, not cut
-export const BATCH_MAX = 16;            // items sent together as one batch
+export const FILES_MAX = 10;            // files sent together, the same in every client (text can go with them)
+const GROUP_MAX = 16;                   // the most one batch can hold
 
 const bytes = (s) => new TextEncoder().encode(s).length;
 const metaBytes = (meta) => bytes(JSON.stringify(meta));
@@ -149,7 +150,7 @@ export function isPdf(url, contentType) {
 
 /** Batch markers for n things sent together, or null for one */
 export function groupsFor(n, id = randomId()) {
-  if (n > BATCH_MAX) throw Object.assign(new Error('batch too large'), { code: 'BATCH_TOO_LARGE' });
+  if (n > GROUP_MAX) throw Object.assign(new Error('batch too large'), { code: 'BATCH_TOO_LARGE' });
   if (n < 2) return Array.from({ length: n }, () => null);
   return Array.from({ length: n }, (_, k) => ({ id, i: k + 1, n }));
 }

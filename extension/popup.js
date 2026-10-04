@@ -1,6 +1,6 @@
 import { api, store, sendText, sendFile, me, authLost } from './api.js';
 import { t, lang } from './i18n.js';
-import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, BATCH_MAX } from './payload.js';
+import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX } from './payload.js';
 import { readPage, readSelection } from './page.js';
 
 const $ = (id) => document.getElementById(id);
@@ -206,7 +206,7 @@ async function send(intent) {
   const big = limit && state.files.find((f) => f.size > limit);
   if (big) throw new Error(`${big.name}: ${t.tooLarge(mb(limit))}`);
   const items = [...(intent.text ? [{ text: intent.text }] : []), ...state.files.map((file) => ({ file }))];
-  if (items.length > BATCH_MAX) throw new Error(t.batchTooLarge(BATCH_MAX));
+  if (state.files.length > FILES_MAX) throw new Error(t.batchTooLarge(FILES_MAX));
   const groups = groupsFor(items.length);
   const seqs = [];
   for (const [k, it] of items.entries()) {
