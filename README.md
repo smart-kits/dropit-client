@@ -38,6 +38,10 @@ that device, and every client's install steps are under *Devices*.
 
 ## The web inbox
 
+![Drop files and send from any browser; pull and copy on another computer; add a device by scanning a code; send any page with the bookmarklet.](./media/web-inbox-tour.webp)
+
+<sub>Shown: a NASA photograph and page (public domain) · a Lonely Planet page link.</sub>
+
 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz), in any browser, phone or computer. Nothing to install.
 
 **Sending**

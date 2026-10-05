@@ -7,6 +7,10 @@ And a folder that fills itself with whatever you send from elsewhere.**
 
 macOS and Linux. A single Node.js file, no dependencies.
 
+![dropit pair joins in one line; dropit send sends the clipboard, a file, a note when a build is done; dropit watch fills a folder with what the phone shares.](../media/cli-tour.webp)
+
+<sub>Shown: a Lonely Planet page link · a NASA photograph (public domain).</sub>
+
 ## One line each
 
 | You want… | Run | You see |

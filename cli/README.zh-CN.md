@@ -7,6 +7,10 @@
 
 支持 macOS 和 Linux。单个 Node.js 文件，没有依赖。
 
+![dropit pair 一行加入；dropit send 发剪贴板、文件、构建完成的提醒；dropit watch 把手机分享来的东西落成文件。](../media/cli-tour.webp)
+
+<sub>画面内容：Lonely Planet 页面链接 · NASA 照片（公共领域）。</sub>
+
 ## 一行就够
 
 | 你想… | 运行 | 你会看到 |

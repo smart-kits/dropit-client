@@ -6,6 +6,10 @@
 一个页面、一段话、一张图、一份 PDF、一张截图：几秒后它就在 Obsidian 里、手机上、任何一个浏览器里等你。
 支持 Chrome 和 Edge。
 
+![在页面、选中的文字、链接、图片、PDF、下载链接、视频上右键 → dropit；或在弹窗里粘贴、选文件。几秒后手机上就收到。](../media/extension-tour.webp)
+
+<sub>画面内容：YouTube 上的 <i>Big Buck Bunny</i> © Blender Foundation（CC BY 3.0）· Wikipedia（CC BY-SA 4.0）· Hacker News · NASA 图片与视频（公共领域）· arXiv:1706.03762《Attention Is All You Need》· Internet Archive《傲慢与偏见》（公共领域）。</sub>
+
 ## 一下就到
 
 | 你正在看… | 这样做 | 其他设备收到 |

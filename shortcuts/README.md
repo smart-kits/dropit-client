@@ -5,6 +5,10 @@
 The main way to send from iPhone and iPad: the **share sheet** and **Back Tap**.
 Share photos, videos, files, a link or some text; a notification says what went — "3 photo/video sent".
 
+![Scan the pairing code and set up the shortcut once; then Share → dropit from Safari or Photos, or double-tap the back of the phone to send the clipboard.](../media/ios-tour.webp)
+
+<sub>The iPhone screens are drawn; what they send and what arrives is real. Shown: Lonely Planet · a NASA photograph (public domain).</sub>
+
 ## Install (one tap)
 
 1. On the iPhone or iPad, open **https://dropit.smart-kits.xyz** in Safari and tap **Install the shortcut**, then **Add Shortcut**.
