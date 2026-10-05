@@ -379,7 +379,7 @@ async function watch(args) {
   const dir = path.resolve(args[0] ?? cfg.folder ?? path.join(os.homedir(), 'dropit'));
   fs.mkdirSync(dir, { recursive: true });
   save({ ...cfg, folder: dir });
-  console.log(t.folder(dir));
+  console.log(t.folder(tildePath(dir)));
 
   // Pulling again from a point: files already in the folder are kept (writeItem skips them),
   // so this fills in what's missing. The server's snapshot of this device's position only moves
@@ -651,6 +651,11 @@ const ext = (f) => path.extname(f).toLowerCase();
 const mimeOf = (f) => IMAGE[ext(f)] ?? OTHER[ext(f)] ?? 'application/octet-stream';
 const kindOf = (f) => (IMAGE[ext(f)] ? 'image' : ext(f) === '.mp4' || ext(f) === '.mov' ? 'video' : 'file');
 /** "5 MB", "1.5 MB" */
+/** A path inside the home folder, as ~/… — shorter to read, and the same on every machine */
+function tildePath(p, home = os.homedir()) {
+  return p === home ? '~' : p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
+}
+
 const mb = (n) => {
   const v = n / 1048576;
   return `${Number.isInteger(v) ? v : v.toFixed(1)} MB`;
@@ -702,6 +707,6 @@ if (require.main === module) {
   COMMANDS[cmd](args).catch((err) => die(err.message));
 } else {
   module.exports = {                             // for tests
-    T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX,
+    T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX, tildePath,
   };
 }

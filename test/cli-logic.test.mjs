@@ -93,5 +93,14 @@ is('with a code → join, joined or not', [pairAction(['k7m2qx'], true), pairAct
 ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>') && en.alreadyJoined.includes('dropit pair --new')
   && zh.alreadyJoined.includes('dropit pair --new'));
 
+// Paths inside the home folder are shown as ~/…
+{
+  const { tildePath } = require('../cli/dropit');
+  ok('tildePath: inside home', tildePath('/Users/a/Notes/Inbox', '/Users/a') === '~/Notes/Inbox');
+  ok('tildePath: home itself', tildePath('/Users/a', '/Users/a') === '~');
+  ok('tildePath: a look-alike prefix is not home', tildePath('/Users/ab/x', '/Users/a') === '/Users/ab/x');
+  ok('tildePath: elsewhere unchanged', tildePath('/tmp/x', '/Users/a') === '/tmp/x');
+}
+
 console.log(`\n${fail === 0 ? '✅' : '🛑'}  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
