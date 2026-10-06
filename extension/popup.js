@@ -1,4 +1,5 @@
-import { api, store, sendText, sendFile, me, authLost } from './api.js';
+import { api, store, sendText, sendFile, me, authLost, forgetToken } from './api.js';
+import { deviceKey } from './device.js';
 import { t, lang } from './i18n.js';
 import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX } from './payload.js';
 import { readPage, readSelection } from './page.js';
@@ -33,7 +34,16 @@ function setupFailed(message) {
 /** A joined browser gets a send-only token: a leaked one can't read anything */
 async function adopt(res) {
   await store.set({ token: res.token, device_id: res.device_id });
-  render();
+  await chrome.storage.local.remove('previous_token');
+  await render();                // it ends by saying what Enter will send; the note goes after that
+  // Joined in place of this browser's earlier join (reinstalled, signed out): say so, it was one step
+  if (res.replaced && res.replaced.how !== 'issuer') say(t.replacedOld(res.replaced.name), true);
+}
+
+/** What lets the service tell this browser joining again from a new one (device.js) */
+async function sameBrowser() {
+  const { previous_token } = await store.get();
+  return { device_key: await deviceKey('extension'), ...(previous_token ? { previous_token } : {}) };
 }
 
 const guardSetup = (fn) => async () => {
@@ -42,7 +52,7 @@ const guardSetup = (fn) => async () => {
 };
 
 $('create').onclick = guardSetup(async () => {
-  adopt(await api('POST', '/v1/accounts', { device_name: t.deviceName(navigator.platform) }, { auth: false }));
+  adopt(await api('POST', '/v1/accounts', { device_name: t.deviceName(navigator.platform), ...await sameBrowser() }, { auth: false }));
 });
 $('code').onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.isComposing) $('claim').click(); };
 $('code').oninput = () => setupFailed(null);
@@ -50,11 +60,19 @@ $('claim').onclick = guardSetup(async () => {
   const code = $('code').value.trim().toUpperCase();
   if (!code) return $('code').focus();
   adopt(await api('POST', '/v1/pair/claim',
-    { code, device_name: t.deviceName(navigator.platform), scope: 'ingest_only' }, { auth: false }));
+    { code, device_name: t.deviceName(navigator.platform), scope: 'ingest_only', ...await sameBrowser() }, { auth: false }));
 });
 
+// Signing out removes this browser from the account first, so it stops using a device slot. Offline or
+// already removed: forget it here anyway — the kept key lets the next join take its place.
 $('unpair').onclick = async () => {
-  await chrome.storage.local.remove(['token', 'device_id', 'me']);
+  const { token, device_id } = await store.get();
+  try {
+    await api('DELETE', `/v1/devices/${encodeURIComponent(device_id)}`);
+    await chrome.storage.local.remove(['token', 'device_id', 'me', 'previous_token']);
+  } catch {
+    await forgetToken(token);
+  }
   render();
 };
 

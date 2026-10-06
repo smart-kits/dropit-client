@@ -56,6 +56,8 @@ const EN = {
   accessDenied: 'Not allowed to read files from this site',
 
   deviceName: (platform) => `Browser · ${platform}`,
+  replacedOld: (name) => `Took the place of this browser's earlier “${name}” — it no longer uses a device slot`,
+  revokedReplaced: 'dropit was joined again in this browser, so this copy was signed out — join again to use it',
   plans: { free: 'Free', paid: 'Paid' },
   planLine: (plan, used, limit) => `${plan} · ${used}/${limit ?? '∞'} devices`,
 
@@ -152,6 +154,8 @@ const ZH = {
   accessDenied: '没有读取这个网站文件的权限',
 
   deviceName: (platform) => `浏览器 · ${platform}`,
+  replacedOld: (name) => `已替换这个浏览器之前的「${name}」，不再多占一台设备的名额`,
+  revokedReplaced: '这个浏览器上重新加入过 dropit，这一份已退出 —— 要用请重新加入',
   plans: { free: '免费版', paid: '付费版' },
   planLine: (plan, used, limit) => `${plan} · ${used}/${limit ?? '∞'} 台设备`,
 

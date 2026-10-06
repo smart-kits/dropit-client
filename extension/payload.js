@@ -206,5 +206,6 @@ export function errorText(code, data = {}, status, t, now = Date.now()) {
   if (code === 'RATE_LIMITED' && data.window === 'hour') return t.rateHour;
   if (code === 'QUOTA_EXCEEDED' && data.field === 'items') return t.quotaItems;
   if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return t.quotaBytes;
+  if (code === 'DEVICE_REVOKED' && data.reason === 'replaced') return t.revokedReplaced;
   return t.errors[code] ?? t.httpFailed(status);
 }

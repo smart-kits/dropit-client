@@ -22,6 +22,15 @@ export const store = {
 export const authLost = (err) => AUTH_LOST.includes(err?.code);
 
 /**
+ * Stop using this browser's key. It is kept as `previous_token` and sent with the next join, so the service
+ * knows exactly which device this was and lets the new join take its place instead of using another slot.
+ */
+export async function forgetToken(token) {
+  await chrome.storage.local.remove(['token', 'device_id', 'me']);
+  if (token) await chrome.storage.local.set({ previous_token: token });
+}
+
+/**
  * Fall back to the next endpoint and remember the one that works.
  * `body` is sent as JSON, or as-is when it is a Blob (with `type` as its content type).
  */
@@ -45,7 +54,7 @@ export async function api(method, path, body, { auth = true, type } = {}) {
       if (!res.ok) {
         const err = new Error(errorText(data.error, data, res.status, t));
         Object.assign(err, { code: data.error, data, status: res.status, handled: true });
-        if (auth && authLost(err)) await chrome.storage.local.remove(['token', 'device_id', 'me']);
+        if (auth && authLost(err)) await forgetToken(cfg.token);
         throw err;
       }
       return data;

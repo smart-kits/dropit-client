@@ -54,6 +54,8 @@ const T = {
     offline: (n, msg) => `Network unavailable (tried ${n} address${n === 1 ? '' : 'es'}): ${msg}`,
     joined: 'Joined your account',
     created: (id) => `Account created: ${id}`,
+    replacedOld: (name) => `  took the place of this machine's earlier "${name}" — it no longer uses a device slot`,
+    revokedReplaced: 'dropit was paired again on this machine, so this copy was signed out — pair again: dropit pair',
     codeValid: (time) => `Valid for 5 minutes (expires at ${time})`,
     nothingToSend: 'Nothing to send. Usage: dropit send <text or link>, or pipe text in',
     alreadySent: (seq) => `Already sent (#${seq})`,
@@ -135,6 +137,8 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     offline: (n, msg) => `网络不可用（试过 ${n} 个地址）：${msg}`,
     joined: '已加入账号',
     created: (id) => `已创建账号 ${id}`,
+    replacedOld: (name) => `  替换了这台机器之前的「${name}」，不再多占一台设备的名额`,
+    revokedReplaced: '这台机器上重新配对过 dropit，这一份已退出 —— 重新配对：dropit pair',
     codeValid: (time) => `5 分钟内有效（${time} 过期）`,
     nothingToSend: '没有内容可投。用法：dropit send <文本或链接>，或从管道读入',
     alreadySent: (seq) => `已投过了（#${seq}）`,
@@ -260,12 +264,43 @@ async function pair(args) {
   const { action, code } = pairAction(args, Boolean(cfg.token));
   if (action === 'refuse') die(t.alreadyJoined);
   const name = `CLI · ${os.hostname()}`;
+  // The key this machine had (still working, or already removed) and its fingerprint: pairing again takes
+  // the earlier one's place instead of using up another device slot
+  const same = { device_key: deviceKey('cli', machineFacts()), ...(cfg.token ? { previous_token: cfg.token } : {}) };
   const res = code
-    ? await api(cfg, 'POST', '/v1/pair/claim', { code: code.trim().toUpperCase(), device_name: name, scope: 'full' }, false)
-    : await api(cfg, 'POST', '/v1/accounts', { device_name: name }, false);
+    ? await api(cfg, 'POST', '/v1/pair/claim', { code: code.trim().toUpperCase(), device_name: name, scope: 'full', ...same }, false)
+    : await api(cfg, 'POST', '/v1/accounts', { device_name: name, ...same }, false);
   save({ ...cfg, token: res.token, device_id: res.device_id, cursor: 0 });
   console.log(code ? t.joined : t.created(res.user_id));
+  if (res.replaced && res.replaced.how !== 'issuer') console.log(t.replacedOld(res.replaced.name));
   await refreshEndpoints(load());
+}
+
+/**
+ * A fingerprint of this machine (and this config file), so pairing again — after the config was lost, say —
+ * takes the place of the earlier pairing instead of using up another device slot. Only a SHA-256 hash is
+ * sent, never the facts. It is not a credential: the key (`dk_…`) stays random.
+ */
+function deviceKey(kind, facts) {
+  return crypto.createHash('sha256').update(JSON.stringify([kind, ...facts])).digest('hex');
+}
+
+/** Host name, user, OS, CPU, memory, the machine's own ID where the OS offers one, and the config path */
+function machineFacts() {
+  let user = '';
+  try { user = os.userInfo().username; } catch { /* left out */ }
+  return [os.hostname(), user, os.platform(), os.arch(), os.cpus()[0]?.model ?? '', os.totalmem(), machineId(), CONFIG];
+}
+
+function machineId() {
+  try {
+    if (process.platform === 'linux') return fs.readFileSync('/etc/machine-id', 'utf8').trim();
+    const { execFileSync } = require('node:child_process');
+    const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (process.platform === 'darwin') return run('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice']).match(/"IOPlatformUUID" = "([^"]+)"/)?.[1] ?? '';
+    if (process.platform === 'win32') return run('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid']).match(/MachineGuid\s+REG_SZ\s+(\S+)/)?.[1] ?? '';
+  } catch { /* not available: the other facts still tell machines apart */ }
+  return '';
 }
 
 /** Issue a pairing code for another device */
@@ -677,6 +712,7 @@ function errorText(code, data = {}, status, tt = t, now = Date.now()) {
   if (code === 'RATE_LIMITED' && data.window === 'hour') return tt.rateHour;
   if (code === 'QUOTA_EXCEEDED' && data.field === 'items') return tt.quotaItems;
   if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return tt.quotaBytes;
+  if (code === 'DEVICE_REVOKED' && data.reason === 'replaced') return tt.revokedReplaced;
   return tt.errors[code] ?? tt.httpFailed(status);
 }
 
@@ -708,5 +744,6 @@ if (require.main === module) {
 } else {
   module.exports = {                             // for tests
     T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX, tildePath,
+    deviceKey, machineFacts,
   };
 }

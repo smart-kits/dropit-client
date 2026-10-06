@@ -8,7 +8,7 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { T, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX } = require('../cli/dropit');
+const { T, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX, deviceKey, machineFacts } = require('../cli/dropit');
 let pass = 0, fail = 0;
 const ok = (name, cond, detail = '') => {
   cond ? pass++ : fail++;
@@ -100,6 +100,18 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
   ok('tildePath: home itself', tildePath('/Users/a', '/Users/a') === '~');
   ok('tildePath: a look-alike prefix is not home', tildePath('/Users/ab/x', '/Users/a') === '/Users/ab/x');
   ok('tildePath: elsewhere unchanged', tildePath('/tmp/x', '/Users/a') === '/tmp/x');
+}
+
+// ── pairing again on the same machine: fingerprint and wording ────────────
+{
+  const facts = machineFacts();
+  const key = deviceKey('cli', facts);
+  ok('fingerprint is a 64-character hex hash, never the facts', /^[0-9a-f]{64}$/.test(key) && !key.includes(facts[0]), key);
+  is('the same machine gives the same fingerprint', deviceKey('cli', machineFacts()), key);
+  ok('another kind of client gives another fingerprint', deviceKey('obsidian', facts) !== key);
+  ok('another config file on this machine is another client', deviceKey('cli', [...facts.slice(0, -1), '/elsewhere/config.json']) !== key);
+  is('removed because this machine paired again: said as such', errorText('DEVICE_REVOKED', { reason: 'replaced' }, 403, en), en.revokedReplaced);
+  is('removed from another device: unchanged', errorText('DEVICE_REVOKED', {}, 403, en), en.errors.DEVICE_REVOKED);
 }
 
 console.log(`\n${fail === 0 ? '✅' : '🛑'}  ${pass} passed, ${fail} failed\n`);

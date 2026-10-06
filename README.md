@@ -109,6 +109,11 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
 - Keys come in two kinds: **full** (send, receive, add devices) and **send-only**. The extension and the iPhone shortcut
   join send-only, so a leaked key can't read your items.
 - Lost a device? Remove it from any other one: web inbox → *Devices* → *Revoke*, or `dropit devices` and `dropit revoke <id>`.
+- Signing out of the extension removes it from your account. Joining or pairing again on the same computer — after
+  reinstalling, say — takes the earlier one's place instead of using another device slot. To recognize it, the client
+  sends the key it had, if any, and a fingerprint: a SHA-256 hash of facts that stay put (extension: browser brand,
+  platform, CPU cores, memory, time zone, graphics chip; terminal: host name, user, OS, CPU, memory, the machine's ID
+  and the config path). Only the hash leaves the device, and it is not a credential.
 
 ## Problems and ideas
 

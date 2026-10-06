@@ -193,5 +193,27 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
     && seen.length === 2 && seen[0] === 'POST https://a.example/v1/accounts', JSON.stringify(seen));
 }
 
+// E30 · device fingerprint: the same facts give the same key; another kind of client, or other facts, another key
+{
+  const { deviceKey, browserFacts } = await import('../extension/device.js');
+  const facts = ['Google Chrome', 'MacIntel', 10, 8, 'Asia/Shanghai', 'Apple M1 Pro'];
+  const a = await deviceKey('extension', facts);
+  ok('E30 a 64-character hex hash, never the facts', /^[0-9a-f]{64}$/.test(a) && !a.includes('Mac'), a);
+  eq('E30 the same facts give the same key', await deviceKey('extension', [...facts]), a);
+  ok('E30 another kind of client gives another key', await deviceKey('web', facts) !== a);
+  ok('E30 another computer gives another key', await deviceKey('extension', [...facts.slice(0, 5), 'Apple M2']) !== a);
+  const nav = { userAgentData: { brands: [{ brand: 'Not)A;Brand' }, { brand: 'Chromium' }, { brand: 'Google Chrome' }] }, platform: 'MacIntel', hardwareConcurrency: 10 };
+  const got = browserFacts(nav);
+  ok('E30 the browser brand without version or filler brands', got[0] === 'Google Chrome' && got[1] === 'MacIntel' && got[2] === 10, JSON.stringify(got));
+  eq('E30 what the browser doesn\'t offer is left out, not an error', browserFacts({}).slice(0, 4), ['', '', '', '']);
+}
+
+// E31 · replaced by joining again in this browser: said as such, not as "removed"
+{
+  const t = { ...STRINGS.en };
+  eq('E31 DEVICE_REVOKED + replaced', errorText('DEVICE_REVOKED', { reason: 'replaced' }, 403, t), t.revokedReplaced);
+  eq('E31 DEVICE_REVOKED alone stays "removed"', errorText('DEVICE_REVOKED', {}, 403, t), t.errors.DEVICE_REVOKED);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
