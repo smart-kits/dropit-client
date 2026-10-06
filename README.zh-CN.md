@@ -106,6 +106,7 @@ Ask me before creating an account, and never show or commit my token.
   为了认出来，客户端会带上它原来的钥匙（如果还有），以及一个设备指纹：几项不常变的信息的 SHA-256 摘要
   （扩展：浏览器品牌、平台、CPU 核数、内存、时区、显卡；终端：主机名、用户、系统、CPU、内存、机器 ID 和配置文件路径）。
   离开设备的只有摘要，它也不是登录凭证。
+- 服务上存了什么、存多久、谁能看到：[隐私说明](https://dropit.smart-kits.xyz/privacy)。
 
 ## 问题和建议
 

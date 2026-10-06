@@ -56,6 +56,8 @@ const EN = {
   accessDenied: 'Not allowed to read files from this site',
 
   deviceName: (platform) => `Browser · ${platform}`,
+  consent: 'Joining sends this browser’s name and a fingerprint hash, used only to manage your device slots. What you send is kept on the service for a short while (1 day on the free plan) so your other devices can receive it.',
+  privacyLink: 'Privacy',
   replacedOld: (name) => `Took the place of this browser's earlier “${name}” — it no longer uses a device slot`,
   revokedReplaced: 'dropit was joined again in this browser, so this copy was signed out — join again to use it',
   plans: { free: 'Free', paid: 'Paid' },
@@ -80,10 +82,10 @@ const EN = {
   html: {
     setupTitle: 'Join with a pairing code',
     codePlaceholder: '6-character pairing code',
-    claim: 'Join',
+    claim: 'Agree and join',
     setupNote: 'Generate it in a dropit client you already use. Valid for 5 minutes.',
     firstTime: 'First time using dropit?',
-    create: 'Create a new account',
+    create: 'Agree and create a new account',
     placeholder: 'Type or paste — text, a link, a screenshot',
     stamp: 'Send',
     stampHint: 'or Enter',
@@ -154,6 +156,8 @@ const ZH = {
   accessDenied: '没有读取这个网站文件的权限',
 
   deviceName: (platform) => `浏览器 · ${platform}`,
+  consent: '加入时会发送这个浏览器的名称和一个设备指纹摘要，只用来管理你的设备名额。你投递的内容会在服务上暂存一段时间（免费版 1 天），供你的其他设备接收。',
+  privacyLink: '隐私说明',
   replacedOld: (name) => `已替换这个浏览器之前的「${name}」，不再多占一台设备的名额`,
   revokedReplaced: '这个浏览器上重新加入过 dropit，这一份已退出 —— 要用请重新加入',
   plans: { free: '免费版', paid: '付费版' },
@@ -176,10 +180,10 @@ const ZH = {
   html: {
     setupTitle: '用配对码加入',
     codePlaceholder: '6 位配对码',
-    claim: '加入',
+    claim: '同意并加入',
     setupNote: '在你已经在用的 dropit 客户端里生成，5 分钟内有效。',
     firstTime: '第一次用 dropit？',
-    create: '创建新账号',
+    create: '同意并创建新账号',
     placeholder: '输入或粘贴：文字、链接、截图',
     stamp: '投递',
     stampHint: '或回车',

@@ -208,6 +208,17 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   eq('E30 what the browser doesn\'t offer is left out, not an error', browserFacts({}).slice(0, 4), ['', '', '', '']);
 }
 
+// E32 · joining says what it sends before either button, and the buttons say "Agree and …" (store policy: consent by a clear action)
+{
+  for (const [lang, s] of Object.entries(STRINGS)) {
+    ok(`E32 ${lang}: the join note names the fingerprint and how long items stay`, /fingerprint|指纹/.test(s.consent) && /1 day|1 天/.test(s.consent), s.consent);
+    ok(`E32 ${lang}: both buttons ask for agreement`, /^(Agree|同意)/.test(s.html.claim) && /^(Agree|同意)/.test(s.html.create), `${s.html.claim} / ${s.html.create}`);
+    ok(`E32 ${lang}: a link to the privacy page`, !!s.privacyLink);
+  }
+  const { PRIVACY_URL } = await import('../extension/api.js').catch(() => ({}));
+  ok('E32 the privacy page is on the service\'s own address', !PRIVACY_URL || PRIVACY_URL.endsWith('/privacy'), String(PRIVACY_URL));
+}
+
 // E31 · replaced by joining again in this browser: said as such, not as "removed"
 {
   const t = { ...STRINGS.en };

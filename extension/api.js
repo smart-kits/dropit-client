@@ -8,6 +8,8 @@ import { t } from './i18n.js';
 import { errorText, endpointList } from './payload.js';
 
 const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
+// What is kept, for how long and who sees it — linked from the join screen
+export const PRIVACY_URL = `${DEFAULT_ENDPOINTS[0]}/privacy`;
 const SOURCE = 'chrome-extension';
 const ME_FRESH_MS = 3_600_000;           // the account line can be an hour old
 // The service says this token no longer works: forget it so the extension asks to join again

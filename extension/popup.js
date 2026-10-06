@@ -1,4 +1,4 @@
-import { api, store, sendText, sendFile, me, authLost, forgetToken } from './api.js';
+import { api, store, sendText, sendFile, me, authLost, forgetToken, PRIVACY_URL } from './api.js';
 import { deviceKey } from './device.js';
 import { t, lang } from './i18n.js';
 import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX } from './payload.js';
@@ -12,6 +12,9 @@ document.body.classList.toggle('window', inWindow);
 document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t.html[el.dataset.i18n];
 $('code').placeholder = t.html.codePlaceholder;
+// What joining sends, said before either button is pressed; the buttons read "Agree and …"
+$('consent').append(`${t.consent} `, Object.assign(document.createElement('a'),
+  { href: PRIVACY_URL, target: '_blank', rel: 'noopener', textContent: t.privacyLink }));
 $('compose').placeholder = t.html.placeholder;
 
 // A new issue with the version and browser filled in — never anything from this account

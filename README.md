@@ -114,6 +114,7 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
   sends the key it had, if any, and a fingerprint: a SHA-256 hash of facts that stay put (extension: browser brand,
   platform, CPU cores, memory, time zone, graphics chip; terminal: host name, user, OS, CPU, memory, the machine's ID
   and the config path). Only the hash leaves the device, and it is not a credential.
+- What the service keeps, for how long and who can see it: [Privacy](https://dropit.smart-kits.xyz/privacy).
 
 ## Problems and ideas
 
