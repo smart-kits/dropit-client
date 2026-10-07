@@ -22,6 +22,7 @@ const HEARTBEAT_MS = 60_000;
 const STALE_MS = 150_000;
 const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
 const FILES_MAX = 10;                        // files sent together — the same in every client
+const VERSION = '1.0.0';                     // released as cli-<VERSION> on GitHub; bump when this file changes
 
 // ── Language ────────────────────────────────────────────────────────────
 // English by default; Simplified Chinese when the environment asks for it.
@@ -106,6 +107,7 @@ const T = {
   dropit me                 Show plan and usage
   dropit devices            List devices
   dropit revoke <device_id> Revoke a device
+  dropit version            Show the version
 
 Language: English by default; set DROPIT_LANG=zh for Simplified Chinese.
 Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/issues
@@ -188,6 +190,7 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
   dropit me                 查看套餐和用量
   dropit devices            列出设备
   dropit revoke <device_id> 吊销一台设备
+  dropit version            显示版本号
 
 语言：默认英文；设置 DROPIT_LANG=zh 使用简体中文。
 源代码，以及问题和建议：https://github.com/smart-kits/dropit-client/issues
@@ -735,7 +738,8 @@ function die(msg) {
   process.exit(1);
 }
 
-const COMMANDS = { pair, code: newCode, send, watch, me, devices, revoke };
+const COMMANDS = { pair, code: newCode, send, watch, me, devices, revoke, version: async () => console.log(VERSION) };
+COMMANDS['--version'] = COMMANDS.version;
 
 if (require.main === module) {
   const [cmd, ...args] = process.argv.slice(2);
@@ -744,6 +748,6 @@ if (require.main === module) {
 } else {
   module.exports = {                             // for tests
     T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX, tildePath,
-    deviceKey, machineFacts,
+    deviceKey, machineFacts, VERSION,
   };
 }

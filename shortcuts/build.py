@@ -36,6 +36,7 @@ import subprocess
 import sys
 import uuid
 
+VERSION = '1.0.0'                  # the signed dropit.shortcut is released as shortcut-<VERSION> on GitHub; bump when it's rebuilt
 TOKEN_FILE = 'dropit-token.txt'
 PAIR_PREFIX = 'dropit-token:'
 OBJ = '￼'                          # placeholder character Shortcuts uses for an inline variable

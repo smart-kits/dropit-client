@@ -201,6 +201,7 @@ dropit me              # free · 2/3 devices · 1.2/30 MB · files up to 5 MB ·
 | `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time is on |
 | `dropit devices` | Every device on your account, with its ID |
 | `dropit revoke <device_id>` | Removes a device at once and frees its slot — a lost laptop, an old phone |
+| `dropit version` | The version installed — each one is a release on GitHub (`cli-<version>`) |
 
 Pairing codes are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix-ups don't matter.
 
