@@ -75,6 +75,11 @@
 
 配对码 5 分钟有效、只能用一次，而且很宽容：大小写、空格、短横线，`0`/`O` 或 `1`/`I`/`l` 搞混都没关系。
 
+**安装文件从哪来。** 每个客户端的每个版本都是一个 [GitHub Release](https://github.com/smart-kits/dropit-client/releases)
+（`extension-…`、`cli-…`、`shortcut-…`；Obsidian 插件的[在它自己的仓库里](https://github.com/smart-kits/dropit-obsidian/releases)），
+说明里列着每个文件的 SHA-256。[dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) 上的下载是逐字节一样的副本，
+给连不上 GitHub 的地方用；安装脚本装之前会先核对哈希。
+
 用 AI 编程助手（Claude Code、Codex、Cursor……）？把这段贴给它：
 
 ```text

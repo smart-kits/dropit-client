@@ -81,6 +81,11 @@ your light or dark setting.
 
 Codes last 5 minutes, work once, and are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix-ups don't matter.
 
+**Where the install files come from.** Every version of every client is a [GitHub Release](https://github.com/smart-kits/dropit-client/releases)
+(`extension-…`, `cli-…`, `shortcut-…`; the Obsidian plugin's are [in its own repository](https://github.com/smart-kits/dropit-obsidian/releases)),
+with each file's SHA-256 in the notes. The downloads on [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) are byte-for-byte copies,
+for places where GitHub is hard to reach, and the install script checks the hash before installing.
+
 Using an AI coding agent (Claude Code, Codex, Cursor…)? Paste this:
 
 ```text
