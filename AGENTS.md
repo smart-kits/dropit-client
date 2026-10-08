@@ -14,8 +14,9 @@ or **work on this repository**. Humans: see [README.md](./README.md).
    run `dropit me` — never `cat` the config file.
 2. **Ask before creating an account.** Ask the user: *"Do you already use dropit on another device?"*
    - **No** → this machine is the first device; `dropit pair` creates the account.
-   - **Yes** → ask them to generate a pairing code on that device (`dropit code`, or
-     *Settings → dropit → Pairing code* in Obsidian) and give it to you. Then `dropit pair <code>`.
+   - **Yes** → ask them to generate a pairing code on that device (`dropit code`,
+     *Settings → dropit → Pairing code* in Obsidian, or *+ Add a device* in the browser extension
+     they created the account in) and give it to you. Then `dropit pair <code>`.
      A code is 6 characters and expires after 5 minutes.
    Creating a second account by mistake splits the user's items across two accounts.
 3. **Don't use `sudo` without asking.** Prefer a user-writable directory on `PATH`.

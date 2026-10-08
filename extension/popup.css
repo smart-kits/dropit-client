@@ -164,6 +164,31 @@ footer a { color: var(--dim); text-decoration: none; }
 footer a:hover { color: var(--ink); text-decoration: underline; }
 footer .link { font-size: 12px; min-height: 0; padding: 0; margin-left: auto; }
 
+/* Adding a device: the entry sits beside the device count; the code shows in a plain card under the send box */
+header .add { flex: none; min-height: 0; padding: 2px 0; font-size: 12px; gap: 3px; }
+header .add svg.i { width: 13px; height: 13px; }
+.pair { margin: 10px 0 0; background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px 12px; }
+.pair-head { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.pair-head h2 { flex: 1; margin: 0; font: 600 14px/1.35 var(--sans); }
+.pair-head .x { min-height: 0; padding: 0 4px; font-size: 18px; line-height: 1; }
+.pair-body { display: flex; align-items: center; gap: 14px; }
+.pair .qr svg { display: block; border-radius: 4px; }     /* the code is drawn on white, with its quiet zone, in either theme */
+.pair-side { min-width: 0; }
+.paircode { margin: 0 0 6px; font: 700 28px/1 var(--mono); letter-spacing: .08em; font-variant-numeric: tabular-nums; user-select: all; }
+.pair .note { margin: 4px 0 0; color: var(--dim); font-size: 12px; line-height: 1.45; }
+.pair #pair-left { font-size: 13px; font-variant-numeric: tabular-nums; }
+.pair #pair-hint { margin-top: 8px; }
+.pair .note .link { min-height: 0; padding: 0; font-size: 12px; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.pair.expired .qr, .pair.expired .paircode { opacity: .25; }
+.pair.expired .paircode { text-decoration: line-through; }
+/* All slots in use: which device the new one takes the place of. A plain native select, in the popup's own type and colors */
+.pair .replace { margin-top: 10px; }
+.pair .replace select {
+  display: block; width: 100%; margin-top: 4px; padding: 5px 6px; font: inherit; font-size: 13px; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+}
+.pair .returned { margin: 4px 0 0; }
+
 /* The one-question window that asks for access to a site */
 .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 14px; }
 .grant .setup h1 { font: 600 16px/1.4 var(--sans); margin: 0 0 8px; overflow-wrap: anywhere; }   /* a sentence: sans, not the label face */

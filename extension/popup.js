@@ -1,8 +1,10 @@
-import { api, store, sendText, sendFile, me, authLost, forgetToken, PRIVACY_URL } from './api.js';
+import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase, PRIVACY_URL } from './api.js';
 import { deviceKey } from './device.js';
 import { t, lang } from './i18n.js';
 import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX } from './payload.js';
 import { readPage, readSelection } from './page.js';
+import { scopeFromProbe, canAddDevices, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
+import { QR } from './qr.js';
 
 const $ = (id) => document.getElementById(id);
 // Opened as a small window (setup from a right-click, or picking files where the popup can't stay open)
@@ -16,6 +18,7 @@ $('code').placeholder = t.html.codePlaceholder;
 $('consent').append(`${t.consent} `, Object.assign(document.createElement('a'),
   { href: PRIVACY_URL, target: '_blank', rel: 'noopener', textContent: t.privacyLink }));
 $('compose').placeholder = t.html.placeholder;
+$('pair-close').setAttribute('aria-label', t.html.closePair);
 
 // A new issue with the version and browser filled in — never anything from this account
 const version = chrome.runtime.getManifest().version;
@@ -34,10 +37,14 @@ function setupFailed(message) {
   box.querySelector('span').textContent = message ?? '';
 }
 
-/** A joined browser gets a send-only token: a leaked one can't read anything */
-async function adopt(res) {
-  await store.set({ token: res.token, device_id: res.device_id });
+/**
+ * A joined browser gets a send-only key: a leaked one can't read anything. Creating the account gives a full one
+ * (it can add devices). What the key may do is kept, so the popup knows without asking.
+ */
+async function adopt(res, scope) {
+  await store.set({ token: res.token, device_id: res.device_id, scope });
   await chrome.storage.local.remove('previous_token');
+  await pairForget();
   await render();                // it ends by saying what Enter will send; the note goes after that
   // Joined in place of this browser's earlier join (reinstalled, signed out): say so, it was one step
   if (res.replaced && res.replaced.how !== 'issuer') say(t.replacedOld(res.replaced.name), true);
@@ -54,16 +61,19 @@ const guardSetup = (fn) => async () => {
   try { await fn(); } catch (err) { setupFailed(err.message); }
 };
 
+// A new account has only this browser in it, and items sent here need somewhere to arrive:
+// adding another device is the one next step, so its code is already showing
 $('create').onclick = guardSetup(async () => {
-  adopt(await api('POST', '/v1/accounts', { device_name: t.deviceName(navigator.platform), ...await sameBrowser() }, { auth: false }));
+  await adopt(await api('POST', '/v1/accounts', { device_name: t.deviceName(navigator.platform), ...await sameBrowser() }, { auth: false }), 'full');
+  await showPairCode(null, true).catch((err) => pairFailed(err.message));
 });
 $('code').onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.isComposing) $('claim').click(); };
 $('code').oninput = () => setupFailed(null);
 $('claim').onclick = guardSetup(async () => {
   const code = $('code').value.trim().toUpperCase();
   if (!code) return $('code').focus();
-  adopt(await api('POST', '/v1/pair/claim',
-    { code, device_name: t.deviceName(navigator.platform), scope: 'ingest_only', ...await sameBrowser() }, { auth: false }));
+  await adopt(await api('POST', '/v1/pair/claim',
+    { code, device_name: t.deviceName(navigator.platform), scope: 'ingest_only', ...await sameBrowser() }, { auth: false }), 'ingest_only');
 });
 
 // Signing out removes this browser from the account first, so it stops using a device slot. Offline or
@@ -72,10 +82,11 @@ $('unpair').onclick = async () => {
   const { token, device_id } = await store.get();
   try {
     await api('DELETE', `/v1/devices/${encodeURIComponent(device_id)}`);
-    await chrome.storage.local.remove(['token', 'device_id', 'me', 'previous_token']);
+    await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'previous_token']);
   } catch {
     await forgetToken(token);
   }
+  await pairForget();
   render();
 };
 
@@ -289,6 +300,177 @@ function busy(on) {
   $('choose').disabled = on;
 }
 
+// ── Adding a device ─────────────────────────────────────────────────────
+// Only a key that may add devices offers it: the one that created the account. A browser joined with a code
+// has a send-only key and never sees the entry, rather than finding out from an error.
+
+/**
+ * What this browser's key may do. Recorded when it joined; a key from before that was recorded is asked about
+ * once (the device list answers only a full key) and the answer is kept. Offline: unknown, asked next time.
+ */
+async function myScope() {
+  const { token, scope } = await store.get();
+  if (!token) return null;
+  if (scope) return scope;
+  let err = null;
+  try { await api('GET', '/v1/devices'); } catch (e) { err = e; }
+  if (authLost(err)) throw err;
+  const found = scopeFromProbe(err);
+  if (found) await store.set({ scope: found });
+  return found;
+}
+
+/** Show the entry to a key that may use it, and bring back a code that was showing when the popup closed */
+async function offerAdding() {
+  let scope = null;
+  try { scope = await myScope(); } catch (err) { return render(err.message); }
+  const may = canAddDevices(scope);
+  $('add-device').hidden = !may || !$('pair').hidden;
+  if (may) await pairResume();
+}
+
+$('add-device').onclick = () => showPairCode(null, false).catch((err) => pairFailed(err.message));
+$('pair-again').onclick = () => showPairCode(null, pairing.shown?.first ?? false).catch((err) => pairFailed(err.message));
+$('pair-close').onclick = async () => {
+  pairStop();
+  await pairForget();
+  $('pair').hidden = true;
+  $('add-device').hidden = false;
+};
+
+// The code being shown, and the countdown that also checks for the new device. The popup closes whenever the
+// browser loses focus (typing the code into Obsidian on this computer does that), so the code is also kept in
+// session storage — memory only, gone with the browser — and shown again on the next open while it is valid.
+const pairing = { timer: null, run: 0, checking: false, shown: null };
+const sessionStore = chrome.storage.session;
+
+async function pairForget() {
+  await sessionStore?.remove('pairing').catch(() => {});
+}
+
+function pairStop() {
+  clearInterval(pairing.timer);
+  pairing.timer = null;
+  pairing.run++;
+}
+
+function pairFailed(message) {
+  pairStop();
+  $('pair').hidden = false;
+  $('add-device').hidden = false;               // trying again is one click
+  $('pair-title').textContent = t.pairTitle;
+  $('pair-body').hidden = $('pair-replace').hidden = $('pair-hint').hidden = true;
+  const box = $('pair-returned');
+  box.hidden = false;
+  box.querySelector('span').textContent = message;
+}
+
+/**
+ * A fresh code. All slots in use: the new device takes the place of the one picked here (by default the one idle
+ * longest); picking another makes a new code for it. `first`: right after creating the account.
+ */
+async function showPairCode(chosen, first) {
+  pairStop();
+  const [account, { devices }] = await Promise.all([me({ fresh: true }), api('GET', '/v1/devices')]);
+  const { device_id } = await store.get();
+  const { others, pick } = slotPlan(account, devices, device_id, chosen);
+  const res = await api('POST', '/v1/pair', pick ? { replace: pick.device_id } : undefined);
+  const keep = (d) => ({ device_id: d.device_id, name: d.name, last_seen_at: d.last_seen_at ?? null });
+  const p = {
+    code: res.code, expires_at: res.expires_at, link: pairLink(await serviceBase(), res.code), first: !!first, device_id,
+    before: devices.map(keep), others: pick ? others.map(keep) : [], pick: pick?.device_id ?? null, limit: account?.devices_limit ?? null,
+  };
+  await sessionStore?.set({ pairing: p }).catch(() => {});
+  navigator.clipboard?.writeText(res.code).catch(() => {});    // so it can be pasted on this computer too
+  if (!state.busy) explain();                                  // an earlier "joined" line is old news now
+  drawPair(p);
+  pairWatch(p, false);
+}
+
+/** A code still valid from the last time the popup was open, for this same key */
+async function pairResume() {
+  if (pairing.timer || !sessionStore) return;
+  const { pairing: p } = await sessionStore.get('pairing').catch(() => ({}));
+  const { device_id } = await store.get();
+  if (!p || p.device_id !== device_id || p.expires_at <= Date.now()) return pairForget();
+  drawPair(p);
+  pairWatch(p, true);
+}
+
+function drawPair(p) {
+  pairing.shown = p;
+  $('pair').hidden = false;
+  $('add-device').hidden = true;
+  $('pair-returned').hidden = true;
+  $('pair-body').hidden = false;
+  $('pair').classList.remove('expired');
+  $('pair-title').textContent = p.first ? t.pairTitleFirst : t.pairTitle;
+  $('pair-qr').replaceChildren();
+  QR.draw($('pair-qr'), p.link, { scale: 4 });
+  $('pair-code').textContent = p.code;          // exactly what to type: no dash to skip over
+  $('pair-hint').textContent = t.pairHint;
+  $('pair-hint').hidden = $('pair-left').hidden = false;
+  $('pair-expired').hidden = true;
+  $('pair-replace').hidden = !p.pick;
+  if (p.pick) {
+    $('pair-replace').querySelector('label').textContent = t.pairFull(p.limit);
+    const select = $('pair-pick');
+    const locale = lang === 'zh' ? 'zh-CN' : 'en';
+    select.replaceChildren(...p.others.map((d) => new Option(
+      `${d.name} · ${d.last_seen_at ? t.lastSeen(ago(d.last_seen_at, Date.now(), t, locale)) : t.neverSeen}`, d.device_id, false, d.device_id === p.pick)));
+    select.onchange = () => showPairCode(select.value, p.first).catch((err) => pairFailed(err.message));
+  }
+}
+
+/**
+ * Once a second: the countdown; every 4th second: the device list. A device it hasn't seen means the code was
+ * used: the code goes away and the line under the box says which device joined. Stops when the code expires
+ * (at most 75 checks) or the popup closes. `now`: check straight away (reopened: it may have joined meanwhile).
+ */
+function pairWatch(p, now) {
+  pairStop();
+  const run = pairing.run;
+  let tick = now ? POLL_EVERY : 0;
+  const step = async () => {
+    if (run !== pairing.run) return;
+    const { left, expired, poll } = pairTick(Date.now(), p.expires_at, tick++);
+    if (expired) return pairExpired();
+    $('pair-left').textContent = t.pairLeft(clock(left));
+    if (!poll || pairing.checking) return;
+    pairing.checking = true;
+    let list = null;
+    try {
+      list = (await api('GET', '/v1/devices')).devices;
+    } catch (err) {
+      if (authLost(err) && run === pairing.run) { pairStop(); render(err.message); }
+    } finally {
+      pairing.checking = false;
+    }
+    const hit = list && run === pairing.run && newcomer(p.before, list);
+    if (hit) pairJoined(hit);
+  };
+  pairing.timer = setInterval(step, 1000);
+  step();
+}
+
+async function pairExpired() {
+  pairStop();
+  await pairForget();
+  $('pair').classList.add('expired');
+  $('pair-hint').hidden = $('pair-left').hidden = $('pair-replace').hidden = true;
+  $('pair-expired').hidden = false;
+  $('pair-expired').querySelector('span').textContent = t.pairExpired;
+}
+
+async function pairJoined({ joined, gone }) {
+  pairStop();
+  await pairForget();
+  $('pair').hidden = true;
+  $('add-device').hidden = false;
+  say(`✓ ${gone ? t.deviceJoinedReplacing(joined.name, gone.name) : t.deviceJoined(joined.name)}`, true);
+  showPlan(true);
+}
+
 // ── Opening ─────────────────────────────────────────────────────────────
 
 /** The tab the user was looking at (also from the small window, which is a window of its own) */
@@ -316,13 +498,13 @@ async function readTab(tab) {
   return { page, selection };
 }
 
-async function showPlan() {
+async function showPlan(fresh = false) {
   const { me: cached } = await store.get();
   const draw = (m) => {
     $('plan').textContent = m ? t.planLine(t.plans[m.plan] ?? m.plan, m.devices_used, m.devices_limit) : '';
   };
   draw(cached?.data);
-  try { draw(await me()); } catch (err) { if (authLost(err)) render(err.message); }
+  try { draw(await me({ fresh })); } catch (err) { if (authLost(err)) render(err.message); }
 }
 
 async function render(message) {
@@ -332,11 +514,14 @@ async function render(message) {
   $('unpair').hidden = !token;
   $('plan').textContent = '';
   if (!token) {
+    pairStop();
+    $('pair').hidden = $('add-device').hidden = true;
     setupFailed(message ?? null);
     $('code').focus();
     return;
   }
   showPlan();
+  offerAdding();
   compose.focus();
   const tab = await currentTab();
   const { page, selection } = await readTab(tab);

@@ -76,6 +76,21 @@ const EN = {
   grantOpened: (host) => `Asked to read files from ${host} — answer in the small window`,
   removeFile: (name) => `Remove ${name}`,
 
+  // Adding a device: only a browser whose key may (the one that created the account). Worded as the web inbox.
+  pairTitle: 'Add a device',
+  pairTitleFirst: 'Next: add your phone or Obsidian',
+  pairHint: 'Scan this with your phone, or type the 6 characters. Single use.',
+  pairLeft: (left) => `Valid for ${left}`,
+  pairExpired: 'This code expired.',
+  pairFull: (limit) => `All ${limit} device slots are in use. The new device takes the place of`,
+  deviceJoined: (name) => `The new device joined: ${name}`,
+  deviceJoinedReplacing: (name, old) => `The new device joined: ${name}, in place of “${old}”`,
+  lastSeen: (w) => `active ${w}`,
+  neverSeen: 'never active',
+  justNow: 'just now',
+  minsAgo: (n) => `${n} min ago`,
+  hoursAgo: (n) => `${n} h ago`,
+
   // The window that asks for access to one site
   grantTitle: (host) => `Let dropit read files from ${host}?`,
 
@@ -99,6 +114,9 @@ const EN = {
     grantNote: 'This site doesn’t let other pages read its files directly. Allowing it only covers this one site, and you can take it back in the extension’s settings.',
     grantAllow: 'Allow this site',
     grantCancel: 'Not now',
+    addDevice: 'Add a device',
+    newCode: 'Show a new code',
+    closePair: 'Close',
   },
   issueBody: (env) => `What happened, or what you'd like:\n\n\n---\n${env}\n\nPlease don't paste a token (dk_…) or anything private: issues are public.`,
 };
@@ -175,6 +193,20 @@ const ZH = {
   grantOpened: (host) => `需要允许读取 ${host} 的文件，请在弹出的小窗口里确认`,
   removeFile: (name) => `移除 ${name}`,
 
+  pairTitle: '加一台设备',
+  pairTitleFirst: '下一步：把手机或 Obsidian 加进来',
+  pairHint: '手机扫这个码，或手敲这 6 位。用一次就作废。',
+  pairLeft: (left) => `${left} 内有效`,
+  pairExpired: '这个配对码过期了。',
+  pairFull: (limit) => `${limit} 台设备的名额已满，新设备加入时替换`,
+  deviceJoined: (name) => `新设备已加入：${name}`,
+  deviceJoinedReplacing: (name, old) => `新设备已加入：${name}，替换了「${old}」`,
+  lastSeen: (w) => `${w}活动`,
+  neverSeen: '未活动',
+  justNow: '刚刚',
+  minsAgo: (n) => `${n} 分钟前`,
+  hoursAgo: (n) => `${n} 小时前`,
+
   grantTitle: (host) => `允许 dropit 读取 ${host} 的文件？`,
 
   html: {
@@ -197,6 +229,9 @@ const ZH = {
     grantNote: '这个网站不让别的页面直接读它的文件。允许只对这一个网站有效，可以在扩展设置里随时收回。',
     grantAllow: '允许这个网站',
     grantCancel: '暂不',
+    addDevice: '加一台设备',
+    newCode: '重新生成配对码',
+    closePair: '收起',
   },
   issueBody: (env) => `发生了什么，或者你希望怎样：\n\n\n---\n${env}\n\n请不要贴 token（dk_ 开头）或私人内容：issue 是公开的。`,
 };

@@ -1,6 +1,6 @@
 /**
  * The extension's decisions that don't need a browser: metadata and its size budget, link or text,
- * file names, context menus, batches, what Enter sends, and error sentences.
+ * file names, context menus, batches, what Enter sends, error sentences, adding a device, and the QR code.
  *
  *   node test/extension.test.mjs
  */
@@ -9,6 +9,7 @@ import {
   fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
+import { readFileSync } from 'node:fs';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail = '') => {
@@ -224,6 +225,108 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   const t = { ...STRINGS.en };
   eq('E31 DEVICE_REVOKED + replaced', errorText('DEVICE_REVOKED', { reason: 'replaced' }, 403, t), t.revokedReplaced);
   eq('E31 DEVICE_REVOKED alone stays "removed"', errorText('DEVICE_REVOKED', {}, 403, t), t.errors.DEVICE_REVOKED);
+}
+
+// E33 · what this browser's key may do: recorded on joining; an older key is asked about once
+{
+  const { scopeFromProbe, canAddDevices } = await import('../extension/pairing.js');
+  eq('E33 the device list answered → full', scopeFromProbe(null), 'full');
+  eq('E33 refused for scope → send-only', scopeFromProbe({ code: 'SCOPE_INSUFFICIENT', status: 403 }), 'ingest_only');
+  eq('E33 offline → unknown, ask again next time', scopeFromProbe({ code: 'OFFLINE' }), null);
+  eq('E33 a server error → unknown, not send-only', scopeFromProbe({ code: undefined, status: 500 }), null);
+  ok('E33 only a full key offers adding a device', canAddDevices('full') && !canAddDevices('ingest_only') && !canAddDevices(null) && !canAddDevices(undefined));
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  ok('E33 creating the account records full, joining with a code records ingest_only',
+    /'\/v1\/accounts'[\s\S]{0,200}'full'\)/.test(popup) && /'\/v1\/pair\/claim'[\s\S]{0,300}'ingest_only'\)/.test(popup));
+  const api = readFileSync(new URL('../extension/api.js', import.meta.url), 'utf8');
+  ok('E33 forgetting the key forgets what it could do', /remove\(\[[^\]]*'scope'/.test(api));
+}
+
+// E34 · all slots in use: the new device takes the place of one, picked before the code is made
+{
+  const { slotPlan } = await import('../extension/pairing.js');
+  const devices = [
+    { device_id: 'me', name: 'Browser', last_seen_at: 1 },
+    { device_id: 'phone', name: 'iPhone', last_seen_at: 500 },
+    { device_id: 'obs', name: 'Obsidian', last_seen_at: 900 },
+  ];
+  eq('E34 room left → no pick', slotPlan({ devices_used: 2, devices_limit: 3 }, devices.slice(0, 2), 'me').pick, null);
+  eq('E34 no limit (paid) → no pick', slotPlan({ devices_used: 9, devices_limit: null }, devices, 'me').pick, null);
+  eq('E34 full → the one idle longest, never this browser', slotPlan({ devices_used: 3, devices_limit: 3 }, devices, 'me').pick?.device_id, 'phone');
+  eq('E34 full → the one picked', slotPlan({ devices_used: 3, devices_limit: 3 }, devices, 'me', 'obs').pick?.device_id, 'obs');
+  eq('E34 a pick that is no longer there → back to the default', slotPlan({ devices_used: 3, devices_limit: 3 }, devices, 'me', 'gone').pick?.device_id, 'phone');
+  eq('E34 a device never active counts as idle longest', slotPlan({ devices_used: 3, devices_limit: 3 },
+    [...devices, { device_id: 'old', name: 'Old', last_seen_at: null }], 'me').pick?.device_id, 'old');
+  eq('E34 over the limit (plan went down) → still a pick', slotPlan({ devices_used: 4, devices_limit: 3 }, devices, 'me').pick?.device_id, 'phone');
+  eq('E34 only this browser left → nothing to replace', slotPlan({ devices_used: 1, devices_limit: 1 }, devices.slice(0, 1), 'me').pick, null);
+  eq('E34 the list offered leaves this browser out', slotPlan({ devices_used: 3, devices_limit: 3 }, devices, 'me').others.map((d) => d.device_id), ['phone', 'obs']);
+}
+
+// E35 · the QR code holds the service's page with the code filled in, as the web inbox and Obsidian show it
+{
+  const { pairLink } = await import('../extension/pairing.js');
+  eq('E35 pairing link', pairLink('https://dropit.smart-kits.xyz', 'K7M2QX'), 'https://dropit.smart-kits.xyz/?pair=K7M2QX');
+  eq('E35 a trailing slash on the address is not doubled', pairLink('http://127.0.0.1:8799/', 'ABC234'), 'http://127.0.0.1:8799/?pair=ABC234');
+}
+
+// E36 · the countdown: every second; the device list every 4th; everything stops when the code expires
+{
+  const { pairTick, clock, newcomer, POLL_EVERY } = await import('../extension/pairing.js');
+  const exp = 300_000;
+  const ticks = Array.from({ length: 301 }, (_, k) => pairTick(k * 1000, exp, k));
+  eq('E36 checks every 4th second', ticks.slice(0, 13).map((x) => x.poll), [false, false, false, false, true, false, false, false, true, false, false, false, true]);
+  eq('E36 at most 74 checks in 5 minutes', ticks.filter((x) => x.poll).length, 74);
+  ok('E36 expired at the deadline: no check, stop', ticks[300].expired && !ticks[300].poll && ticks[300].left === 0);
+  ok('E36 a late tick past the deadline still counts as expired', pairTick(exp + 5000, exp, 1000).expired);
+  ok('E36 reopened: checks straight away', pairTick(0, exp, POLL_EVERY).poll);
+  eq('E36 clock', [clock(300_000), clock(299_001), clock(65_000), clock(9_000), clock(1)], ['5:00', '5:00', '1:05', '0:09', '0:01']);
+  const before = [{ device_id: 'me', name: 'Browser' }, { device_id: 'phone', name: 'iPhone' }];
+  eq('E36 nothing new → keep watching', newcomer(before, before), null);
+  eq('E36 a new device → which one', newcomer(before, [...before, { device_id: 'obs', name: 'Obsidian' }]), { joined: { device_id: 'obs', name: 'Obsidian' }, gone: null });
+  eq('E36 one in place of another (count unchanged) → both named',
+    newcomer(before, [before[0], { device_id: 'pixel', name: 'Pixel' }]), { joined: { device_id: 'pixel', name: 'Pixel' }, gone: { device_id: 'phone', name: 'iPhone' } });
+  eq('E36 a device removed meanwhile is not a join', newcomer(before, [before[0]]), null);
+}
+
+// E37 · "active 5 min ago" in the replace picker, in the web inbox's words
+{
+  const { ago } = await import('../extension/pairing.js');
+  const now = 10 * 86_400_000;
+  for (const [lang, s] of Object.entries(STRINGS)) {
+    eq(`E37 ${lang}`, [ago(now - 10_000, now, s), ago(now - 5 * 60_000, now, s), ago(now - 3 * 3_600_000, now, s)],
+      [s.justNow, s.minsAgo(5), s.hoursAgo(3)]);
+  }
+  ok('E37 older than a day → a date', /\d/.test(ago(0, now, STRINGS.en, 'en')));
+}
+
+// E38 · the QR encoder. Fingerprints of whole matrices, each checked bit for bit against the npm `qrcode`
+// package (1.5.4, byte mode, level L, same version, every one of the 8 masks) and decoded back with `jsQR`
+// (1.4.0) on 2026-10-07. If a change moves one, run that comparison again — don't just update the value.
+{
+  const { createHash } = await import('node:crypto');
+  const { QR } = await import('../extension/qr.js');
+  const fp = (m) => createHash('sha256').update(m.map((r) => r.join('')).join('')).digest('hex').slice(0, 16);
+  const GOLDEN = [
+    ['A', 21, 'c70a942b285013ce'],
+    ['中文也要能编码', 25, '5ca9524f316bc3d1'],
+    ['x'.repeat(60), 33, '46ce7fb396051eff'],
+    ['https://dropit.smart-kits.xyz/?pair=9G08F6', 29, '0be44e09ec941a57'],
+    ['https://dropit.smart-kits.xyz/?pair=K7M2QX', 29, '0ff63f3119bac0ad'],
+    ['y'.repeat(106), 37, '69cdac05c7ca2618'],
+  ];
+  for (const [text, size, hash] of GOLDEN) {
+    const m = QR.matrix(text);
+    ok(`E38 ${JSON.stringify(text).slice(0, 34)} ${size}×${size}`, m.length === size && fp(m) === hash, `${m.length}×${m.length} ${fp(m)}`);
+  }
+  const link = 'https://dropit.smart-kits.xyz/?pair=9G08F6';
+  const eight = createHash('sha256').update([0, 1, 2, 3, 4, 5, 6, 7].map((mask) => QR.matrix(link, { mask }).map((r) => r.join('')).join('')).join('|')).digest('hex').slice(0, 16);
+  eq('E38 all 8 masks of the pairing link', eight, '69b597076e7cf997');
+  const m = QR.matrix('A');
+  const finder = (br, bc) => [0, 6].every((d) => m[br][bc + d] === 1 && m[br + d][bc] === 1) && m[br + 1][bc + 1] === 0 && m[br + 3][bc + 3] === 1;
+  ok('E38 three finder patterns', finder(0, 0) && finder(0, 14) && finder(14, 0));
+  let threw = false;
+  try { QR.matrix('y'.repeat(107)); } catch { threw = true; }
+  ok('E38 too long for version 5 → an error, not a wrong code', threw);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

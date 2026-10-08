@@ -41,6 +41,24 @@ Click the dropit icon, or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>. It
 While it sends, the stamp stays pressed, the envelope's red-and-blue stripes run, and a batch counts up
 (*Sending 2 of 3…*). Then the popup **stays open**: *✓ Sent #71 · 14:07* under an empty box, ready for the next thing.
 
+## Add a device
+
+What you send needs somewhere to arrive. In the browser where you **created the account**, the popup adds your
+phone, Obsidian or another computer:
+
+- **Right after *Create a new account*** it already shows a 6-character code and its QR code (also copied for you).
+  Scan the QR code with your phone's camera, or type the code in Obsidian, in a terminal (`dropit pair <code>`) or in
+  another browser. Later, it's **+ Add a device** next to the device count at the top.
+- **It notices when the other device has joined**: the code goes away and the line under the box says
+  *✓ The new device joined: iPhone · Shortcuts*.
+- **A code lasts 5 minutes and works once**; the countdown is under it. Clicking away closes the popup but not the code —
+  open it again and the same code is still there.
+- **All device slots in use?** It says which device the new one takes the place of — the one idle longest, unless you
+  pick another — so joining is still one step on the other device.
+
+A browser that joined with a code doesn't show this: its key can only send (see below). Make codes on a device with a
+full key instead — the web inbox, Obsidian, `dropit code`, or the browser that created the account.
+
 ## Right-click
 
 Right-click anywhere on a page and there is one **dropit** entry. It opens onto what fits right there,
@@ -97,7 +115,8 @@ After updating from an older version Chrome sometimes leaves them blank — set 
 3. **Join your account.** Click the icon. On a device you already use, show a pairing code — in the web inbox
    under *Devices*, in Obsidian under *Settings → dropit*, or with `dropit code` in a terminal.
    Type the 6 characters and press *Join*; case, spaces and `0`/`O` mix-ups don't matter.
-   Your very first device? Use the small *Create a new account* link under the form instead.
+   Your very first device? Use the small *Create a new account* link under the form instead — the popup then shows a code
+   for [your next device](#add-a-device) straight away.
 
 **Updating:** unzip the new version over the same folder, then press *Reload* on `chrome://extensions`.
 Same folder, same extension — you stay joined.
@@ -117,9 +136,12 @@ Same folder, same extension — you stay joined.
 Images and files are fetched **by the page itself**, the way it already loads them, so most sites need nothing more.
 The rare site that refuses gets a one-site question; you can take it back on the extension's details page.
 
-**Your account stays safe.** Each browser joins as its own device, and joining with a code gives it a
-**send-only** key: even if it leaked, nobody could read your items, add devices or change settings with it.
-The key never enters a web page — the page only hands over the bytes. To disconnect this browser, use
+**Your account stays safe.** Each browser is its own device. Joining with a code gives it a **send-only** key:
+even if it leaked, nobody could read your items, add devices or change settings with it. The browser where you
+*created* the account holds the account's first key, a **full** one — that's what lets it
+[add your other devices](#add-a-device), and like any full key it could read your items if it leaked, so sign that
+browser out on a computer that isn't yours. Either way the key stays in the extension's own storage on this computer
+and never enters a web page — the page only hands over the bytes. To disconnect this browser, use
 *Sign out on this browser* at the bottom of the popup, or remove it from another device.
 
 ## What isn't possible
@@ -130,7 +152,7 @@ The key never enters a web page — the page only hands over the bytes. To disco
   and suggests *Send image link*.
 - **Dragging a file from the desktop onto the popup** doesn't work — the popup closes the moment you click elsewhere.
   Copy it in Finder and paste it into the popup, or use *Choose files*.
-- **Send-only.** To receive on a computer, use [Obsidian](https://github.com/smart-kits/dropit-obsidian),
+- **Sending only.** The extension doesn't receive: to receive on a computer, use [Obsidian](https://github.com/smart-kits/dropit-obsidian),
   the [terminal](../cli/) or the web inbox.
 - Desktop Chrome has no system share sheet: the right-click entry, the icon and the two keys are its share buttons.
 
@@ -140,7 +162,9 @@ The key never enters a web page — the page only hands over the bytes. To disco
 extension/
 ├── manifest.json     Manifest V3
 ├── background.js     Right-click menu, keys, sending, the note on the page, badge and notifications
-├── popup.html/.js    The popup: joining, the send box, progress
+├── popup.html/.js    The popup: joining, the send box, progress, adding a device
+├── pairing.js        Pure decisions for adding a device: which key may, which slot to replace, when to stop watching
+├── qr.js             A tiny QR encoder (from the Obsidian plugin, MIT), pinned by fingerprints in the tests
 ├── popup.css         The airmail look (shared with the one-site window)
 ├── payload.js        Pure decisions: what Enter sends, metadata and its size, menus, batches, error text
 ├── page.js           Run inside the page: title and description, selection, fetching a file, the note

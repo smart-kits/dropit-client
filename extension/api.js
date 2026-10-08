@@ -28,8 +28,14 @@ export const authLost = (err) => AUTH_LOST.includes(err?.code);
  * knows exactly which device this was and lets the new join take its place instead of using another slot.
  */
 export async function forgetToken(token) {
-  await chrome.storage.local.remove(['token', 'device_id', 'me']);
+  await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope']);
   if (token) await chrome.storage.local.set({ previous_token: token });
+}
+
+/** The address requests go to now: the one that last worked, else the built-in one */
+export async function serviceBase() {
+  const { endpoints } = await store.get();
+  return endpointList(endpoints, DEFAULT_ENDPOINTS)[0].replace(/\/+$/, '');
 }
 
 /**

@@ -73,9 +73,11 @@ your light or dark setting.
 ## Start in three steps
 
 1. **Your first device creates the account.** In the web inbox: *Just for now? Use it in this browser* → *Create a new account*.
-   Or in the terminal: `dropit pair`; in Obsidian: *Settings → dropit → Create a new account*.
+   Or in the terminal: `dropit pair`; in Obsidian: *Settings → dropit → Create a new account*;
+   in the browser extension: *Create a new account* under the join form.
 2. **Show a pairing code** on that device: web inbox → *Devices* → *Show pairing code*; terminal: `dropit code`;
-   Obsidian: *Settings → dropit → Add a device*.
+   Obsidian: *Settings → dropit → Add a device*; browser extension: it shows one right after creating the account,
+   later *+ Add a device* at the top of the popup.
 3. **Join from every other device** with the code — or scan its QR code with the phone's camera.
    On an iPhone, scanning it opens the shortcut's setup with the code filled in — tap *Set up the shortcut*.
 
@@ -104,7 +106,7 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
 - **Nothing lost, nothing twice.** A receiver moves on only after an item is safely written: a crash means a repeat at worst,
   never a gap. The same thing sent twice in a row within a minute (a double tap, a retry) is kept once.
 - **Every device on its own.** Each is joined separately and can be removed separately. Send-only devices — the iPhone shortcut,
-  the browser extension, bookmarklets — can't read anything you've sent.
+  a browser extension joined with a code, bookmarklets — can't read anything you've sent.
 - **Small and open.** The terminal client is one Node.js file; the extension loads as it is; no build step, no dependencies.
 
 ## Security & privacy
@@ -112,7 +114,8 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
 - Each device's key stays on that device — terminal: `~/.config/dropit/config.json` (readable only by you);
   extension: the browser's local extension storage; Obsidian: the plugin's `data.json`; web inbox: the browser's local storage.
 - Keys come in two kinds: **full** (send, receive, add devices) and **send-only**. The extension and the iPhone shortcut
-  join send-only, so a leaked key can't read your items.
+  join send-only, so a leaked key can't read your items. A browser extension that created the account holds a full key,
+  so it can add your other devices.
 - Lost a device? Remove it from any other one: web inbox → *Devices* → *Revoke*, or `dropit devices` and `dropit revoke <id>`.
 - Signing out of the extension removes it from your account. Joining or pairing again on the same computer — after
   reinstalling, say — takes the earlier one's place instead of using another device slot. To recognize it, the client

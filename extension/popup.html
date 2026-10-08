@@ -6,6 +6,11 @@
 <header>
   <p class="wordmark"><img src="icon-32.png" alt="">dropit</p>
   <span class="plan" id="plan"></span>
+  <!-- Next to the device count; only a browser whose key may add devices (it created the account) shows it -->
+  <button class="link add" id="add-device" type="button" hidden>
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    <span data-i18n="addDevice"></span>
+  </button>
 </header>
 
 <!-- Joining is the usual case. Creating an account by mistake splits someone's items across two
@@ -44,6 +49,26 @@
     <input type="file" id="files" multiple hidden>
     <span class="hint" data-i18n="hint"></span>
   </div>
+</section>
+
+<!-- Adding a device: a code and its QR, a countdown, and a quiet check for the new device joining.
+     Shown right after creating an account, since that is the one sensible next step. -->
+<section class="pair" id="pair" hidden>
+  <div class="pair-head">
+    <h2 id="pair-title"></h2>
+    <button class="link x" id="pair-close" type="button">×</button>
+  </div>
+  <div class="pair-body" id="pair-body">
+    <div class="qr" id="pair-qr"></div>
+    <div class="pair-side">
+      <p class="paircode" id="pair-code"></p>
+      <p class="note" id="pair-left" aria-live="off"></p>
+      <p class="note" id="pair-expired" hidden><span></span> <button class="link" id="pair-again" type="button" data-i18n="newCode"></button></p>
+    </div>
+  </div>
+  <p class="note" id="pair-hint"></p>
+  <p class="note replace" id="pair-replace" hidden><label for="pair-pick"></label><select id="pair-pick"></select></p>
+  <div class="returned" id="pair-returned" role="alert" hidden><b data-i18n="returned"></b><span></span></div>
 </section>
 
 <!-- The public repository: see the code, or say what went wrong -->
