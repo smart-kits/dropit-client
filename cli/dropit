@@ -21,8 +21,14 @@ const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
 const HEARTBEAT_MS = 60_000;
 const STALE_MS = 150_000;
 const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
+const STEADY_MS = 60_000;                    // a connection that lasted this long starts the backoff over
+const TOO_MANY_WAIT_MS = 15 * 60_000;        // the account's real-time connections are full: try again after this
+const API_TIMEOUT_MS = 30_000;
+const DOWNLOAD_TIMEOUT_MS = 30 * 60_000;     // a backstop for a download that stops moving, not a size limit
+// Answers that won't change by trying again: watch stops instead of retrying forever
+const AUTH_LOST = new Set(['INVALID_TOKEN', 'DEVICE_REVOKED', 'SCOPE_INSUFFICIENT']);
 const FILES_MAX = 10;                        // files sent together — the same in every client
-const VERSION = '1.0.0';                     // released as cli-<VERSION> on GitHub; bump when this file changes
+const VERSION = '1.0.1';                     // released as cli-<VERSION> on GitHub; bump when this file changes
 
 // ── Language ────────────────────────────────────────────────────────────
 // English by default; Simplified Chinese when the environment asks for it.
@@ -83,6 +89,11 @@ const T = {
     wsNotIncluded: 'Caught up. Real-time push is not in your plan (new accounts get it for 10 days), '
       + 'so watch stops here; run it again to pick up new items.',
     wsFailed: (msg) => `Real-time connection failed: ${msg}`,
+    wsTooMany: (n) => `Real-time push is paused: this account already has ${n} live connections `
+      + '(another watch, or Obsidian on several machines). Trying again in about 15 minutes, and catching up then.',
+    stopped: (msg) => `watch stopped: ${msg}`,
+    accountChanged: 'This machine joined another account — receiving from that one now',
+    notDropit: (status) => `the answer (HTTP ${status}) isn't from dropit — a sign-in page or proxy on this network?`,
     meDevices: (used, limit) => `${used}/${limit} devices`,
     meFiles: (size) => `files up to ${size}`,
     rtOn: 'real-time available',
@@ -166,6 +177,11 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     wsTrialFull: '已补齐。今天的实时名额满了 —— watch 等到 UTC 零点过后自动重连。',
     wsNotIncluded: '已补齐。当前套餐不含实时推送（新账号有 10 天体验期），watch 就此退出；再运行一次即可接着收新内容。',
     wsFailed: (msg) => `实时连接失败：${msg}`,
+    wsTooMany: (n) => `实时推送暂停：这个账号已经有 ${n} 条实时连接（另一个 watch，或多台机器上的 Obsidian）。`
+      + '大约 15 分钟后再试，连上时补齐这期间的内容。',
+    stopped: (msg) => `watch 已停止：${msg}`,
+    accountChanged: '这台机器加入了另一个账号 —— 改为接收那个账号的内容',
+    notDropit: (status) => `收到的回应（HTTP ${status}）不是 dropit 的 —— 这个网络需要登录，或者有代理？`,
     meDevices: (used, limit) => `${used}/${limit} 台设备`,
     meFiles: (size) => `单个文件最大 ${size}`,
     rtOn: '实时推送可用',
@@ -210,15 +226,25 @@ function load() {
   try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return { endpoints: DEFAULT_ENDPOINTS }; }
 }
 
+/** Written whole, then moved into place: a `send` reading it while `watch` writes never sees half a file */
 function save(cfg) {
   fs.mkdirSync(path.dirname(CONFIG), { recursive: true });
-  fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2), { mode: 0o600 });   // holds the token — owner-only
+  const tmp = `${CONFIG}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), { mode: 0o600 });       // holds the token — owner-only
+  fs.renameSync(tmp, CONFIG);
+}
+
+/** Service addresses worth sending the token to: https, or this machine (for running the service locally) */
+const SAFE_BASE = /^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$))/i;
+function endpointsOf(list) {
+  const safe = (Array.isArray(list) ? list : []).filter((e) => typeof e === 'string' && SAFE_BASE.test(e));
+  return safe.length ? safe : DEFAULT_ENDPOINTS;
 }
 
 // ── Network: fall back to the next endpoint, remember the one that works ──
 
 async function api(cfg, method, path_, body, auth = true) {
-  const endpoints = cfg.endpoints?.length ? cfg.endpoints : DEFAULT_ENDPOINTS;
+  const endpoints = endpointsOf(cfg.endpoints);
   let lastErr;
   for (const base of endpoints) {
     try {
@@ -229,11 +255,16 @@ async function api(cfg, method, path_, body, auth = true) {
           ...(body ? { 'content-type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
-      const data = await res.json().catch(() => ({}));
+      const answer = await res.json().catch(() => null);
+      // Every dropit answer is a JSON object. A 2xx that isn't (a network's sign-in page, a proxy) means this
+      // address didn't reach dropit: try the next one rather than report a send that never happened.
+      if (res.ok && (answer === null || typeof answer !== 'object')) throw new Error(t.notDropit(res.status));
+      const data = answer ?? {};
       if (base !== endpoints[0]) {            // this one works — try it first next time
         cfg.endpoints = [base, ...endpoints.filter((e) => e !== base)];
-        save(cfg);
+        save({ ...load(), endpoints: cfg.endpoints });   // only the list: the rest of the file may have changed meanwhile
       }
       if (!res.ok) {
         const err = new Error(errorText(data.error, data, res.status));
@@ -275,7 +306,7 @@ async function pair(args) {
     : await api(cfg, 'POST', '/v1/accounts', { device_name: name, ...same }, false);
   save({ ...cfg, token: res.token, device_id: res.device_id, cursor: 0 });
   console.log(code ? t.joined : t.created(res.user_id));
-  if (res.replaced && res.replaced.how !== 'issuer') console.log(t.replacedOld(res.replaced.name));
+  if (res.replaced && res.replaced.how !== 'issuer') console.log(t.replacedOld(shown(res.replaced.name)));
   await refreshEndpoints(load());
 }
 
@@ -422,7 +453,10 @@ async function watch(args) {
   // Pulling again from a point: files already in the folder are kept (writeItem skips them),
   // so this fills in what's missing. The server's snapshot of this device's position only moves
   // forward on its own, so it's reset too.
-  const state = { cursor: cfg.cursor ?? 0, since: 0, syncing: false, socket: null, retry: 0, lastBeat: 0, until: null, off: null };
+  const state = {
+    token: cfg.token, cursor: cfg.cursor ?? 0, since: 0, syncing: false, again: false,
+    socket: null, connecting: false, retryTimer: null, retry: 0, openedAt: 0, lastBeat: 0, until: null, off: null,
+  };
   if (from || days) {
     state.cursor = from ? from - 1 : 0;
     state.since = days ? Date.now() - days * 86_400_000 : 0;
@@ -441,28 +475,66 @@ async function watch(args) {
   process.on('SIGINT', () => { state.socket?.close(); process.exit(0); });
 }
 
+/**
+ * Catch up from the cursor. A push that comes in while this runs isn't dropped: it asks for one more round
+ * once this one is done, since the page already fetched may not hold the new item.
+ */
 async function pullInto(dir, state) {
-  if (state.syncing) return;
+  if (state.syncing) { state.again = true; return; }
   state.syncing = true;
   try {
-    for (let hasMore = true; hasMore; ) {
-      const cfg = load();
-      const since = state.since ? `&since=${state.since}` : '';
-      const page = await api(cfg, 'GET', `/v1/pull?after=${state.cursor}&limit=200${since}`);
-      for (const item of page.items) {
-        await writeItem(dir, item);
-        state.cursor = item.seq;                   // item by item: a failure stops exactly there
+    do {
+      state.again = false;
+      for (let hasMore = true; hasMore; ) {
+        const cfg = load();
+        if (cfg.token !== state.token) adopt(state, cfg);
+        const since = state.since ? `&since=${state.since}` : '';
+        const page = await api(cfg, 'GET', `/v1/pull?after=${state.cursor}&limit=200${since}`);
+        for (const item of page.items) {
+          await writeItem(dir, item);
+          state.cursor = item.seq;                 // item by item: a failure stops exactly there
+        }
+        state.cursor = page.next_after;            // advance only after writing: a duplicate beats a lost item
+        saveCursor(state);
+        hasMore = page.has_more;
       }
-      state.cursor = page.next_after;              // advance only after writing: a duplicate beats a lost item
-      save({ ...cfg, cursor: state.cursor });
-      hasMore = page.has_more;
-    }
+    } while (state.again);
   } catch (err) {
-    save({ ...load(), cursor: state.cursor });    // keep what did get written
+    if (AUTH_LOST.has(err.code)) stopWatch(err.message);
+    saveCursor(state);                             // keep what did get written
     console.error(t.pullFailed(err.message));
   } finally {
     state.syncing = false;
   }
+}
+
+/** The cursor belongs to the account it was read under: if `dropit pair` switched accounts meanwhile, leave the file alone */
+function saveCursor(state) {
+  const cfg = load();
+  if (cfg.token === state.token) save({ ...cfg, cursor: state.cursor });
+}
+
+/**
+ * `dropit pair` ran in another terminal while watch was running. Receive from the new account, from where
+ * pairing put it, over a new real-time connection — the open one is the old account's.
+ */
+function adopt(state, cfg) {
+  if (!cfg.token) stopWatch(t.notPaired);
+  state.token = cfg.token;
+  state.cursor = cfg.cursor ?? 0;
+  state.since = 0;
+  console.log(t.accountChanged);
+  if (state.socket) dropSocket(state);
+}
+
+/**
+ * The token no longer works (removed from the account, or send-only). Trying again can't fix that, so stop.
+ * Exit code 0 on purpose: the launch agent and systemd unit in the README restart watch only after a failure,
+ * and restarting this would just ask the same question every few seconds.
+ */
+function stopWatch(msg) {
+  console.error(t.stopped(msg));
+  process.exit(0);
 }
 
 async function writeItem(dir, item) {
@@ -477,7 +549,7 @@ async function writeItem(dir, item) {
     const note = path.join(dir, `${stamp}-${item.seq}.md`);
     let reason;
     try {
-      const res = await fetch(item.url);
+      const res = await fetch(item.url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
       if (res.ok) {
         fs.writeFileSync(target, Buffer.from(await res.arrayBuffer()));
         fs.rmSync(note, { force: true });
@@ -487,13 +559,13 @@ async function writeItem(dir, item) {
     } catch (err) {
       reason = t.downloadFailed(item.seq, err.message);
     }
-    fs.writeFileSync(note, `---\ndropit_seq: ${item.seq}\nkind: ${item.kind}\nsource: ${item.source}\n---\n\n`
+    fs.writeFileSync(note, `---\ndropit_seq: ${item.seq}\nkind: ${yamlValue(item.kind)}\nsource: ${yamlValue(item.source)}\n---\n\n`
       + `${reason}\n\n${t.retryHint(item.seq)}\n`);
     return console.error(reason);
   }
   const target = path.join(dir, `${stamp}-${item.seq}.md`);
   if (fs.existsSync(target)) return;
-  fs.writeFileSync(target, `---\ndropit_seq: ${item.seq}\nkind: ${item.kind}\nsource: ${item.source}\n`
+  fs.writeFileSync(target, `---\ndropit_seq: ${item.seq}\nkind: ${yamlValue(item.kind)}\nsource: ${yamlValue(item.source)}\n`
     + `created: ${new Date(item.created_at).toISOString()}\n---\n\n${markdownOf(item)}\n`);
   console.log(`↓ ${path.basename(target)}`);
 }
@@ -541,39 +613,81 @@ function markdownOf(item) {
 
 // ── Real-time (same liveness logic as the Obsidian plugin) ──────────────
 
+/**
+ * One attempt at a time: while a connection is open, being opened, or waiting to be retried, nothing starts another.
+ * (1.0.0 let each heartbeat start a new retry chain, so a service that kept saying no got asked more often every minute.)
+ */
 async function connect(state, sync) {
-  if (state.socket || state.off) return;
+  if (state.socket || state.connecting || state.off) return;
+  clearTimeout(state.retryTimer);
+  state.retryTimer = null;
+  state.connecting = true;
   const cfg = load();
   try {
     const { ticket, realtime_until: until } = await api(cfg, 'POST', '/v1/ws/ticket');
     state.until = until ?? null;                 // null = paid, always on; otherwise the end of the trial
     state.ticketDay = Math.floor(Date.now() / 86_400_000);   // the trial's real-time is granted per UTC day
-    const base = (cfg.endpoints ?? DEFAULT_ENDPOINTS)[0].replace(/^http/, 'ws').replace(/\/$/, '');
-    const socket = new WebSocket(`${base}/v1/ws?ticket=${encodeURIComponent(ticket)}`);
+    const base = endpointsOf(cfg.endpoints)[0].replace(/^http/, 'ws').replace(/\/$/, '');
+    // can=end: this client reads why it's being let go (the account's connections are full) and waits, instead of
+    // retrying at once — so the service may tell it, rather than refuse the connection without a reason
+    const socket = new WebSocket(`${base}/v1/ws?ticket=${encodeURIComponent(ticket)}&can=end`);
     state.socket = socket;
+    state.lastBeat = Date.now();                 // a handshake that never finishes counts as stale too
     socket.onopen = () => {
-      state.retry = 0;
+      if (state.socket !== socket) return;
+      state.connecting = false;
+      state.openedAt = Date.now();
       state.lastBeat = Date.now();
       console.log(state.until == null ? t.wsConnected : t.wsConnectedTrial(trialLeft(state.until)));
+      sync();                                    // whatever arrived while this wasn't connected
     };
     socket.onmessage = (ev) => {
+      if (state.socket !== socket) return;
       state.lastBeat = Date.now();
       if (ev.data === 'pong') return;
-      // The last push of a day whose real-time spots ran out says so; the server then closes the socket.
       let msg = null;
       try { msg = JSON.parse(ev.data); } catch { /* not JSON: an older server's message */ }
+      if (msg?.end === 'too_many') return void pause(state, sync, msg.limit);
+      // The last push of a day whose real-time spots ran out says so; the server then closes the socket.
       // Off right away, so the close that follows doesn't reconnect; the notice waits for the catch-up it announces
       if (msg?.end === 'trial_full') state.off = 'trial_full';
       const pulled = sync();
       if (msg?.end === 'trial_full') pulled.finally(() => stopRealtime(state, sync, 'trial_full'));
     };
-    socket.onclose = () => { if (state.socket === socket) state.socket = null; reconnect(state, sync); };
+    socket.onclose = () => {
+      if (state.socket !== socket) return;       // already let go of (stale, another account, paused)
+      // A connection that held for a while starts the backoff over; one closed right after opening doesn't,
+      // so being let go again and again slows down instead of coming back every second
+      if (state.openedAt && Date.now() - state.openedAt >= STEADY_MS) state.retry = 0;
+      dropSocket(state);
+      reconnect(state, sync);
+    };
     socket.onerror = () => socket.close();
   } catch (err) {
+    state.connecting = false;
     if (err.code === 'WS_REQUIRES_PAID') return stopRealtime(state, sync, err.data?.reason);
+    if (AUTH_LOST.has(err.code)) return stopWatch(err.message);
     console.error(t.wsFailed(err.message));
-    reconnect(state, sync);
+    reconnect(state, sync, err.data?.retry_after);
   }
+}
+
+/** Let go of the connection without waiting for its close event: one the server closes can sit in CLOSING for a long time */
+function dropSocket(state) {
+  const socket = state.socket;
+  state.socket = null;
+  state.connecting = false;
+  state.openedAt = 0;
+  try { socket?.close(); } catch { /* already closed */ }
+}
+
+/** The account already has as many real-time connections as it may: say so once, and try again later */
+function pause(state, sync, limit) {
+  dropSocket(state);
+  if (!state.paused) console.log(t.wsTooMany(limit ?? '?'));
+  state.paused = true;
+  clearTimeout(state.retryTimer);
+  state.retryTimer = setTimeout(() => { state.retryTimer = null; connect(state, sync); }, TOO_MANY_WAIT_MS * (1 + Math.random() / 2));
 }
 
 /**
@@ -582,9 +696,7 @@ async function connect(state, sync) {
  */
 function stopRealtime(state, sync, why) {
   state.off = why ?? 'plan';
-  const socket = state.socket;
-  state.socket = null;
-  socket?.close();
+  dropSocket(state);
   if (why !== 'trial_full') {
     console.log(why === 'trial_over' ? t.wsTrialOver : t.wsNotIncluded);
     process.exit(0);                             // also when it happens on a reconnect, not just at start
@@ -592,7 +704,8 @@ function stopRealtime(state, sync, why) {
   console.log(t.wsTrialFull);
   const DAY = 86_400_000;
   clearTimeout(state.retryTimer);                // one retry, however many times today said no
-  state.retryTimer = setTimeout(() => { state.off = null; connect(state, sync); }, DAY - (Date.now() % DAY) + Math.random() * 600_000);
+  state.retryTimer = setTimeout(() => { state.retryTimer = null; state.off = null; connect(state, sync); },
+    DAY - (Date.now() % DAY) + Math.random() * 600_000);
   return 'full';
 }
 
@@ -602,10 +715,16 @@ function trialLeft(until, tt = t, now = Date.now()) {
   return tt.daysLeft(left < 86_400_000 ? 0 : Math.ceil(left / 86_400_000));
 }
 
-function reconnect(state, sync) {
+/**
+ * The next attempt, replacing any already waiting. Exponential backoff with a random half on top, so that many
+ * machines that lost the service at once don't all come back in the same second; never sooner than the
+ * service asked for (retry_after, in seconds).
+ */
+function reconnect(state, sync, retryAfter) {
   if (state.off) return;
-  const delay = BACKOFF_MS[Math.min(state.retry++, BACKOFF_MS.length - 1)];
-  setTimeout(() => connect(state, sync), delay).unref?.();
+  const base = Math.max(BACKOFF_MS[Math.min(state.retry++, BACKOFF_MS.length - 1)], (Number(retryAfter) || 0) * 1000);
+  clearTimeout(state.retryTimer);
+  state.retryTimer = setTimeout(() => { state.retryTimer = null; connect(state, sync); }, base * (1 + Math.random() / 2));
 }
 
 /** After sleep/wake a socket often goes stale while readyState still says OPEN — ping and time it. */
@@ -623,15 +742,21 @@ function heartbeat(state, sync) {
     const ended = left <= 0 && now - (state.recheckAt ?? 0) > 3_600_000;
     if (newDay || ended) {
       if (ended) state.recheckAt = now;
-      const socket = state.socket;
-      state.socket = null;
-      socket.close();
+      dropSocket(state);
       return void connect(state, sync);
     }
   }
-  if (!state.socket) return void connect(state, sync);
-  if (Date.now() - state.lastBeat > STALE_MS) return void state.socket.close();
-  try { state.socket.send('ping'); } catch { state.socket.close(); }
+  if (!state.socket) {
+    if (!state.connecting && !state.retryTimer) connect(state, sync);   // nothing on the way: try now
+    return;
+  }
+  if (Date.now() - state.lastBeat > STALE_MS) {  // silent too long, or a handshake that never finished
+    dropSocket(state);
+    return void reconnect(state, sync);
+  }
+  if (state.socket.readyState !== 1) return;     // still opening
+  if (Date.now() - state.openedAt >= STEADY_MS) state.paused = false;   // held a while: a later "full" is news again
+  try { state.socket.send('ping'); } catch { dropSocket(state); reconnect(state, sync); }
 }
 
 async function me() {
@@ -660,7 +785,7 @@ function meLine(m, tt = t, now = Date.now()) {
 async function devices() {
   const { devices } = await api(needToken(), 'GET', '/v1/devices');
   for (const d of devices) {
-    console.log(`${d.device_id}  ${d.scope.padEnd(12)} ${t.cursor} ${String(d.cursor).padEnd(6)} ${d.name}`);
+    console.log(`${shown(d.device_id)}  ${shown(d.scope).padEnd(12)} ${t.cursor} ${String(d.cursor).padEnd(6)} ${shown(d.name)}`);
   }
 }
 
@@ -676,8 +801,8 @@ async function refreshEndpoints(cfg) {
   try {
     const { endpoints } = await api(cfg, 'GET', '/v1/endpoints', null, false);
     if (!endpoints?.length) return;
-    const current = (load().endpoints ?? DEFAULT_ENDPOINTS)[0];
-    save({ ...load(), endpoints: [...new Set([current, ...endpoints])] });
+    const current = endpointsOf(load().endpoints)[0];
+    save({ ...load(), endpoints: [...new Set([current, ...endpoints.filter((e) => SAFE_BASE.test(e))])] });
   } catch { /* keep the local list if this fails */ }
 }
 
@@ -719,7 +844,29 @@ function errorText(code, data = {}, status, tt = t, now = Date.now()) {
   return tt.errors[code] ?? tt.httpFailed(status);
 }
 
-const sanitize = (name) => name.replace(/[/\\:*?"<>|]/g, '_').slice(0, 120);
+// Control characters: C0, DEL and C1. In a name printed to the terminal, ESC sequences can rewrite what's on screen
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+
+/** Text from other devices or the service, safe to print: control characters shown as '?' */
+const shown = (s) => String(s ?? '').replace(CONTROL, '?');
+
+/**
+ * A received file's name, safe on every system: no path, reserved or control characters; at most 120 characters
+ * and 200 bytes (Linux allows 255 bytes, and the date-and-number prefix comes first); cut between characters,
+ * never inside one, keeping the extension.
+ */
+function sanitize(name) {
+  const clean = String(name).replace(CONTROL, '_').replace(/[/\\:*?"<>|]/g, '_');
+  const fits = (s) => Array.from(s).length <= 120 && Buffer.byteLength(s) <= 200;
+  if (fits(clean)) return clean;
+  const ext = /\.[A-Za-z0-9]{1,8}$/.exec(clean)?.[0] ?? '';
+  const stem = Array.from(clean.slice(0, clean.length - ext.length));
+  while (stem.length && !fits(stem.join('') + ext)) stem.pop();
+  return stem.join('') + ext;
+}
+
+/** A front-matter value: as is when YAML can't misread it, otherwise a quoted string (JSON's quoting is valid YAML) */
+const yamlValue = (v) => (/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(String(v)) ? String(v) : JSON.stringify(String(v)));
 
 function needToken() {
   const cfg = load();
@@ -749,5 +896,8 @@ if (require.main === module) {
   module.exports = {                             // for tests
     T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX, tildePath,
     deviceKey, machineFacts, VERSION,
+    // the network side, driven by the tests with a stand-in fetch, WebSocket and clock
+    api, endpointsOf, sanitize, shown, yamlValue, watch,
+    BACKOFF_MS, HEARTBEAT_MS, TOO_MANY_WAIT_MS, CONFIG,
   };
 }

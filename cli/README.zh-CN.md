@@ -87,6 +87,12 @@ created: 2026-10-04T07:30:00.000Z
 | `实时推送已连接 · 体验还剩 3 天` | 新账号有一段实时推送体验期 |
 | `……10 天的实时推送体验已结束……` | 补齐后退出；再运行一次（或者定时运行）就会补齐 |
 | `……今天的实时名额满了……` | 原地等着，UTC 零点过后自己重连 |
+| `实时推送暂停：这个账号已经有 12 条实时连接……` | 这个账号同时在接收的机器太多了（另一个 `watch`，或多台机器上的 Obsidian）。大约 15 分钟后自己再试，连上时补齐 |
+| `watch 已停止：设备已被移除……` | 这台机器已从账号里移除。再试也没用，所以 `watch` 停下（launchd / systemd 也不会把它拉起来）。用 `dropit pair <配对码>` 重新配对，再启动 `watch` |
+| `这台机器加入了另一个账号……` | `watch` 运行时你执行了 `dropit pair <配对码>`。不用做什么：之后收的是那个账号的内容 |
+
+每次重新连上 —— 睡眠唤醒、换网络、服务暂时不可用之后 —— 都会先补齐这期间到的内容。
+服务不可用时最多每分钟问一次；服务说了什么时候再来，就等到那时。
 
 ### 让它一直开着
 
@@ -104,7 +110,7 @@ created: 2026-10-04T07:30:00.000Z
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
   <key>RunAtLoad</key><true/>
-  <!-- 崩了就重启；正常退出（比如实时体验期结束）不重启 -->
+  <!-- 崩了就重启；正常退出（实时体验期结束，或这台机器被移除）不重启 -->
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>StandardOutPath</key><string>/Users/you/Library/Logs/dropit.log</string>
   <key>StandardErrorPath</key><string>/Users/you/Library/Logs/dropit.log</string>

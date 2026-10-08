@@ -92,6 +92,13 @@ Point it at an Obsidian or Logseq folder and every item becomes a note there.
 | `Real-time push connected · trial: 3 days left` | New accounts get real-time for a while |
 | `…The 10-day real-time trial has ended…` | It caught up and exits; run it again (or on a schedule) to catch up |
 | `…Today's real-time spots are full…` | It waits and reconnects by itself a little after midnight UTC |
+| `Real-time push is paused: this account already has 12 live connections…` | Too many machines are receiving at once on this account (another `watch`, Obsidian on several machines). It tries again by itself in about 15 minutes and catches up then |
+| `watch stopped: This device was removed…` | This machine was removed from your account. Trying again can't fix that, so `watch` stops (and a launch agent or service won't restart it). Pair again with `dropit pair <code>`, then start `watch` again |
+| `This machine joined another account…` | You ran `dropit pair <code>` while `watch` was running. Nothing to do: it now receives from that account |
+
+Whenever it reconnects — after sleep, a network change, or the service being unavailable — it first catches up on
+what arrived meanwhile. While the service is unavailable it asks at most once a minute, or less often when the
+service says when to come back.
 
 ### Keep it running
 
@@ -110,7 +117,7 @@ Point it at an Obsidian or Logseq folder and every item becomes a note there.
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
   <key>RunAtLoad</key><true/>
-  <!-- restart after a crash, but not after it exits on purpose (e.g. the real-time trial ended) -->
+  <!-- restart after a crash, but not after it exits on purpose (the real-time trial ended, or this machine was removed) -->
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>StandardOutPath</key><string>/Users/you/Library/Logs/dropit.log</string>
   <key>StandardErrorPath</key><string>/Users/you/Library/Logs/dropit.log</string>
