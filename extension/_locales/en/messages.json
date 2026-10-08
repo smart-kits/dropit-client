@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "dropit" },
-  "extDescription": { "message": "Send a page, selected text, a link, an image or a screenshot to your own dropit — right-click, a shortcut, or the toolbar." },
+  "extName": { "message": "dropit — Send to Phone, PC, Web & Obsidian" },
+  "extDescription": { "message": "Send links, text, images and files from your browser to your phone, other computers, a web inbox and Obsidian. Arrives in seconds." },
   "actionTitle": { "message": "Send to dropit" },
   "cmdDropNow": { "message": "Send the selection, or this page, right away" }
 }

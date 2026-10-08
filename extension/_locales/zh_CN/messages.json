@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "dropit" },
-  "extDescription": { "message": "右键、快捷键或点图标，把页面、选中的字、链接、图片和截图投进你自己的 dropit。" },
+  "extName": { "message": "dropit — 手机电脑互传，多端同步到 Obsidian" },
+  "extDescription": { "message": "手机电脑互传：把网页、链接、文字、图片和文件一键发到手机、其他电脑、网页收件箱和 Obsidian，几秒送达，多端同步。" },
   "actionTitle": { "message": "投进 dropit" },
   "cmdDropNow": { "message": "直接投：有选中投选中，没有就投这个页面" }
 }
