@@ -117,7 +117,7 @@ Ask me before creating an account, and never show or commit my token.
 
 [提一个 issue](https://github.com/smart-kits/dropit-client/issues)。每个客户端里都有入口：扩展在弹窗底部，
 网页收件箱在页面底部，终端在 `dropit` 的帮助文字里，Obsidian 在「设置 → dropit → 反馈」。
-issue 是公开的 —— 千万别贴钥匙（`dk_…`）。
+issue 是公开的 —— 千万别贴钥匙（`dk_…`）。账号相关、不方便公开的问题，发邮件到 [support@dropit.smart-kits.xyz](mailto:support@dropit.smart-kits.xyz)。
 
 ## 参与开发
 

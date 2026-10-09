@@ -128,7 +128,7 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
 
 [Open an issue](https://github.com/smart-kits/dropit-client/issues). Every client links there: the extension at the bottom of
 its popup, the web inbox at the bottom of the page, the terminal in `dropit`'s help text, Obsidian under *Settings → dropit → Feedback*.
-Issues are public — never paste a key (`dk_…`).
+Issues are public — never paste a key (`dk_…`). For questions about your account you'd rather not post publicly, email [support@dropit.smart-kits.xyz](mailto:support@dropit.smart-kits.xyz).
 
 ## Contributing
 
