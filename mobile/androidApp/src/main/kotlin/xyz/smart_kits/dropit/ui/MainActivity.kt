@@ -47,7 +47,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
@@ -136,6 +140,7 @@ private fun Join(code: String?, resumed: Int, onJoined: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var input by remember(code) { mutableStateOf(code.orEmpty()) }
+    val typed = pairingCodeOf(input)
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
 
@@ -159,17 +164,21 @@ private fun Join(code: String?, resumed: Int, onJoined: () -> Unit) {
         }
         OutlinedTextField(
             value = input,
-            onValueChange = { input = it.uppercase().filter(Char::isLetterOrDigit).take(6) },
+            // Kept exactly as the keyboard typed it: rewriting the text while the keyboard is still composing a
+            // word makes it commit that word again ("vc" became "VVC"). Capitals are only drawn, and the code is
+            // cleaned up when read
+            onValueChange = { input = it },
             label = { Text(stringResource(R.string.join_code)) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+            visualTransformation = Capitals,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
         Text(stringResource(R.string.consent), style = MaterialTheme.typography.bodySmall)
         TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }) {
             Text(stringResource(R.string.privacy))
         }
-        Button(onClick = { run { ctx.app.account.join(input) } }, enabled = !busy && input.length == 6, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = { run { ctx.app.account.join(typed) } }, enabled = !busy && typed.length == 6, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.join_agree))
         }
         error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
@@ -178,6 +187,14 @@ private fun Join(code: String?, resumed: Int, onJoined: () -> Unit) {
             Text(stringResource(R.string.first_device), style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+/** The code in what was typed or pasted: letters and digits, in capitals, at most six */
+internal fun pairingCodeOf(typed: String): String = typed.filter(Char::isLetterOrDigit).uppercase().take(6)
+
+/** Draws letters as capitals, one character for one, so the cursor stays where it was */
+private val Capitals = VisualTransformation { text ->
+    TransformedText(AnnotatedString(text.text.map(Char::uppercaseChar).joinToString("")), OffsetMapping.Identity)
 }
 
 private data class Picked(val uri: Uri, val name: String)
