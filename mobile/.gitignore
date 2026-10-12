@@ -1,0 +1,12 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+# Signing keys and their passwords never enter this public repository
+*.jks
+*.keystore
+keystore.properties
+# Push-service settings are read from local.properties, never committed
+google-services.json
+.idea/
+*.iml

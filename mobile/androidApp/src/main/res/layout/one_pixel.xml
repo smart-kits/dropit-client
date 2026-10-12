@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Some systems never give a window without a layout the focus, and only the focused app may read the clipboard -->
+<View xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="1px" android:layout_height="1px" />

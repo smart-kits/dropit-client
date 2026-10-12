@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">dropit</string>
+    <string name="send_clipboard">Send clipboard</string>
+
+    <!-- Channels -->
+    <string name="channel_send">Sending</string>
+    <string name="channel_send_desc">Progress and results of what you send</string>
+
+    <!-- Sending -->
+    <string name="sending_n">Sending %1$d/%2$d</string>
+    <string name="sending">Sending…</string>
+    <string name="sent">Sent %1$s</string>
+    <string name="sent_again">Already sent a moment ago %1$s</string>
+    <string name="send_failed">Not sent</string>
+    <string name="taken">Got it — sending</string>
+    <string name="over_count">%1$d files after the first 10 were not sent</string>
+    <string name="too_large">%1$s is %2$s — your plan allows up to %3$s per item</string>
+    <string name="clipboard_empty">The clipboard is empty — or dropit isn\'t allowed to read it (Settings → Apps → dropit → Permissions → Clipboard)</string>
+    <string name="nothing_to_send">Nothing to send</string>
+    <plurals name="unreadable">
+        <item quantity="one">%1$d file could not be read and was not sent</item>
+        <item quantity="other">%1$d files could not be read and were not sent</item>
+    </plurals>
+    <string name="action_retry">Retry</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="join_waiting">Join, and what you just shared goes out</string>
+    <string name="tile_hint">After copying something, pull down quick settings and tap "Send clipboard".</string>
+    <string name="tile_add">Add to quick settings</string>
+    <string name="tile_manual">Pull down quick settings → edit → drag "Send clipboard" in.</string>
+    <string name="clip_new">New on your clipboard</string>
+    <string name="clip_a_file">A copied file</string>
+    <string name="join_again">Join again</string>
+
+    <!-- Join -->
+    <string name="join_title">Join your dropit</string>
+    <string name="join_hint">Pairing code from a device you already use: the web inbox (Devices), Obsidian settings, or `dropit code` in a terminal</string>
+    <string name="join_code">Pairing code</string>
+    <string name="join_agree">Join</string>
+    <string name="create_agree">Agree and create a new account</string>
+    <string name="first_device">First device? Create a new account</string>
+    <string name="consent">Tapping Join means you agree to this: joining sends this phone\'s name and a fingerprint hash, used only to manage your device slots. What you send is kept on the service for a short while (1 day on the free plan) so your other devices can receive it.</string>
+    <string name="privacy">Privacy</string>
+
+    <!-- Home -->
+    <string name="compose_hint">Write something, or paste…</string>
+    <string name="attach">Files</string>
+    <string name="send">Send</string>
+    <string name="will_send_text">Sends this text</string>
+    <string name="will_send_files">Sends %1$d file(s)</string>
+    <string name="will_send_both">Sends this text + %1$d file(s)</string>
+    <string name="remove">Remove</string>
+    <string name="sign_out">Sign out on this phone</string>
+    <string name="account_line">%1$s · %2$d/%3$d devices</string>
+    <string name="refresh">Refresh</string>
+    <string name="bg_hint">While a drop goes out, a small card shows at the bottom of the screen: this phone pauses apps that are not on screen. Let dropit run without battery limits and drops go out in the background, card-free.</string>
+    <string name="bg_allow">Allow in background</string>
+</resources>

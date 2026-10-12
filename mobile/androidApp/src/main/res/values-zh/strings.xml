@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="send_clipboard">发剪贴板</string>
+
+    <string name="channel_send">投递</string>
+    <string name="channel_send_desc">投递的进度和结果</string>
+
+    <string name="sending_n">正在投递 %1$d/%2$d</string>
+    <string name="sending">正在投递…</string>
+    <string name="sent">已投递 %1$s</string>
+    <string name="sent_again">刚才已经投过 %1$s</string>
+    <string name="send_failed">没投出去</string>
+    <string name="taken">收到，正在投递</string>
+    <string name="over_count">第 10 个之后的 %1$d 个文件没有投</string>
+    <string name="too_large">%1$s 有 %2$s，你的套餐单个上限是 %3$s</string>
+    <string name="clipboard_empty">剪贴板是空的 —— 或者 dropit 没有读剪贴板的权限（设置 → 应用 → dropit → 权限 → 剪贴板）</string>
+    <string name="nothing_to_send">没有可投的内容</string>
+    <plurals name="unreadable">
+        <item quantity="other">有 %1$d 个文件读不到，没有投</item>
+    </plurals>
+    <string name="action_retry">重试</string>
+    <string name="action_cancel">取消</string>
+    <string name="close">关闭</string>
+    <string name="join_waiting">加入后，刚才分享的内容会接着投出去</string>
+    <string name="tile_hint">复制之后，下拉控制中心点「发剪贴板」就能投。</string>
+    <string name="tile_add">加到控制中心</string>
+    <string name="tile_manual">下拉控制中心 → 编辑 → 把「发剪贴板」拖进去。</string>
+    <string name="clip_new">剪贴板里有新内容</string>
+    <string name="clip_a_file">复制的文件</string>
+    <string name="join_again">重新加入</string>
+
+    <string name="join_title">加入你的 dropit</string>
+    <string name="join_hint">配对码从已经在用的设备上拿：网页收件箱的「设备」页、Obsidian 设置，或终端里的 `dropit code`</string>
+    <string name="join_code">配对码</string>
+    <string name="join_agree">加入</string>
+    <string name="create_agree">同意并创建新账号</string>
+    <string name="first_device">这是第一台设备？创建新账号</string>
+    <string name="consent">点「加入」即表示同意：加入时会发送这台手机的名称和一个设备指纹摘要，只用来管理你的设备名额。你投递的内容会在服务上暂存一段时间（免费版 1 天），供你的其他设备接收。</string>
+    <string name="privacy">隐私说明</string>
+
+    <string name="compose_hint">写点什么，或粘贴…</string>
+    <string name="attach">选文件</string>
+    <string name="send">投递</string>
+    <string name="will_send_text">投这段文字</string>
+    <string name="will_send_files">投 %1$d 个文件</string>
+    <string name="will_send_both">投这段文字 + %1$d 个文件</string>
+    <string name="remove">移除</string>
+    <string name="sign_out">在这台手机上退出</string>
+    <string name="account_line">%1$s · %2$d/%3$d 台设备</string>
+    <string name="refresh">刷新</string>
+    <string name="bg_hint">投递时屏幕底部会出现一张小卡片：这台手机会暂停不在屏幕上的 App。允许 dropit 不受省电限制，投递就完全在后台进行，不出卡片。</string>
+    <string name="bg_allow">允许后台投递</string>
+</resources>
