@@ -5,7 +5,7 @@
  *   node test/extension.test.mjs
  */
 import {
-  META_BUDGET, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
+  META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
   fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
@@ -327,6 +327,40 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   let threw = false;
   try { QR.matrix('y'.repeat(107)); } catch { threw = true; }
   ok('E38 too long for version 5 → an error, not a wrong code', threw);
+}
+
+// V · test/vectors/payload.json: the same cases the phone apps' shared code is tested against.
+// The extension is the reference; if a rule changes here, regenerate the expected values there.
+{
+  const { deviceKey } = await import('../extension/device.js');
+  const V = JSON.parse(readFileSync(new URL('./vectors/payload.json', import.meta.url), 'utf8'));
+  eq('V constants', V.constants, { META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, GROUP_MAX: 16 });
+  for (const [x, want] of V.kindOf) eq(`V kindOf ${JSON.stringify(x)}`, kindOf(x), want);
+  for (const [x, want] of V.squash) eq(`V squash ${JSON.stringify(x)}`, squash(x), want);
+  for (const [x, n, want] of V.clip) eq(`V clip ${n}`, clip(x, n), want);
+  for (const [x, want] of V.pageMeta) eq('V pageMeta', pageMeta(x), want);
+  for (const [u, t, want] of V.fromMeta) eq('V fromMeta', fromMeta(u, t), want);
+  V.fitMeta.forEach(([m, limit, want], k) => eq(`V fitMeta ${k}`, fitMeta(m, limit), want));
+  for (const [n, id, want] of V.groupsFor) eq(`V groupsFor ${n}`, groupsFor(n, id), want);
+  for (const n of V.groupsForRefused) {
+    let code = null;
+    try { groupsFor(n); } catch (err) { code = err.code; }
+    eq(`V groupsFor ${n} refused`, code, 'BATCH_TOO_LARGE');
+  }
+  for (const [x, want] of V.seqRange) eq('V seqRange', seqRange(x), want);
+  for (const [x, want] of V.mb) eq('V mb', mb(x), want);
+  for (const [x, want] of V.fileSize) eq('V fileSize', fileSize(x), want);
+  for (const [stored, defaults, want] of V.endpointList) eq('V endpointList', endpointList(stored, defaults), want);
+  // A recording `t`: each sentence comes back as its key and arguments, so the choice is checked, not the wording
+  const rec = { errors: Object.fromEntries(Object.keys(STRINGS.en.errors).map((k) => [k, `errors.${k}`])) };
+  for (const [k, v] of Object.entries(STRINGS.en)) if (k !== 'errors') rec[k] = typeof v === 'function' ? (...a) => `${k}(${a.join(',')})` : k;
+  for (const c of V.errorText) {
+    const [d, tm] = c.now_local.split('T');
+    const now = new Date(`${d}T${tm}:00`).getTime();
+    eq(`V errorText ${c.code} ${JSON.stringify(c.data)}`, errorText(c.code ?? undefined, c.data, c.status, rec, now), c.expect);
+  }
+  eq('V every error code has a sentence', V.errorCodes, Object.keys(STRINGS.en.errors));
+  for (const [kind, facts, want] of V.deviceKey) eq(`V deviceKey ${kind}`, await deviceKey(kind, facts), want);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

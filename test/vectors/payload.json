@@ -1,0 +1,732 @@
+{
+ "_about": "Inputs and expected outputs shared by every client that implements these rules. The browser extension is the reference; test/extension.test.mjs and the mobile shared tests both read this file. Change a rule in one client → change it here → both tests must pass.",
+ "constants": {
+  "META_BUDGET": 2000,
+  "TITLE_MAX": 200,
+  "DESCRIPTION_MAX": 300,
+  "FROM_URL_MAX": 1024,
+  "FILES_MAX": 10,
+  "GROUP_MAX": 16
+ },
+ "kindOf": [
+  [
+   "https://a.com",
+   "url"
+  ],
+  [
+   "  https://a.com/x \n",
+   "url"
+  ],
+  [
+   "HTTP://A.COM",
+   "url"
+  ],
+  [
+   "看 https://a.com",
+   "text"
+  ],
+  [
+   "https://a.com\nhttps://b.com",
+   "text"
+  ],
+  [
+   "https://a.com b",
+   "text"
+  ],
+  [
+   "ftp://x",
+   "text"
+  ],
+  [
+   "https://",
+   "text"
+  ],
+  [
+   "",
+   "text"
+  ]
+ ],
+ "squash": [
+  [
+   " a \n\n b\t",
+   "a b"
+  ],
+  [
+   "a\u0000bc",
+   "a b c"
+  ],
+  [
+   "",
+   ""
+  ],
+  [
+   "  ",
+   ""
+  ],
+  [
+   "a　b",
+   "a b"
+  ]
+ ],
+ "clip": [
+  [
+   "😀😀😀😀😀😀😀😀😀😀",
+   5,
+   "😀😀😀😀…"
+  ],
+  [
+   "abc",
+   5,
+   "abc"
+  ],
+  [
+   "abc",
+   3,
+   "abc"
+  ],
+  [
+   "abcd",
+   3,
+   "ab…"
+  ],
+  [
+   "abc def",
+   4,
+   "abc…"
+  ],
+  [
+   "abc",
+   0,
+   ""
+  ],
+  [
+   "abc",
+   1,
+   "…"
+  ]
+ ],
+ "pageMeta": [
+  [
+   {
+    "title": "  A\ttitle \n",
+    "description": "one\n\ntwo\t three   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   {
+    "title": "A title",
+    "description": "one two three xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
+   }
+  ],
+  [
+   {
+    "title": " ",
+    "description": ""
+   },
+   {}
+  ],
+  [
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+    "description": "述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述"
+   },
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标…",
+    "description": "述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述…"
+   }
+  ]
+ ],
+ "fromMeta": [
+  [
+   "https://a.com/p",
+   " Page\ntitle ",
+   {
+    "url": "https://a.com/p",
+    "title": "Page title"
+   }
+  ],
+  [
+   "https://a.com/p",
+   "",
+   {
+    "url": "https://a.com/p"
+   }
+  ],
+  [
+   "javascript:alert(1)",
+   "x",
+   null
+  ],
+  [
+   "https://a.com/?qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+   "T",
+   null
+  ],
+  [
+   "http://a.com",
+   "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+   {
+    "url": "http://a.com",
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标…"
+   }
+  ]
+ ],
+ "fitMeta": [
+  [
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+    "description": "述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述"
+   },
+   2000,
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+    "description": "述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述"
+   }
+  ],
+  [
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+    "description": "述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述"
+   },
+   1000,
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+    "description": "述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述述…"
+   }
+  ],
+  [
+   {
+    "title": "标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标标",
+    "from": {
+     "url": "https://a.com/pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+     "title": "来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来"
+    }
+   },
+   1200,
+   {
+    "from": {
+     "url": "https://a.com/pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+     "title": "来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来来…"
+    }
+   }
+  ],
+  [
+   {
+    "title": "T",
+    "from": {
+     "url": "https://a.com/?qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+     "title": "x"
+    }
+   },
+   2000,
+   {
+    "title": "T"
+   }
+  ],
+  [
+   {},
+   2000,
+   null
+  ],
+  [
+   {
+    "title": "",
+    "group": {
+     "id": "abcdef",
+     "i": 1,
+     "n": 2
+    }
+   },
+   2000,
+   {
+    "group": {
+     "id": "abcdef",
+     "i": 1,
+     "n": 2
+    }
+   }
+  ],
+  [
+   {
+    "description": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+   },
+   100,
+   {
+    "description": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀…"
+   }
+  ],
+  [
+   {
+    "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "group": {
+     "id": "abcdefgh",
+     "i": 1,
+     "n": 3
+    }
+   },
+   40,
+   {
+    "group": {
+     "id": "abcdefgh",
+     "i": 1,
+     "n": 3
+    }
+   }
+  ],
+  [
+   {
+    "from": {
+     "url": "https://a.com/p"
+    },
+    "group": {
+     "id": "abcdefgh",
+     "i": 2,
+     "n": 2
+    }
+   },
+   2000,
+   {
+    "from": {
+     "url": "https://a.com/p"
+    },
+    "group": {
+     "id": "abcdefgh",
+     "i": 2,
+     "n": 2
+    }
+   }
+  ]
+ ],
+ "groupsFor": [
+  [
+   0,
+   "abcdefgh",
+   []
+  ],
+  [
+   1,
+   "abcdefgh",
+   [
+    null
+   ]
+  ],
+  [
+   2,
+   "abcdefgh",
+   [
+    {
+     "id": "abcdefgh",
+     "i": 1,
+     "n": 2
+    },
+    {
+     "id": "abcdefgh",
+     "i": 2,
+     "n": 2
+    }
+   ]
+  ],
+  [
+   3,
+   "abcdefgh",
+   [
+    {
+     "id": "abcdefgh",
+     "i": 1,
+     "n": 3
+    },
+    {
+     "id": "abcdefgh",
+     "i": 2,
+     "n": 3
+    },
+    {
+     "id": "abcdefgh",
+     "i": 3,
+     "n": 3
+    }
+   ]
+  ],
+  [
+   16,
+   "abcdefgh",
+   [
+    {
+     "id": "abcdefgh",
+     "i": 1,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 2,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 3,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 4,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 5,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 6,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 7,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 8,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 9,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 10,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 11,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 12,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 13,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 14,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 15,
+     "n": 16
+    },
+    {
+     "id": "abcdefgh",
+     "i": 16,
+     "n": 16
+    }
+   ]
+  ]
+ ],
+ "groupsForRefused": [
+  17
+ ],
+ "seqRange": [
+  [
+   [
+    71
+   ],
+   "#71"
+  ],
+  [
+   [
+    71,
+    72,
+    73
+   ],
+   "#71–#73"
+  ],
+  [
+   [
+    73,
+    71
+   ],
+   "#71–#73"
+  ],
+  [
+   [],
+   ""
+  ]
+ ],
+ "mb": [
+  [
+   5242880,
+   "5 MB"
+  ],
+  [
+   104857600,
+   "100 MB"
+  ],
+  [
+   1572864,
+   "1.5 MB"
+  ],
+  [
+   524288,
+   "0.5 MB"
+  ]
+ ],
+ "fileSize": [
+  [
+   0,
+   "0 B"
+  ],
+  [
+   11,
+   "11 B"
+  ],
+  [
+   1023,
+   "1023 B"
+  ],
+  [
+   1024,
+   "1 KB"
+  ],
+  [
+   14336,
+   "14 KB"
+  ],
+  [
+   1048575,
+   "1024 KB"
+  ],
+  [
+   1048576,
+   "1.0 MB"
+  ],
+  [
+   2453667.84,
+   "2.3 MB"
+  ]
+ ],
+ "endpointList": [
+  [
+   null,
+   [
+    "https://dropit.smart-kits.xyz"
+   ],
+   [
+    "https://dropit.smart-kits.xyz"
+   ]
+  ],
+  [
+   [
+    "https://old.example"
+   ],
+   [
+    "https://dropit.smart-kits.xyz"
+   ],
+   [
+    "https://old.example",
+    "https://dropit.smart-kits.xyz"
+   ]
+  ],
+  [
+   [
+    "https://dropit.smart-kits.xyz",
+    "https://b.example"
+   ],
+   [
+    "https://dropit.smart-kits.xyz"
+   ],
+   [
+    "https://dropit.smart-kits.xyz",
+    "https://b.example"
+   ]
+  ]
+ ],
+ "errorText": [
+  {
+   "code": "PAYLOAD_TOO_LARGE",
+   "data": {
+    "field": "size",
+    "limit": 5242880
+   },
+   "status": 413,
+   "now_local": "2026-10-03T23:30",
+   "expect": "tooLarge(5 MB)"
+  },
+  {
+   "code": "PAYLOAD_TOO_LARGE",
+   "data": {
+    "field": "size",
+    "limit": 1572864
+   },
+   "status": 413,
+   "now_local": "2026-10-03T23:30",
+   "expect": "tooLarge(1.5 MB)"
+  },
+  {
+   "code": "PAYLOAD_TOO_LARGE",
+   "data": {
+    "field": "meta"
+   },
+   "status": 413,
+   "now_local": "2026-10-03T23:30",
+   "expect": "errors.PAYLOAD_TOO_LARGE"
+  },
+  {
+   "code": "RATE_LIMITED",
+   "data": {
+    "window": "day",
+    "retry_after": 1800
+   },
+   "status": 429,
+   "now_local": "2026-10-03T23:30",
+   "expect": "rateDay(00:00)"
+  },
+  {
+   "code": "RATE_LIMITED",
+   "data": {
+    "window": "hour",
+    "retry_after": 1800
+   },
+   "status": 429,
+   "now_local": "2026-10-03T23:30",
+   "expect": "rateHour"
+  },
+  {
+   "code": "RATE_LIMITED",
+   "data": {
+    "retry_after": 1800
+   },
+   "status": 429,
+   "now_local": "2026-10-03T23:30",
+   "expect": "errors.RATE_LIMITED"
+  },
+  {
+   "code": "QUOTA_EXCEEDED",
+   "data": {
+    "field": "items"
+   },
+   "status": 507,
+   "now_local": "2026-10-03T23:30",
+   "expect": "quotaItems"
+  },
+  {
+   "code": "QUOTA_EXCEEDED",
+   "data": {
+    "field": "bytes"
+   },
+   "status": 507,
+   "now_local": "2026-10-03T23:30",
+   "expect": "quotaBytes"
+  },
+  {
+   "code": "QUOTA_EXCEEDED",
+   "data": {},
+   "status": 507,
+   "now_local": "2026-10-03T23:30",
+   "expect": "errors.QUOTA_EXCEEDED"
+  },
+  {
+   "code": "DEVICE_REVOKED",
+   "data": {
+    "reason": "replaced"
+   },
+   "status": 403,
+   "now_local": "2026-10-03T23:30",
+   "expect": "revokedReplaced"
+  },
+  {
+   "code": "DEVICE_REVOKED",
+   "data": {},
+   "status": 403,
+   "now_local": "2026-10-03T23:30",
+   "expect": "errors.DEVICE_REVOKED"
+  },
+  {
+   "code": "INVALID_TOKEN",
+   "data": {},
+   "status": 401,
+   "now_local": "2026-10-03T23:30",
+   "expect": "errors.INVALID_TOKEN"
+  },
+  {
+   "code": "PAIRING_LIMITED",
+   "data": {
+    "retry_after": 100
+   },
+   "status": 429,
+   "now_local": "2026-10-03T23:30",
+   "expect": "errors.PAIRING_LIMITED"
+  },
+  {
+   "code": "NOPE",
+   "data": {},
+   "status": 500,
+   "now_local": "2026-10-03T23:30",
+   "expect": "httpFailed(500)"
+  },
+  {
+   "code": null,
+   "data": {},
+   "status": 502,
+   "now_local": "2026-10-03T23:30",
+   "expect": "httpFailed(502)"
+  }
+ ],
+ "errorCodes": [
+  "INVALID_TOKEN",
+  "DEVICE_REVOKED",
+  "SCOPE_INSUFFICIENT",
+  "DEVICE_LIMIT_REACHED",
+  "PAIRING_CODE_INVALID",
+  "PAIRING_CODE_EXPIRED",
+  "RATE_LIMITED",
+  "SIGNUP_LIMITED",
+  "PAIRING_LIMITED",
+  "TURNSTILE_REQUIRED",
+  "QUOTA_EXCEEDED",
+  "PAYLOAD_TOO_LARGE",
+  "GLOBAL_CIRCUIT_OPEN",
+  "BLOB_UNAVAILABLE"
+ ],
+ "deviceKey": [
+  [
+   "android",
+   [
+    "a1b2c3d4e5f60718",
+    "Xiaomi",
+    "Redmi K70"
+   ],
+   "049881167a1e78c120b2cd5f6debbd5f1909925552a1090d63dd9ea094efa156"
+  ],
+  [
+   "extension",
+   [
+    "Google Chrome",
+    "MacIntel",
+    10,
+    8,
+    "Asia/Shanghai",
+    "Apple M1 Pro"
+   ],
+   "d6a8aadb6f6bf9d1d2c7530da30d585209a254d192637f887ea69e2935d27d62"
+  ],
+  [
+   "android",
+   [
+    "",
+    "",
+    ""
+   ],
+   "f33641901b0f14e68a20680f80b7cf11f32aa30d4dc5418e2b20f456d460b0f2"
+  ]
+ ]
+}
