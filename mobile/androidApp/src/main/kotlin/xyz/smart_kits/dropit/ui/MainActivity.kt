@@ -304,12 +304,22 @@ private fun Home(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Un
         // The fastest way after copying, offered until it is there
         var tileAdded by remember(resumed) { mutableStateOf(ctx.app.store.tileAdded) }
         var tileManual by remember { mutableStateOf(Build.VERSION.SDK_INT < 33) }
+        var tileDeclined by remember { mutableStateOf(false) }
         if (!tileAdded) {
             Spacer(Modifier.height(16.dp))
             Text(stringResource(if (tileManual) R.string.tile_manual else R.string.tile_hint), style = MaterialTheme.typography.bodySmall)
             if (!tileManual) OutlinedButton(onClick = {
-                ctx.requestTile { added -> if (added) { ctx.app.store.tileAdded = true; tileAdded = true } else tileManual = true }
+                ctx.requestTile { answer ->
+                    when (answer) {
+                        TileAsk.ADDED -> { ctx.app.store.tileAdded = true; tileAdded = true }
+                        // Said no this time: the button stays for a change of mind, and the manual way shows too,
+                        // since the system may stop asking after a refusal
+                        TileAsk.DECLINED -> tileDeclined = true
+                        TileAsk.UNAVAILABLE -> tileManual = true
+                    }
+                }
             }) { Text(stringResource(R.string.tile_add)) }
+            if (tileDeclined && !tileManual) Text(stringResource(R.string.tile_manual), style = MaterialTheme.typography.bodySmall)
         }
         // Checked again each time the screen comes back: the person may have just changed it in settings
         val background = remember(resumed) { ctx.app.runsInBackground }
@@ -325,12 +335,22 @@ private fun Home(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Un
     }
 }
 
+internal enum class TileAsk { ADDED, DECLINED, UNAVAILABLE }
+
+/** A refusal is not the same as a system that cannot ask: only the second hides the button */
+internal fun tileAskOf(result: Int): TileAsk = when (result) {
+    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED,
+    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> TileAsk.ADDED
+    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> TileAsk.DECLINED
+    else -> TileAsk.UNAVAILABLE
+}
+
 /**
- * The system's one-tap "add this tile" (Android 13+). [done] gets false when the system would not show it
- * (declined, or a system that leaves it out), so the screen falls back to saying how to add it by hand.
+ * The system's one-tap "add this tile" (Android 13+). [done] gets DECLINED when the person said no, and
+ * UNAVAILABLE when the system would not ask (a system that leaves it out), so the screen says how to add it by hand.
  */
 @android.annotation.SuppressLint("NewApi")
-private fun android.content.Context.requestTile(done: (Boolean) -> Unit) {
+private fun android.content.Context.requestTile(done: (TileAsk) -> Unit) {
     val sbm = getSystemService(android.app.StatusBarManager::class.java)
     runCatching {
         sbm.requestAddTileService(
@@ -338,9 +358,6 @@ private fun android.content.Context.requestTile(done: (Boolean) -> Unit) {
             getString(R.string.send_clipboard),
             android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_tile),
             mainExecutor,
-        ) { result ->
-            done(result == android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
-                result == android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED)
-        }
-    }.onFailure { done(false) }
+        ) { result -> done(tileAskOf(result)) }
+    }.onFailure { done(TileAsk.UNAVAILABLE) }
 }
