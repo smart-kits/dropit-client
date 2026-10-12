@@ -1,6 +1,20 @@
-<!-- An envelope, single colour: quick-settings tiles and shortcuts tint it -->
+<!-- The dropit mark in one colour (striped border and "d"): quick-settings tiles and shortcuts tint it.
+     Drawn on the logo's 64-unit grid, scaled into the 24dp icon with 2dp to spare on each side -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF"
-        android:pathData="M3,5h18a1,1 0 0,1 1,1v12a1,1 0 0,1 -1,1H3a1,1 0 0,1 -1,-1V6a1,1 0 0,1 1,-1zM4,7.4V17h16V7.4l-8,5.2zM5.6,7l6.4,4.2L18.4,7z" />
+    <group android:translateX="2" android:translateY="2" android:scaleX="0.3125" android:scaleY="0.3125">
+        <!-- The airmail border: the frame, kept only where the diagonal stripes run -->
+        <group>
+            <clip-path android:pathData="M-92.02,-10L-8.02,74L1.82,74L-82.18,-10ZM-75.62,-10L8.38,74L18.22,74L-65.78,-10ZM-59.21,-10L24.79,74L34.63,74L-49.37,-10ZM-42.81,-10L41.19,74L51.03,74L-32.97,-10ZM-26.40,-10L57.60,74L67.44,74L-16.56,-10ZM-10.00,-10L74.00,74L83.84,74L-0.16,-10ZM6.40,-10L90.40,74L100.25,74L16.25,-10ZM22.81,-10L106.81,74L116.65,74L32.65,-10ZM39.21,-10L123.21,74L133.06,74L49.06,-10ZM55.62,-10L139.62,74L149.46,74L65.46,-10Z" />
+            <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+                android:pathData="M11,0H53A11,11 0 0 1 64,11V53A11,11 0 0 1 53,64H11A11,11 0 0 1 0,53V11A11,11 0 0 1 11,0ZM16,12H48A4,4 0 0 1 52,16V48A4,4 0 0 1 48,52H16A4,4 0 0 1 12,48V16A4,4 0 0 1 16,12Z" />
+        </group>
+        <!-- The "d", from the logo's font outline -->
+        <group android:pivotX="214.5" android:pivotY="346" android:translateX="-182.5" android:translateY="-313.5"
+            android:scaleX="0.042" android:scaleY="-0.042">
+            <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="30"
+                android:strokeLineJoin="round"
+                android:pathData="M287 700H379Q384 700 387.5 696.5Q391 693 391 688V12Q391 7 387.5 3.5Q384 0 379 0H287Q282 0 278.5 3.5Q275 7 275 12V24Q275 27 273.0 28.0Q271 29 269 27Q233 -8 179 -8Q112 -8 75.0 36.0Q38 80 38 154V357Q38 433 75.5 476.0Q113 519 179 519Q202 519 226.0 510.5Q250 502 269 483Q271 481 273.0 482.0Q275 483 275 486V688Q275 693 278.5 696.5Q282 700 287 700ZM275 149V362Q271 388 255.0 403.5Q239 419 215 419Q187 419 170.0 399.5Q153 380 153 348V163Q153 131 170.0 111.5Q187 92 215 92Q239 92 255.0 107.5Q271 123 275 149Z" />
+        </group>
+    </group>
 </vector>
