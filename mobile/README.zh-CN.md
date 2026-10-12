@@ -27,4 +27,6 @@
 iOS 测试需要 Xcode。把 `DROPIT_DEV_URL` 设成本地的 dropit 服务时，JVM 测试还会对它跑一条端到端检查。
 调试包在手机上连 `127.0.0.1:8799`，用 `adb reverse tcp:8799 tcp:8799` 转发。
 
-两种构建：`site`（官网版，自己更新）和 `play`（Google Play）。正式签名读 `keystore.properties`，这个文件永远不进仓库。
+两种构建：`site`（官网版，自己更新）和 `play`（Google Play）。正式签名读放在本仓库之外的
+`keystore.properties`：先看 `DROPIT_SIGNING` 指向的路径，没有就读 `../../signing/keystore.properties`。
+其中 `storeFile` 相对这个文件。找不到它时，release 包不签名。

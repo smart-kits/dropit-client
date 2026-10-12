@@ -29,5 +29,6 @@ The iOS tests need Xcode. With `DROPIT_DEV_URL` set to a local dropit service, t
 end-to-end check against it. A debug build talks to `127.0.0.1:8799` on the phone, so forward it with
 `adb reverse tcp:8799 tcp:8799`.
 
-Two flavors: `site` (from the website, updates itself) and `play` (Google Play). Release signing reads
-`keystore.properties`, which never enters this repository.
+Two flavors: `site` (from the website, updates itself) and `play` (Google Play). Release signing reads a
+`keystore.properties` kept outside this repository: the path in `DROPIT_SIGNING`, otherwise
+`../../signing/keystore.properties`. Its `storeFile` is relative to that file. Without it, release builds are unsigned.

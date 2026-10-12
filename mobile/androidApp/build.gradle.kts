@@ -6,9 +6,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Release signing comes from keystore.properties next to this file (never committed):
-// storeFile=/absolute/path/dropit-release.jks, storePassword=…, keyAlias=dropit, keyPassword=…
-val keystore = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f ->
+// Release signing reads a keystore.properties kept outside this repository: the path in DROPIT_SIGNING,
+// else signing/keystore.properties two levels above this project. storeFile is relative to that file:
+// storeFile=dropit-release.jks, storePassword=…, keyAlias=dropit, keyPassword=…
+val keystoreFile = System.getenv("DROPIT_SIGNING")?.let(::File)
+    ?: rootProject.file("../../signing/keystore.properties")
+val keystore = keystoreFile.takeIf { it.exists() }?.let { f ->
     Properties().apply { f.inputStream().use(::load) }
 }
 
@@ -35,7 +38,7 @@ android {
 
     signingConfigs {
         if (keystore != null) create("release") {
-            storeFile = file(keystore.getProperty("storeFile"))
+            storeFile = keystoreFile.parentFile.resolve(keystore.getProperty("storeFile"))
             storePassword = keystore.getProperty("storePassword")
             keyAlias = keystore.getProperty("keyAlias")
             keyPassword = keystore.getProperty("keyPassword")
