@@ -31,9 +31,18 @@ android {
     flavorDimensions += "dist"
     productFlavors {
         // From the product's own site: updates itself
-        create("site") { dimension = "dist"; buildConfigField("boolean", "SELF_UPDATE", "true") }
-        // From Google Play: Play updates it; no payment links
-        create("play") { dimension = "dist"; buildConfigField("boolean", "SELF_UPDATE", "false") }
+        create("site") {
+            dimension = "dist"
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+            // Off while the website isn't taking payments: the plan table stays, the buy tiles don't show
+            buildConfigField("boolean", "PAYMENTS", "false")
+        }
+        // From Google Play: Play updates it; prices and payment links stay out (store rules)
+        create("play") {
+            dimension = "dist"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+            buildConfigField("boolean", "PAYMENTS", "false")
+        }
     }
 
     signingConfigs {
@@ -57,7 +66,19 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
+        // Shrunk exactly like a release, but talking to the local service like a development build: for
+        // checking that nothing breaks once the code is shrunk, without touching the real service
+        create("qa") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            buildConfigField("String", "ENDPOINTS", "\"http://127.0.0.1:8799\"")
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
+
+    // The local service is plain http on this machine: the same exception a development build has
+    sourceSets.getByName("qa").res.srcDir("src/debug/res")
 
     buildFeatures {
         compose = true
@@ -78,6 +99,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.work)
+    // Scanning a pairing code: the camera, and an open-source reader that needs no Google services
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)

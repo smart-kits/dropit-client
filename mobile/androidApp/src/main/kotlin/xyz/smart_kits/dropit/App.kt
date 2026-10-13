@@ -27,6 +27,8 @@ class App : Application() {
         private set
     lateinit var account: Account
         private set
+    lateinit var letters: LetterBox
+        private set
 
     val strings: Strings get() = Strings.forLanguage(Locale.getDefault().toLanguageTag())
 
@@ -66,6 +68,7 @@ class App : Application() {
         }
         client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','))
         account = Account(this, store, client)
+        letters = LetterBox(this)
         createChannels()
         addShortcuts()
         Outbox(this).sweep()
@@ -81,14 +84,24 @@ class App : Application() {
         )
     }
 
-    /** Long-press the home-screen icon → "Send clipboard" (a dynamic shortcut works for any build's package) */
+    /**
+     * Long-press the home-screen icon → "Send clipboard"; and "My devices" for the share sheet's top row,
+     * where the system has one: tapping it sends straight away. Dynamic shortcuts work for any build's package.
+     */
     private fun addShortcuts() {
-        val shortcut = ShortcutInfoCompat.Builder(this, "send_clipboard")
+        val clipboard = ShortcutInfoCompat.Builder(this, "send_clipboard")
             .setShortLabel(getString(R.string.send_clipboard))
-            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_tile))
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_logo))
             .setIntent(Intent(this, ClipboardActivity::class.java).setAction(Intent.ACTION_VIEW))
             .build()
-        runCatching { ShortcutManagerCompat.setDynamicShortcuts(this, listOf(shortcut)) }
+        val share = ShortcutInfoCompat.Builder(this, "my_devices")
+            .setShortLabel(getString(R.string.shortcut_devices))
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_logo))
+            .setIntent(Intent(this, xyz.smart_kits.dropit.ui.MainActivity::class.java).setAction(Intent.ACTION_VIEW))
+            .setCategories(setOf("xyz.smart_kits.dropit.category.SHARE"))
+            .setLongLived(true)
+            .build()
+        runCatching { ShortcutManagerCompat.setDynamicShortcuts(this, listOf(clipboard, share)) }
     }
 
     companion object {

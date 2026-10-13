@@ -73,7 +73,7 @@ class Notes(private val context: Context) {
         post(jobId, b.build())
     }
 
-    fun failed(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false) {
+    fun failed(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false, upgrade: String? = null) {
         val b = base()
             .setContentTitle(context.getString(R.string.send_failed))
             .setContentText(reason)
@@ -82,6 +82,12 @@ class Notes(private val context: Context) {
         // Some systems fold a notification's buttons away (HyperOS: two taps deep), so tapping the note itself
         // does the one useful thing too: rejoin, or retry
         if (rejoin) b.setContentIntent(open())
+        // A limit that a paid plan lifts: trying again would hit it again, so the way out is Upgrade
+        if (upgrade != null && xyz.smart_kits.dropit.BuildConfig.PAYMENTS) {
+            val plans = open(MainActivity.SHOW_PLANS)
+            b.setContentIntent(plans)
+            b.addAction(0, context.getString(R.string.action_upgrade), plans)
+        }
         if (retry) {
             val again = SendActions.retry(context, jobId)
             if (!rejoin) b.setContentIntent(again)
@@ -92,8 +98,9 @@ class Notes(private val context: Context) {
 
     fun cancel(jobId: String) = nm.cancel(idFor(jobId))
 
-    private fun open() = PendingIntent.getActivity(
-        context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    private fun open(show: String? = null) = PendingIntent.getActivity(
+        context, show.hashCode(),
+        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).apply { if (show != null) putExtra(MainActivity.SHOW, show) },
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 

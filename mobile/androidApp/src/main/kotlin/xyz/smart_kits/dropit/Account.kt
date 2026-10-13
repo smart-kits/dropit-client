@@ -20,13 +20,32 @@ import xyz.smart_kits.dropit.shared.Requests
 import xyz.smart_kits.dropit.shared.deviceKey
 
 /** What `/v1/me` says, as far as this app uses it */
-data class Me(val plan: String, val devicesUsed: Int, val devicesLimit: Int, val itemBytesLimit: Long?) {
+data class Me(
+    val plan: String,
+    val devicesUsed: Int,
+    val devicesLimit: Int,
+    val itemBytesLimit: Long?,
+    val bytesUsed: Long,
+    val bytesLimit: Long,
+    /** Lifetime, a year, a month — or null on the free plan */
+    val paidKind: String?,
+    val paidUntil: Long?,
+    /** Where a free account upgrades; the service gives it to free accounts only */
+    val upgradeUrl: String?,
+) {
+    val paid: Boolean get() = plan == "paid"
+
     companion object {
         fun from(o: JsonObject) = Me(
             plan = o["plan"]?.jsonPrimitive?.contentOrNull ?: "free",
             devicesUsed = o["devices_used"]?.jsonPrimitive?.intOrNull ?: 0,
             devicesLimit = o["devices_limit"]?.jsonPrimitive?.intOrNull ?: 0,
             itemBytesLimit = o["item_bytes_limit"]?.jsonPrimitive?.longOrNull,
+            bytesUsed = o["bytes_used"]?.jsonPrimitive?.longOrNull ?: 0,
+            bytesLimit = o["bytes_limit"]?.jsonPrimitive?.longOrNull ?: 0,
+            paidKind = o["paid_kind"]?.jsonPrimitive?.contentOrNull,
+            paidUntil = o["paid_until"]?.jsonPrimitive?.longOrNull,
+            upgradeUrl = o["upgrade_url"]?.jsonPrimitive?.contentOrNull,
         )
     }
 }

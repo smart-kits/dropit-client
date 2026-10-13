@@ -3,14 +3,64 @@
     <string name="app_name">dropit</string>
     <string name="send_clipboard">Send clipboard</string>
 
+    <!--
+      Names starting with label_ are set in the label face (condensed capitals; a Chinese subset that holds
+      only the characters these strings use). After changing a Chinese one, run tools/label_font.py.
+    -->
+    <string name="label_join_title">Send once,\nget it on every device</string>
+    <string name="label_send">Send</string>
+    <string name="label_sending">Sending</string>
+    <string name="label_returned">Returned</string>
+    <string name="label_received">Received</string>
+    <string name="label_kind_text">Text</string>
+    <string name="label_kind_link">Link</string>
+    <string name="label_kind_image">Image</string>
+    <string name="label_kind_video">Video</string>
+    <string name="label_kind_file">File</string>
+    <plurals name="label_n_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <plurals name="label_text_n_files">
+        <item quantity="one">Text + %1$d file</item>
+        <item quantity="other">Text + %1$d files</item>
+    </plurals>
+    <string name="label_this_phone">This phone</string>
+    <string name="label_clip_new">New on your clipboard</string>
+    <string name="label_settings">Settings</string>
+    <string name="label_devices">Devices</string>
+    <string name="label_add_device">Add a device</string>
+    <string name="label_plan">Plan and usage</string>
+    <string name="label_upgrade">Upgrade to Paid</string>
+    <string name="label_pull_again">Pull again</string>
+    <string name="label_scan">Scan to join</string>
+    <string name="label_gestures">Quick settings and gestures</string>
+    <string name="label_group_general">General</string>
+    <string name="label_group_receiving">Receiving</string>
+    <string name="label_group_phone">This phone</string>
+    <string name="label_group_account">Account</string>
+    <string name="label_group_about">About</string>
+    <string name="label_group_leave">Leave</string>
+    <string name="label_free">Free</string>
+    <string name="label_paid">Paid</string>
+    <string name="label_scope_full">Full</string>
+    <string name="label_scope_send">Send only</string>
+    <string name="label_save">SAVE</string>
+    <string name="label_limited">Limited</string>
+    <string name="label_ob_notify">Sent or received —\na notification tells you</string>
+    <string name="label_ob_background">Let dropit\nfinish the job</string>
+    <string name="label_ob_tile">Copied something?\nPull down and tap</string>
+    <string name="label_ob_faster">This phone\ncan go faster</string>
+
     <!-- Channels -->
-    <string name="channel_send">Sending</string>
+    <string name="channel_send">Send results</string>
     <string name="channel_send_desc">Progress and results of what you send</string>
 
     <!-- Sending -->
-    <string name="sending_n">Sending %1$d/%2$d</string>
+    <string name="sending_n">Sending %1$d of %2$d…</string>
     <string name="sending">Sending…</string>
     <string name="sent">Sent %1$s</string>
+    <string name="sent_at">✓ Sent %1$s · %2$s</string>
     <string name="sent_again">Already sent a moment ago %1$s</string>
     <string name="send_failed">Not sent</string>
     <string name="taken">Got it — sending</string>
@@ -24,36 +74,184 @@
     </plurals>
     <string name="action_retry">Retry</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_upgrade">Upgrade</string>
     <string name="close">Close</string>
-    <string name="join_waiting">Join, and what you just shared goes out</string>
-    <string name="tile_hint">After copying something, pull down quick settings and tap "Send clipboard".</string>
-    <string name="tile_add">Add to quick settings</string>
-    <string name="tile_manual">Pull down quick settings → edit → drag "Send clipboard" in.</string>
-    <string name="clip_new">New on your clipboard</string>
+    <string name="back">Back</string>
+    <string name="join_again">This phone was removed from the account — join again</string>
     <string name="clip_a_file">A copied file</string>
-    <string name="join_again">Join again</string>
 
     <!-- Join -->
-    <string name="join_title">Join your dropit</string>
-    <string name="join_hint">Pairing code from a device you already use: the web inbox (Devices), Obsidian settings, or `dropit code` in a terminal</string>
+    <string name="join_help">On a dropit you already use, open Devices → Add a device: scan its QR code, or type the pairing code.</string>
     <string name="join_code">Pairing code</string>
-    <string name="join_agree">Join</string>
-    <string name="create_agree">Agree and create a new account</string>
-    <string name="first_device">First device? Create a new account</string>
-    <string name="consent">Tapping Join means you agree to this: joining sends this phone\'s name and a fingerprint hash, used only to manage your device slots. What you send is kept on the service for a short while (1 day on the free plan) so your other devices can receive it.</string>
+    <string name="join">Join</string>
+    <string name="scan">Scan a QR code</string>
+    <string name="consent">Tapping Join means you agree: this phone\'s name and a device fingerprint digest are sent, used only to manage your device slots.</string>
     <string name="privacy">Privacy</string>
+    <string name="first_device">First device?</string>
+    <string name="create_account">Create a new account</string>
+    <string name="create_agree">Agree and create a new account</string>
+    <string name="create_note">A new account is separate from any dropit you already use. Creating one sends the same two things as joining.</string>
+    <plurals name="join_waiting">
+        <item quantity="one">Join, and what you just shared goes out.</item>
+        <item quantity="other">Join, and the %1$d things you just shared go out.</item>
+    </plurals>
+    <string name="scan_hint">Point at the QR code on another device\'s “Add a device” page</string>
+    <string name="scan_type_instead">Type the code instead</string>
+    <string name="scan_not_ours">That isn\'t a dropit pairing code</string>
+    <string name="scan_torch">Light</string>
 
     <!-- Home -->
-    <string name="compose_hint">Write something, or paste…</string>
-    <string name="attach">Files</string>
-    <string name="send">Send</string>
-    <string name="will_send_text">Sends this text</string>
-    <string name="will_send_files">Sends %1$d file(s)</string>
-    <string name="will_send_both">Sends this text + %1$d file(s)</string>
+    <string name="compose_hint">Type or paste — text, a link, a screenshot</string>
+    <string name="attach">Choose files</string>
     <string name="remove">Remove</string>
-    <string name="sign_out">Sign out on this phone</string>
-    <string name="account_line">%1$s · %2$d/%3$d devices</string>
-    <string name="refresh">Refresh</string>
-    <string name="bg_hint">While a drop goes out, a small card shows at the bottom of the screen: this phone pauses apps that are not on screen. Let dropit run without battery limits and drops go out in the background, card-free.</string>
-    <string name="bg_allow">Allow in background</string>
+    <string name="remove_file">Remove %1$s</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="send_this">Send this</string>
+    <string name="plan_line">%1$s · %2$d/%3$d devices</string>
+    <string name="settings">Settings</string>
+    <string name="pull">Pull new items</string>
+    <string name="more">More</string>
+    <string name="empty_title">Nothing here yet.</string>
+    <string name="empty_body">Send something from your computer; it shows up here.</string>
+    <string name="sent_mark">✓ Sent · %1$s</string>
+    <string name="from_page">From %1$s</string>
+    <string name="open">Open</string>
+    <string name="copy">Copy</string>
+    <string name="copy_text">Copy text</string>
+    <string name="share">Share</string>
+    <string name="copied">Copied</string>
+    <string name="now">now</string>
+    <string name="ago_min">%1$d min ago</string>
+    <string name="ago_hour">%1$d h ago</string>
+    <string name="ago_day">%1$d d ago</string>
+    <string name="postmark_name">Arrived %1$s %2$s from %3$s</string>
+    <string name="tip_tile">After copying, pull down quick settings and tap “Send clipboard”.</string>
+    <string name="tip_tile_manual">Pull down quick settings → edit → drag “Send clipboard” in.</string>
+    <string name="tip_tile_add">Add</string>
+    <string name="tip_background">While sending, a small card shows: this phone pauses apps that aren\'t on screen.</string>
+    <string name="tip_background_allow">Allow</string>
+    <string name="tip_notify">Notifications are off: results of what you send won\'t show.</string>
+
+    <!-- Upgrade, by what was hit -->
+    <string name="up_per_day">Keep sending with Paid — %1$d a day</string>
+    <string name="up_file_size">Send it with Paid — %1$d MB per file</string>
+    <string name="up_space">Paid holds %1$d MB</string>
+    <string name="up_queue">Paid keeps up to %1$d items waiting</string>
+    <string name="up_devices">Paid fits %1$d devices</string>
+    <string name="up_realtime">Paid stays real-time</string>
+    <string name="up_generic">See what Paid gives you</string>
+
+    <!-- Onboarding -->
+    <string name="ob_step">%1$d / %2$d</string>
+    <string name="ob_step_phone">%1$d / %2$d · %3$s</string>
+    <string name="ob_notify_body">Send results and what your other devices send. On the lock screen it only says “dropit · New item”.</string>
+    <string name="ob_notify_allow">Allow notifications</string>
+    <string name="ob_not_now">Not now</string>
+    <string name="ob_background_body">This phone pauses apps that aren\'t on screen. Let dropit run without battery limits: no card while sending, and what other devices send arrives in seconds.</string>
+    <string name="ob_background_allow">Allow in background</string>
+    <string name="ob_background_skip">No thanks, show a small card while sending</string>
+    <string name="ob_battery">Battery</string>
+    <string name="ob_battery_need">Needs “Unrestricted”</string>
+    <string name="ob_battery_unset">Not set</string>
+    <string name="ob_battery_ok">✓ Unrestricted</string>
+    <string name="ob_tile_body">Put “Send clipboard” in quick settings. Copied something? Pull down and tap it.</string>
+    <string name="ob_tile_add">Add to quick settings</string>
+    <string name="ob_tile_added">✓ In quick settings</string>
+    <string name="ob_skip">Skip</string>
+    <string name="ob_next">Next</string>
+    <string name="ob_done">Done</string>
+    <string name="ob_share_row">Top row of the share sheet</string>
+    <string name="ob_share_row_sub">dropit · My devices — one tap sends</string>
+    <string name="ob_share_pin">Pin dropit in the share sheet</string>
+    <string name="ob_share_pin_sub">Long-press dropit when sharing → Pin</string>
+    <string name="ob_share_recent">Share sheet</string>
+    <string name="ob_share_recent_sub_mi">Apps are ordered by recent use — after a send or two, dropit moves up</string>
+    <string name="ob_share_recent_sub">dropit moves up once you\'ve used it</string>
+    <string name="ob_backtap">Double-tap the back</string>
+    <string name="ob_backtap_send">Double-tap the back to send</string>
+    <string name="ob_backtap_pixel">Settings → System → Gestures → Quick Tap → Open app → dropit</string>
+    <string name="ob_backtap_samsung">If the Galaxy Store has it: Good Lock → RegiStar → Back-tap → Open app → pick dropit\'s “Send clipboard”</string>
+    <string name="ob_backtap_mi">Settings → Additional settings → Gesture shortcuts → Back tap → Double tap → Control center, then tap “Send clipboard”</string>
+    <string name="ob_after_copy">After copying</string>
+    <string name="ob_after_copy_sub">Pull down quick settings and tap “Send clipboard” — the fastest way</string>
+
+    <!-- Settings -->
+    <string name="set_language">Language</string>
+    <string name="set_language_sub">Follows the system: Chinese for Simplified and Traditional Chinese, English otherwise</string>
+    <string name="lang_system">System</string>
+    <string name="set_device_name">Device name</string>
+    <string name="set_battery_sub">Unrestricted: no card while sending</string>
+    <string name="set_devices_sub">%1$d/%2$d · add, remove</string>
+    <string name="set_plan_sub">%1$s · %2$s of %3$s used</string>
+    <string name="set_version">Version</string>
+    <string name="set_source">Source code</string>
+    <string name="set_sign_out">Sign out on this phone</string>
+    <string name="set_sign_out_sub">Removes this phone from the account; other devices stay</string>
+    <string name="sign_out_confirm">Sign out</string>
+
+    <!-- Devices -->
+    <string name="dev_count">%1$d/%2$d</string>
+    <string name="dev_active_now">Active now</string>
+    <string name="dev_active">Active %1$s</string>
+    <string name="dev_up_to">up to #%1$d</string>
+    <string name="dev_remove_note">A removed device is told so on its next request, and its slot frees up at once.</string>
+    <string name="dev_remove_ask">Remove %1$s?</string>
+    <string name="add_help">Type this code on the new device, or scan the QR code with its camera</string>
+    <string name="add_expires">Expires in %1$s · single use</string>
+    <string name="add_expired">This code has expired</string>
+    <string name="add_new_code">New code</string>
+    <string name="add_full">All %1$d slots are in use. Pick the device the new one replaces:</string>
+    <string name="add_replaces">Takes the place of %1$s</string>
+    <string name="add_joined">%1$s joined</string>
+    <string name="qr_name">QR code for pairing</string>
+
+    <!-- Plan -->
+    <string name="plan_space">Space</string>
+    <string name="plan_space_used">%1$s / %2$s</string>
+    <string name="plan_row_per_day">Items a day</string>
+    <string name="plan_row_file">Largest file</string>
+    <string name="plan_row_space">Space</string>
+    <string name="plan_row_kept">Kept after sending</string>
+    <string name="plan_row_devices">Devices</string>
+    <string name="plan_row_realtime">Real-time delivery</string>
+    <plurals name="plan_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="plan_first_days">First %1$d days</string>
+    <string name="plan_always">Always on</string>
+    <string name="plan_per_year">/ year</string>
+    <string name="buy_year">Yearly $%1$s</string>
+    <string name="buy_year_sub">about $%1$s a month</string>
+    <string name="buy_month">Monthly $%1$s</string>
+    <string name="buy_month_sub">cancel anytime</string>
+    <string name="buy_life">Lifetime $%1$s</string>
+    <string name="buy_life_sub">pay once</string>
+    <string name="buy_note">You pay in the browser; back here it takes effect by itself.</string>
+    <string name="plan_paid_until">Paid until %1$s</string>
+    <string name="plan_paid_life">Paid for life</string>
+    <string name="why_per_day">Today\'s %1$d sends are used up</string>
+    <string name="why_per_day_sub">Paid sends %1$d a day.</string>
+    <string name="why_file_size">That file is over the %1$d MB limit</string>
+    <string name="why_file_size_sub">Paid takes files up to %1$d MB.</string>
+    <string name="why_space">Your %1$d MB of space is full</string>
+    <string name="why_space_sub">Paid holds %1$d MB.</string>
+    <string name="why_queue">Too many items are waiting</string>
+    <string name="why_queue_sub">Paid keeps up to %1$d.</string>
+    <string name="why_devices">All %1$d device slots are in use</string>
+    <string name="why_devices_sub">Paid fits %1$d devices.</string>
+    <string name="why_realtime">Your %1$d days of real-time delivery are over</string>
+    <string name="why_realtime_sub">Paid stays real-time.</string>
+    <!-- Samples shown in the first-run pictures -->
+    <string name="ob_sample_app">dropit · now</string>
+    <string name="ob_sample_title">Text from MacBook</string>
+    <string name="ob_sample_text">221B Baker Street, London…</string>
+    <string name="ob_wifi">Wi-Fi</string>
+    <string name="ob_bluetooth">Bluetooth</string>
+    <string name="ob_tile_manual">This phone didn\'t add it by itself: pull down quick settings → edit → drag “Send clipboard” in.</string>
+    <string name="sign_out_ask">Sign out on this phone?</string>
+    <string name="loading">Loading…</string>
+    <string name="try_again">Try again</string>
+    <string name="add_replace">Replace</string>
+    <string name="shortcut_devices">My devices</string>
 </resources>

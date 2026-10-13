@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The dropit mark in colour: the airmail stripe, a white square, the navy "d". Same drawing as the website's icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="64" android:viewportHeight="64">
+    <group>
+        <clip-path android:pathData="M11,0H53A11,11 0 0 1 64,11V53A11,11 0 0 1 53,64H11A11,11 0 0 1 0,53V11A11,11 0 0 1 11,0Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M0,0H64V64H0Z" />
+        <path android:fillColor="#FFC8102E" android:pathData="M-135.24,-4.00L-63.24,68.00L-53.40,68.00L-125.40,-4.00ZM-102.43,-4.00L-30.43,68.00L-20.59,68.00L-92.59,-4.00ZM-69.62,-4.00L2.38,68.00L12.22,68.00L-59.78,-4.00ZM-36.81,-4.00L35.19,68.00L45.03,68.00L-26.97,-4.00ZM-4.00,-4.00L68.00,68.00L77.84,68.00L5.84,-4.00ZM28.81,-4.00L100.81,68.00L110.65,68.00L38.65,-4.00ZM61.62,-4.00L133.62,68.00L143.46,68.00L71.46,-4.00ZM94.43,-4.00L166.43,68.00L176.27,68.00L104.27,-4.00ZM127.24,-4.00L199.24,68.00L209.08,68.00L137.08,-4.00Z" />
+        <path android:fillColor="#FF1F4E9E" android:pathData="M-118.83,-4.00L-46.83,68.00L-36.99,68.00L-108.99,-4.00ZM-86.02,-4.00L-14.02,68.00L-4.18,68.00L-76.18,-4.00ZM-53.21,-4.00L18.79,68.00L28.63,68.00L-43.37,-4.00ZM-20.40,-4.00L51.60,68.00L61.44,68.00L-10.56,-4.00ZM12.40,-4.00L84.40,68.00L94.25,68.00L22.25,-4.00ZM45.21,-4.00L117.21,68.00L127.06,68.00L55.06,-4.00ZM78.02,-4.00L150.02,68.00L159.87,68.00L87.87,-4.00ZM110.83,-4.00L182.83,68.00L192.68,68.00L120.68,-4.00ZM143.64,-4.00L215.64,68.00L225.49,68.00L153.49,-4.00Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M16,12H48A4,4 0 0 1 52,16V48A4,4 0 0 1 48,52H16A4,4 0 0 1 12,48V16A4,4 0 0 1 16,12Z" />
+        <group android:pivotX="214.5" android:pivotY="346" android:translateX="-182.5" android:translateY="-313.5" android:scaleX="0.042" android:scaleY="-0.042">
+            <path android:fillColor="#FF1F4E9E" android:strokeColor="#FF1F4E9E" android:strokeWidth="30" android:strokeLineJoin="round" android:pathData="M287 700H379Q384 700 387.5 696.5Q391 693 391 688V12Q391 7 387.5 3.5Q384 0 379 0H287Q282 0 278.5 3.5Q275 7 275 12V24Q275 27 273.0 28.0Q271 29 269 27Q233 -8 179 -8Q112 -8 75.0 36.0Q38 80 38 154V357Q38 433 75.5 476.0Q113 519 179 519Q202 519 226.0 510.5Q250 502 269 483Q271 481 273.0 482.0Q275 483 275 486V688Q275 693 278.5 696.5Q282 700 287 700ZM275 149V362Q271 388 255.0 403.5Q239 419 215 419Q187 419 170.0 399.5Q153 380 153 348V163Q153 131 170.0 111.5Q187 92 215 92Q239 92 255.0 107.5Q271 123 275 149Z" />
+        </group>
+    </group>
+</vector>

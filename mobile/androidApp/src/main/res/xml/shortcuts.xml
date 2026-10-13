@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "dropit · My devices" in the share sheet's top row (where the system has one): one tap sends, no app list -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="xyz.smart_kits.dropit.entry.ShareActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="xyz.smart_kits.dropit.category.SHARE" />
+    </share-target>
+</shortcuts>

@@ -54,6 +54,15 @@ class Store(context: Context) : ClientStore {
         get() = prefs.getBoolean(TILE_ADDED, false)
         set(v) = prefs.edit().putBoolean(TILE_ADDED, v).apply()
 
+    /** A setup hint the person waved away: not shown again */
+    fun tipHidden(name: String): Boolean = prefs.getBoolean("tip_hidden_$name", false)
+    fun hideTip(name: String) = prefs.edit().putBoolean("tip_hidden_$name", true).apply()
+
+    /** Whether the first-run steps (notifications, background, quick settings, gestures) were gone through */
+    var onboarded: Boolean
+        get() = prefs.getBoolean("onboarded", false)
+        set(v) = prefs.edit().putBoolean("onboarded", v).apply()
+
     override suspend fun endpoints(): List<String>? = prefs.getString(ENDPOINTS, null)?.split('\n')?.filter { it.isNotBlank() }
     override suspend fun setEndpoints(list: List<String>) { prefs.edit().putString(ENDPOINTS, list.joinToString("\n")).apply() }
 

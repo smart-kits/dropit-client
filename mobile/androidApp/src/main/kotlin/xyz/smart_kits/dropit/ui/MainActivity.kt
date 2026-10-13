@@ -1,105 +1,85 @@
 package xyz.smart_kits.dropit.ui
 
-import android.Manifest
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import xyz.smart_kits.dropit.Me
-import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
-import xyz.smart_kits.dropit.shared.ApiError
-import xyz.smart_kits.dropit.shared.OfflineError
-import xyz.smart_kits.dropit.shared.PRIVACY_URL
-import xyz.smart_kits.dropit.work.InApp
-import xyz.smart_kits.dropit.work.Inbound
-import xyz.smart_kits.dropit.work.Outbox
-import xyz.smart_kits.dropit.work.SendWorker
+import xyz.smart_kits.dropit.ui.theme.DropitTheme
 
-// A plain, working screen for development. The designed one replaces it once its drawings are approved.
+/** Where the app is. Home is underneath everything; the rest stack on it and go back to it. */
+sealed interface Screen {
+    data object Settings : Screen
+    data object Devices : Screen
+    data object AddDevice : Screen
+    /** `why`: what limit was just hit, when that is what brought the person here */
+    data class Plans(val why: String? = null) : Screen
+    /** The first-run steps; `gesturesOnly` shows just the quick-settings and gesture ones again */
+    data class Onboarding(val gesturesOnly: Boolean = false) : Screen
+    data object Scan : Screen
+}
 
 class MainActivity : ComponentActivity() {
     private var incomingCode by mutableStateOf<String?>(null)
+    /** The code came from this phone's own camera: joining goes ahead without another tap */
+    private var scanned by mutableStateOf(false)
     private var signedIn by mutableStateOf(false)
     private var resumed by mutableStateOf(0)
     private var offer by mutableStateOf<ClipOffer?>(null)
+    private val stack = mutableStateListOf<Screen>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The system draws under the bars from Android 15 on anyway; this also gives them icons that show on the
-        // light background (they were white on white)
+        // The system draws under the bars from Android 15 on anyway; this also gives them icons that show on
+        // the light ground (they were white on white)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         signedIn = app.account.signedIn
-        incomingCode = codeFrom(intent)
-        if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        read(intent)
+        // Joined before the first-run steps existed, or left them half-way: they come up once
+        if (signedIn && !app.store.onboarded) stack += Screen.Onboarding()
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                Surface(Modifier.fillMaxSize()) {
-                    if (signedIn) Home(resumed, offer, onOfferDone = ::offerDone, onSignedOut = { signedIn = false })
-                    else Join(incomingCode, resumed, onJoined = { signedIn = true; app.sendWaiting() })
+            DropitTheme {
+                val go: (Screen) -> Unit = { stack += it }
+                val back: () -> Unit = { stack.removeLastOrNull() }
+                BackHandler(enabled = stack.isNotEmpty(), onBack = back)
+                val top = stack.lastOrNull()
+                when {
+                    !signedIn && top == Screen.Scan -> ScanScreen(onCode = { incomingCode = it; scanned = true; back() }, onBack = back)
+                    !signedIn -> JoinScreen(incomingCode, resumed, joinNow = scanned, onJoined = ::joined, onScan = { scanned = false; go(Screen.Scan) })
+                    top == null || top == Screen.Scan -> HomeScreen(resumed, offer, onOfferDone = ::offerDone, onSignedOut = ::signedOut, go = go)
+                    top is Screen.Onboarding -> OnboardingScreen(resumed, top.gesturesOnly, onDone = { app.store.onboarded = true; back() })
+                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
+                    top == Screen.Devices -> DevicesScreen(resumed, go = go, onBack = back)
+                    top == Screen.AddDevice -> AddDeviceScreen(go = go, onBack = back)
+                    top is Screen.Plans -> PlansScreen(resumed, top.why, onBack = back)
                 }
             }
         }
     }
 
+    private fun joined() {
+        signedIn = true
+        incomingCode = null
+        scanned = false
+        stack.clear()
+        app.sendWaiting()
+        if (!app.store.onboarded) stack += Screen.Onboarding()
+    }
+
+    private fun signedOut() {
+        signedIn = false
+        stack.clear()
+    }
+
     override fun onResume() {
         super.onResume()
-        signedIn = app.account.signedIn
+        if (signedIn && !app.account.signedIn) signedOut()
         resumed++
     }
 
@@ -117,247 +97,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        codeFrom(intent)?.let { incomingCode = it }
+        read(intent)
     }
 
-    /** A code handed over by the web page (`?pair=`) or another app */
-    private fun codeFrom(i: Intent?): String? =
-        i?.getStringExtra("code") ?: i?.data?.getQueryParameter("pair")
-}
-
-@Composable
-private fun errorText(e: Throwable): String {
-    val ctx = LocalContext.current
-    return when (e) {
-        is ApiError -> ctx.app.strings.render(e.sentence())
-        is OfflineError -> ctx.app.strings.render(e.sentence)
-        else -> e.message ?: e.toString()
-    }
-}
-
-@Composable
-private fun Join(code: String?, resumed: Int, onJoined: () -> Unit) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var input by remember(code) { mutableStateOf(code.orEmpty()) }
-    val typed = pairingCodeOf(input)
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<Throwable?>(null) }
-
-    fun run(block: suspend () -> Unit) {
-        busy = true; error = null
-        scope.launch {
-            try { block(); onJoined() } catch (e: Throwable) { error = e } finally { busy = false }
-        }
+    /** A code handed over by the web page (`?pair=`) or another app; or a notification asking for a screen */
+    private fun read(i: Intent?) {
+        (i?.getStringExtra("code") ?: i?.data?.getQueryParameter("pair"))?.let { incomingCode = it }
+        if (i?.getStringExtra(SHOW) == SHOW_PLANS && signedIn && stack.lastOrNull() !is Screen.Plans) stack += Screen.Plans()
     }
 
-    Column(
-        Modifier.safeDrawingPadding().imePadding().padding(24.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(stringResource(R.string.join_title), style = MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.join_hint), style = MaterialTheme.typography.bodyMedium)
-        // Read again each time the screen comes back: a share may have just been held for after joining
-        val waiting = remember(resumed) { ctx.app.store.waiting.isNotEmpty() }
-        if (waiting) {
-            Text(stringResource(R.string.join_waiting), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-        }
-        OutlinedTextField(
-            value = input,
-            // Kept exactly as the keyboard typed it: rewriting the text while the keyboard is still composing a
-            // word makes it commit that word again ("vc" became "VVC"). Capitals are only drawn, and the code is
-            // cleaned up when read
-            onValueChange = { input = it },
-            label = { Text(stringResource(R.string.join_code)) },
-            singleLine = true,
-            visualTransformation = Capitals,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(stringResource(R.string.consent), style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }) {
-            Text(stringResource(R.string.privacy))
-        }
-        Button(onClick = { run { ctx.app.account.join(typed) } }, enabled = !busy && typed.length == 6, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.join_agree))
-        }
-        error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
-        Spacer(Modifier.height(24.dp))
-        TextButton(onClick = { run { ctx.app.account.createAccount() } }, enabled = !busy) {
-            Text(stringResource(R.string.first_device), style = MaterialTheme.typography.bodySmall)
-        }
+    companion object {
+        const val SHOW = "show"
+        const val SHOW_PLANS = "plans"
     }
-}
-
-/** The code in what was typed or pasted: letters and digits, in capitals, at most six */
-internal fun pairingCodeOf(typed: String): String = typed.filter(Char::isLetterOrDigit).uppercase().take(6)
-
-/** Draws letters as capitals, one character for one, so the cursor stays where it was */
-private val Capitals = VisualTransformation { text ->
-    TransformedText(AnnotatedString(text.text.map(Char::uppercaseChar).joinToString("")), OffsetMapping.Identity)
-}
-
-private data class Picked(val uri: Uri, val name: String)
-
-@Composable
-private fun Home(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit, onSignedOut: () -> Unit) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var text by remember { mutableStateOf("") }
-    val files = remember { mutableStateListOf<Picked>() }
-    var status by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var me by remember { mutableStateOf<Me?>(null) }
-
-    // What was known shows at once; then the service's answer, each time the screen comes back (devices and
-    // plan change elsewhere: another device joins, a payment goes through)
-    LaunchedEffect(resumed) {
-        if (me == null) me = ctx.app.account.me()
-        me = ctx.app.account.me(fresh = true)
-    }
-
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        for (u in uris) {
-            val name = ctx.contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else null
-            } ?: u.lastPathSegment ?: "?"
-            files += Picked(u, name)
-        }
-    }
-
-    /** Hold, hand to the background, and say here how it went. [sent] runs once it is in. */
-    fun send(inbound: Inbound, sent: () -> Unit) {
-        busy = true; status = null
-        scope.launch {
-            val outbox = Outbox(ctx)
-            val job = withContext(Dispatchers.IO) { outbox.hold(inbound) }
-            InApp.add(job.id)
-            outbox.enqueue(job.id)
-            val info = try {
-                WorkManager.getInstance(ctx).getWorkInfosForUniqueWorkFlow(job.id)
-                    .first { list -> list.firstOrNull()?.state?.isFinished == true }.first()
-            } finally {
-                InApp.remove(job.id)      // the screen went away first: the result is a notification again
-            }
-            busy = false
-            if (info.state == WorkInfo.State.SUCCEEDED) {
-                status = "✓ " + info.outputData.getString(SendWorker.DONE)
-                sent()
-                me = ctx.app.account.me()
-            } else {
-                status = info.outputData.getString(SendWorker.ERROR)   // kept as written, to try again
-                if (!ctx.app.account.signedIn) onSignedOut()
-            }
-        }
-    }
-
-    Column(
-        Modifier.safeDrawingPadding().imePadding().padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            me?.let { Text(stringResource(R.string.account_line, it.plan, it.devicesUsed, it.devicesLimit), style = MaterialTheme.typography.bodySmall) }
-        }
-        // Copied something before opening dropit: one tap sends it
-        if (offer != null) Surface(tonalElevation = 2.dp, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.fillMaxWidth().padding(16.dp, 12.dp, 8.dp, 4.dp)) {
-                Text(stringResource(R.string.clip_new), style = MaterialTheme.typography.labelMedium)
-                Text(offer.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 3, modifier = Modifier.padding(top = 4.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { onOfferDone(offer) }) { Text(stringResource(R.string.close)) }
-                    TextButton(enabled = !busy, onClick = {
-                        val o = offer
-                        // Gone once it is in; if it fails it stays, with the reason below, to try again
-                        send(Inbound(text = o.text, streams = listOfNotNull(o.uri?.toString()))) { onOfferDone(o) }
-                    }) { Text(stringResource(R.string.send)) }
-                }
-            }
-        }
-        OutlinedTextField(
-            value = text, onValueChange = { text = it },
-            placeholder = { Text(stringResource(R.string.compose_hint)) },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-        )
-        for (f in files.toList()) Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("📎 ${f.name}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { files.remove(f) }) { Text(stringResource(R.string.remove)) }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { pick.launch(arrayOf("*/*")) }) { Text(stringResource(R.string.attach)) }
-            Spacer(Modifier.weight(1f))
-            Button(onClick = {
-                // Sent: clear and get ready for the next one
-                send(Inbound(text = text, streams = files.map { it.uri.toString() })) { text = ""; files.clear() }
-            }, enabled = !busy && (text.isNotBlank() || files.isNotEmpty())) { Text(stringResource(R.string.send)) }
-        }
-        // Said before pressing: what Send will send
-        val hasText = text.isNotBlank()
-        val line = when {
-            hasText && files.isNotEmpty() -> stringResource(R.string.will_send_both, files.size)
-            files.isNotEmpty() -> stringResource(R.string.will_send_files, files.size)
-            hasText -> stringResource(R.string.will_send_text)
-            else -> null
-        }
-        line?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        status?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-        // The fastest way after copying, offered until it is there
-        var tileAdded by remember(resumed) { mutableStateOf(ctx.app.store.tileAdded) }
-        var tileManual by remember { mutableStateOf(Build.VERSION.SDK_INT < 33) }
-        var tileDeclined by remember { mutableStateOf(false) }
-        if (!tileAdded) {
-            Spacer(Modifier.height(16.dp))
-            Text(stringResource(if (tileManual) R.string.tile_manual else R.string.tile_hint), style = MaterialTheme.typography.bodySmall)
-            if (!tileManual) OutlinedButton(onClick = {
-                ctx.requestTile { answer ->
-                    when (answer) {
-                        TileAsk.ADDED -> { ctx.app.store.tileAdded = true; tileAdded = true }
-                        // Said no this time: the button stays for a change of mind, and the manual way shows too,
-                        // since the system may stop asking after a refusal
-                        TileAsk.DECLINED -> tileDeclined = true
-                        TileAsk.UNAVAILABLE -> tileManual = true
-                    }
-                }
-            }) { Text(stringResource(R.string.tile_add)) }
-            if (tileDeclined && !tileManual) Text(stringResource(R.string.tile_manual), style = MaterialTheme.typography.bodySmall)
-        }
-        // Checked again each time the screen comes back: the person may have just changed it in settings
-        val background = remember(resumed) { ctx.app.runsInBackground }
-        if (!background) {
-            Spacer(Modifier.height(16.dp))
-            Text(stringResource(R.string.bg_hint), style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = { ctx.app.askRunInBackground(ctx) }) { Text(stringResource(R.string.bg_allow)) }
-        }
-        Spacer(Modifier.height(32.dp))
-        TextButton(onClick = { scope.launch { ctx.app.account.signOut(); onSignedOut() } }) {
-            Text(stringResource(R.string.sign_out))
-        }
-    }
-}
-
-internal enum class TileAsk { ADDED, DECLINED, UNAVAILABLE }
-
-/** A refusal is not the same as a system that cannot ask: only the second hides the button */
-internal fun tileAskOf(result: Int): TileAsk = when (result) {
-    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED,
-    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> TileAsk.ADDED
-    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> TileAsk.DECLINED
-    else -> TileAsk.UNAVAILABLE
-}
-
-/**
- * The system's one-tap "add this tile" (Android 13+). [done] gets DECLINED when the person said no, and
- * UNAVAILABLE when the system would not ask (a system that leaves it out), so the screen says how to add it by hand.
- */
-@android.annotation.SuppressLint("NewApi")
-private fun android.content.Context.requestTile(done: (TileAsk) -> Unit) {
-    val sbm = getSystemService(android.app.StatusBarManager::class.java)
-    runCatching {
-        sbm.requestAddTileService(
-            android.content.ComponentName(this, xyz.smart_kits.dropit.entry.SendClipboardTile::class.java),
-            getString(R.string.send_clipboard),
-            android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_tile),
-            mainExecutor,
-        ) { result -> done(tileAskOf(result)) }
-    }.onFailure { done(TileAsk.UNAVAILABLE) }
 }

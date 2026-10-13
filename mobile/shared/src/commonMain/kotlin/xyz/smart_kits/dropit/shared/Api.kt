@@ -15,6 +15,23 @@ import kotlinx.serialization.json.put
 
 const val DEFAULT_ENDPOINT = "https://dropit.smart-kits.xyz"
 const val PRIVACY_URL = "$DEFAULT_ENDPOINT/privacy"
+const val SOURCE_URL = "https://github.com/smart-kits/dropit-client"
+
+/** What a pairing QR code holds: the page that opens the right client with the code filled in */
+fun pairingLink(code: String, base: String = DEFAULT_ENDPOINT): String = "$base/?pair=$code"
+
+/**
+ * The pairing code in what a camera read, or null when it is not dropit's: only a 6-character code by itself,
+ * or a link to dropit's own address with `pair=`. Nothing else is ever opened or acted on.
+ */
+fun pairingCodeIn(scanned: String, hosts: List<String> = listOf(DEFAULT_ENDPOINT)): String? {
+    val s = scanned.trim()
+    fun code(c: String) = c.uppercase().takeIf { it.length == 6 && it.all { ch -> ch in '0'..'9' || ch in 'A'..'Z' } }
+    code(s)?.let { return it }
+    val host = hosts.firstOrNull { h -> s.startsWith("$h/?") || s.startsWith("$h?") } ?: return null
+    val query = s.removePrefix(host).substringAfter('?').substringBefore('#')
+    return query.split('&').firstOrNull { it.startsWith("pair=") }?.let { code(it.removePrefix("pair=")) }
+}
 const val SOURCE = "android"
 
 internal val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = false }
@@ -107,6 +124,11 @@ object Requests {
         "POST", "/v1/pair",
         body = buildJsonObject { replace?.let { put("replace", it) } },
     )
+
+    fun devices() = RequestSpec("GET", "/v1/devices")
+
+    /** Where to pay for `plan` (month, year or life): the answer holds `checkout_url`, opened in the browser */
+    fun checkout(plan: String) = RequestSpec("POST", "/v1/checkout", body = buildJsonObject { put("plan", plan) })
 
     fun pull(after: Long, limit: Int = 50) = RequestSpec(
         "GET", "/v1/pull", query = listOf("after" to after.toString(), "limit" to limit.toString()),

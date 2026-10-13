@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="card_surface">#FFFFFFFF</color>
-    <color name="card_text">#FF1C1B1F</color>
-    <color name="card_muted">#FF79747E</color>
-    <color name="card_accent">#FF6750A4</color>
-</resources>

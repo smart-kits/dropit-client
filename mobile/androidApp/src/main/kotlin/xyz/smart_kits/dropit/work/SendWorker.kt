@@ -18,6 +18,8 @@ import xyz.smart_kits.dropit.shared.Failure
 import xyz.smart_kits.dropit.shared.FileBody
 import xyz.smart_kits.dropit.shared.FileInfo
 import xyz.smart_kits.dropit.shared.Item
+import xyz.smart_kits.dropit.shared.Letter
+import xyz.smart_kits.dropit.shared.LetterFile
 import xyz.smart_kits.dropit.shared.Message
 import xyz.smart_kits.dropit.shared.OfflineError
 import xyz.smart_kits.dropit.shared.Requests
@@ -66,7 +68,12 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         } else emptyList()
         if (plan.isEmpty) {
             outbox.drop(job.id)
-            return fail(job.id, (unreadable + tooLarge).joinToString("\n").ifEmpty { applicationContext.getString(R.string.nothing_to_send) }, retry = false)
+            // Only files over the plan's limit: a free account is shown the way to send them
+            val upgrade = if (tooLarge.isNotEmpty()) me?.upgradeUrl else null
+            return fail(
+                job.id, (unreadable + tooLarge).joinToString("\n").ifEmpty { applicationContext.getString(R.string.nothing_to_send) },
+                retry = false, upgrade = upgrade, why = upgrade?.let { "file_size" },
+            )
         }
 
         var deduped = false
@@ -102,7 +109,13 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             throw e
         } catch (e: ApiError) {
             if (e.failure == Failure.AUTH_LOST) app.store.forget()
-            return fail(job.id, app.strings.render(e.sentence()), retry = true, rejoin = e.failure == Failure.AUTH_LOST)
+            // The service says so itself when a paid plan would have let this through
+            val upgrade = e.data["upgrade_url"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            val why = e.data["why"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            return fail(
+                job.id, app.strings.render(e.sentence()), retry = upgrade == null, rejoin = e.failure == Failure.AUTH_LOST,
+                upgrade = upgrade, why = why,
+            )
         } catch (e: OfflineError) {
             return fail(job.id, app.strings.render(e.sentence), retry = true)
         }
@@ -115,19 +128,36 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         val said = applicationContext.getString(if (deduped && job.seqs.size <= 1) R.string.sent_again else R.string.sent, range)
         notes.sent(job.id, said, extra, quiet = OnScreen.has(job.id) || InApp.has(job.id))
+        // It joins the app's list as a letter from this phone, before the held copies go
+        runCatching {
+            val text = plan.items.filterIsInstance<Item.Text>().firstOrNull()
+            app.letters.add(
+                Letter(
+                    id = job.id, mine = true, at = System.currentTimeMillis(), seqs = job.seqs,
+                    kind = text?.kind, text = text?.raw, title = text?.meta?.title,
+                    files = plan.items.filterIsInstance<Item.File>().map { f ->
+                        val held = job.files[f.index]
+                        LetterFile(held.name ?: "?", held.size, held.mime, thumb = app.letters.thumb(File(held.path), "${job.id}-${f.index}", held.mime))
+                    },
+                ),
+            )
+        }
         outbox.drop(job.id)
         return Result.success(workDataOf(SEQS to job.seqs.toLongArray(), DONE to (listOf(said) + extra).joinToString("\n")))
     }
 
-    private fun fail(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false): Result {
-        if (InApp.has(jobId)) outbox.drop(jobId) else notes.failed(jobId, reason, retry, rejoin)
-        return Result.failure(workDataOf(ERROR to reason, RETRY to retry))
+    private fun fail(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false, upgrade: String? = null, why: String? = null): Result {
+        if (InApp.has(jobId)) outbox.drop(jobId) else notes.failed(jobId, reason, retry, rejoin, upgrade)
+        return Result.failure(workDataOf(ERROR to reason, RETRY to retry, UPGRADE to upgrade, WHY to why, REJOIN to rejoin))
     }
 
     companion object {
         const val JOB = "job"
         const val ERROR = "error"
         const val RETRY = "retry"
+        const val UPGRADE = "upgrade"
+        const val WHY = "why"
+        const val REJOIN = "rejoin"
         const val SEQS = "seqs"
         const val DONE = "done"
         const val K = "k"
