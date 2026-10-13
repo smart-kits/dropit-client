@@ -20,9 +20,9 @@ object Plans {
     val paid = PlanLimits(days = 10, spaceMB = 500, fileMB = 100, devices = 10, perDay = 300, queue = 1000, realtimeTrialDays = null)
 
     // One month and one year are paid once and don't renew; PRICE_YEAR is the yearly subscription
-    const val PRICE_MONTH = 2.99
-    const val PRICE_YEAR_ONCE = 24.9
-    const val PRICE_YEAR = 14.9
+    const val PRICE_MONTH = 3.0
+    const val PRICE_YEAR_ONCE = 19.9
+    const val PRICE_YEAR = 12.9
     const val PRICE_LIFE = 39.9
 
     /** How much the subscription costs less than the same year paid once, in whole percent: the number on the sale sticker */
