@@ -82,12 +82,19 @@ class Strings private constructor(
                 "quotaItems" to "Too many items waiting — wait for old ones to expire",
                 "quotaBytes" to "Storage is full — wait for old items to expire",
                 "revokedReplaced" to "dropit was joined again on this phone, so this copy was signed out — join again to use it",
+                "noticeLocked" to "dropit · something new",
+                "realtimeOver" to "Background receiving ended with the trial — it stays on with Paid",
+                "realtimeFull" to "Today's real-time places are taken — it comes back tomorrow by itself",
             ),
             formats = mapOf(
                 "httpFailed" to { a -> "Request failed: HTTP ${a[0]}" },
                 "tooLarge" to { a -> "Larger than ${a[0]}, the most one item can be" },
                 "rateDay" to { a -> "Today's sends are used up — back at ${a[0]}" },
                 "batchTooLarge" to { a -> "At most ${a[0]} files at once" },
+                "noticeFrom" to { a -> "From ${a[0]}" },
+                "noticeFiles" to { a -> "${a[0]} files" },
+                "noticeTextAndFiles" to { a -> if (a[0] == "1") "1 file and a text" else "${a[0]} files and a text" },
+                "noticeBacklog" to { a -> "${a[0]} new items" },
             ),
         )
 
@@ -114,12 +121,19 @@ class Strings private constructor(
                 "quotaItems" to "积压的内容太多了，等旧内容过期",
                 "quotaBytes" to "空间已满，等旧内容过期",
                 "revokedReplaced" to "这台手机上重新加入过 dropit，这一份已退出 —— 要用请重新加入",
+                "noticeLocked" to "dropit · 新内容",
+                "realtimeOver" to "后台接收的体验期结束了，付费版一直有",
+                "realtimeFull" to "今天的实时名额满了，明天自动恢复",
             ),
             formats = mapOf(
                 "httpFailed" to { a -> "请求失败 HTTP ${a[0]}" },
                 "tooLarge" to { a -> "超过了单条上限 ${a[0]}" },
                 "rateDay" to { a -> "今天的投递次数用完了，${a[0]} 恢复" },
                 "batchTooLarge" to { a -> "一次最多 ${a[0]} 个文件" },
+                "noticeFrom" to { a -> "来自 ${a[0]}" },
+                "noticeFiles" to { a -> "${a[0]} 个文件" },
+                "noticeTextAndFiles" to { a -> "${a[0]} 个文件和一段文字" },
+                "noticeBacklog" to { a -> "收到 ${a[0]} 条" },
             ),
         )
 

@@ -130,9 +130,32 @@ object Requests {
     /** Where to pay for `plan` (month, year or life): the answer holds `checkout_url`, opened in the browser */
     fun checkout(plan: String) = RequestSpec("POST", "/v1/checkout", body = buildJsonObject { put("plan", plan) })
 
-    fun pull(after: Long, limit: Int = 50) = RequestSpec(
-        "GET", "/v1/pull", query = listOf("after" to after.toString(), "limit" to limit.toString()),
+    /** `why`: what set the pull off — `open`, `push`, `reconnect`, `manual`, `pair` (the service counts pulls by it) */
+    fun pull(after: Long, limit: Int = PULL_LIMIT, why: String? = null) = RequestSpec(
+        "GET", "/v1/pull",
+        query = buildList {
+            add("after" to after.toString()); add("limit" to limit.toString())
+            why?.let { add("why" to it) }
+        },
     )
+
+    /** This phone's address at the system push service; a blank `token` takes it off again */
+    fun registerPush(token: String?) = RequestSpec(
+        "PUT", "/v1/devices/self/push",
+        body = buildJsonObject {
+            if (!token.isNullOrBlank()) put("kind", "fcm")
+            put("token", token.orEmpty())
+        },
+    )
+
+    /** Ask the service to push one test signal to this phone: whether it arrives decides how the phone receives */
+    fun testPush() = RequestSpec("POST", "/v1/devices/self/push/test")
+
+    /** A one-minute, single-use ticket for the live connection */
+    fun wsTicket() = RequestSpec("POST", "/v1/ws/ticket")
+
+    /** Where the live connection opens, given a ticket. The connection says why it is closing (`can=end`). */
+    fun wsTarget(ticket: String): String = "/v1/ws?ticket=${encode(ticket)}&can=end"
 }
 
 /** What went wrong, in the terms a person acts on */
