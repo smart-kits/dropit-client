@@ -96,7 +96,7 @@ fun PlansScreen(resumed: Int, why: String?, onBack: () -> Unit) {
             val (head, sub) = when (why) {
                 "per_day" -> stringResource(R.string.why_per_day, f.perDay) to stringResource(R.string.why_per_day_sub, p.perDay)
                 "file_size" -> stringResource(R.string.why_file_size, f.fileMB) to stringResource(R.string.why_file_size_sub, p.fileMB)
-                "space" -> stringResource(R.string.why_space, f.spaceMB) to stringResource(R.string.why_space_sub, p.spaceMB)
+                "space" -> stringResource(R.string.why_space, Plans.space(f.spaceMB)) to stringResource(R.string.why_space_sub, Plans.space(p.spaceMB))
                 "queue" -> stringResource(R.string.why_queue) to stringResource(R.string.why_queue_sub, p.queue)
                 "devices" -> stringResource(R.string.why_devices, f.devices) to stringResource(R.string.why_devices_sub, p.devices)
                 "realtime" -> stringResource(R.string.why_realtime, f.realtimeTrialDays ?: 0) to stringResource(R.string.why_realtime_sub)
@@ -128,14 +128,21 @@ fun PlansScreen(resumed: Int, why: String?, onBack: () -> Unit) {
 
         // Prices and paying only in the build from the website; a store build says what the limits are and stops
         if (BuildConfig.PAYMENTS && !paid) {
+            // One subscription tile: an account that has never had the first month gets it, everyone else the yearly price
+            val trial = me?.trialAvailable != false
             BuyTile(
-                stringResource(R.string.buy_year, Plans.price(Plans.PRICE_YEAR)), stringResource(R.string.buy_year_sub, Plans.price(Plans.PRICE_YEAR / 12)),
+                if (trial) stringResource(R.string.buy_trial, Plans.price(Plans.PRICE_TRIAL)) else stringResource(R.string.buy_year, Plans.price(Plans.PRICE_YEAR)),
+                if (trial) stringResource(R.string.buy_trial_sub, Plans.price(Plans.PRICE_YEAR)) else stringResource(R.string.buy_year_sub),
                 solid = true, busy = opening == "year", modifier = Modifier.fillMaxWidth().padding(top = 22.dp), onClick = { buy("year") },
-            ) { Burst("${Plans.yearSaves}%", small = stringResource(R.string.label_save).uppercase()) }
+            ) {
+                // With the first month on offer, that is the deal the sticker shouts; without it, what the subscription saves
+                if (trial) Burst(stringResource(R.string.label_try_month), small = stringResource(R.string.label_try).uppercase(), size = 56.dp)
+                else Burst("${Plans.yearSaves}%", small = stringResource(R.string.label_save).uppercase())
+            }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BuyTile(
-                    stringResource(R.string.buy_month, Plans.price(Plans.PRICE_MONTH)), stringResource(R.string.buy_month_sub),
-                    busy = opening == "month", modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { buy("month") },
+                    stringResource(R.string.buy_once, Plans.price(Plans.PRICE_YEAR_ONCE)), stringResource(R.string.buy_once_sub),
+                    busy = opening == "yearOnce", modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { buy("yearOnce") },
                 )
                 BuyTile(
                     stringResource(R.string.buy_life, Plans.price(Plans.PRICE_LIFE)), stringResource(R.string.buy_life_sub),
@@ -159,7 +166,7 @@ private fun PlanTable(mine: Int, bold: String?) {
     val rows = listOf(
         Triple("per_day", stringResource(R.string.plan_row_per_day), f.perDay.toString() to p.perDay.toString()),
         Triple("file_size", stringResource(R.string.plan_row_file), "${f.fileMB} MB" to "${p.fileMB} MB"),
-        Triple("space", stringResource(R.string.plan_row_space), "${f.spaceMB} MB" to "${p.spaceMB} MB"),
+        Triple("space", stringResource(R.string.plan_row_space), Plans.space(f.spaceMB) to Plans.space(p.spaceMB)),
         Triple("kept", stringResource(R.string.plan_row_kept), days(f.days) to days(p.days)),
         Triple("devices", stringResource(R.string.plan_row_devices), f.devices.toString() to p.devices.toString()),
         Triple("realtime", stringResource(R.string.plan_row_realtime), stringResource(R.string.plan_first_days, f.realtimeTrialDays ?: 0) to stringResource(R.string.plan_always)),

@@ -39,6 +39,8 @@
     <string name="label_scope_full">完整</string>
     <string name="label_scope_send">只能投递</string>
     <string name="label_save">省</string>
+    <string name="label_try">先试</string>
+    <string name="label_try_month">1个月</string>
     <string name="label_limited">限量</string>
     <string name="label_ob_notify">投完、收到，\n都用通知告诉你</string>
     <string name="label_ob_background">让 dropit 在后台\n把事办完</string>
@@ -121,7 +123,7 @@
 
     <string name="up_per_day">升级接着发 —— 每天 %1$d 条</string>
     <string name="up_file_size">升级后发送 —— 单个文件 %1$d MB</string>
-    <string name="up_space">付费版有 %1$d MB</string>
+    <string name="up_space">付费版有 %1$s</string>
     <string name="up_queue">付费版最多积压 %1$d 条</string>
     <string name="up_devices">付费版放得下 %1$d 台</string>
     <string name="up_realtime">付费版一直实时</string>
@@ -202,10 +204,12 @@
     <string name="plan_first_days">前 %1$d 天</string>
     <string name="plan_always">一直有</string>
     <string name="plan_per_year">/ 年</string>
-    <string name="buy_year">年付 $%1$s</string>
-    <string name="buy_year_sub">约 $%1$s / 月</string>
-    <string name="buy_month">月付 $%1$s</string>
-    <string name="buy_month_sub">随时取消</string>
+    <string name="buy_year">年付订阅 $%1$s</string>
+    <string name="buy_year_sub">每年自动续费，随时取消</string>
+    <string name="buy_trial">年付订阅：首月 $%1$s</string>
+    <string name="buy_trial_sub">不到一杯咖啡钱，所有上限立刻解锁 · 之后每年 $%1$s，随时取消</string>
+    <string name="buy_once">一年 $%1$s</string>
+    <string name="buy_once_sub">一次付清，不自动续费</string>
     <string name="buy_life">终身 $%1$s</string>
     <string name="buy_life_sub">一次买断</string>
     <string name="buy_note">在浏览器里付款，付完回到这里自动生效。</string>
@@ -215,8 +219,8 @@
     <string name="why_per_day_sub">付费版每天 %1$d 条。</string>
     <string name="why_file_size">这个文件超过了 %1$d MB 的上限</string>
     <string name="why_file_size_sub">付费版单个文件 %1$d MB。</string>
-    <string name="why_space">%1$d MB 的空间满了</string>
-    <string name="why_space_sub">付费版有 %1$d MB。</string>
+    <string name="why_space">%1$s 的空间满了</string>
+    <string name="why_space_sub">付费版有 %1$s。</string>
     <string name="why_queue">积压的内容太多了</string>
     <string name="why_queue_sub">付费版最多积压 %1$d 条。</string>
     <string name="why_devices">%1$d 个设备名额都用上了</string>

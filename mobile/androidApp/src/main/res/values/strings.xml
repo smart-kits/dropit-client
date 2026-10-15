@@ -46,6 +46,8 @@
     <string name="label_scope_full">Full</string>
     <string name="label_scope_send">Send only</string>
     <string name="label_save">SAVE</string>
+    <string name="label_try">Try</string>
+    <string name="label_try_month">1 MONTH</string>
     <string name="label_limited">Limited</string>
     <string name="label_ob_notify">Sent or received —\na notification tells you</string>
     <string name="label_ob_background">Let dropit\nfinish the job</string>
@@ -135,7 +137,7 @@
     <!-- Upgrade, by what was hit -->
     <string name="up_per_day">Keep sending with Paid — %1$d a day</string>
     <string name="up_file_size">Send it with Paid — %1$d MB per file</string>
-    <string name="up_space">Paid holds %1$d MB</string>
+    <string name="up_space">Paid holds %1$s</string>
     <string name="up_queue">Paid keeps up to %1$d items waiting</string>
     <string name="up_devices">Paid fits %1$d devices</string>
     <string name="up_realtime">Paid stays real-time</string>
@@ -222,9 +224,11 @@
     <string name="plan_always">Always on</string>
     <string name="plan_per_year">/ year</string>
     <string name="buy_year">Yearly $%1$s</string>
-    <string name="buy_year_sub">about $%1$s a month</string>
-    <string name="buy_month">Monthly $%1$s</string>
-    <string name="buy_month_sub">cancel anytime</string>
+    <string name="buy_year_sub">renews each year, cancel anytime</string>
+    <string name="buy_trial">Yearly — first month $%1$s</string>
+    <string name="buy_trial_sub">Less than a coffee, every limit lifted now · then $%1$s a year, cancel anytime</string>
+    <string name="buy_once">One year $%1$s</string>
+    <string name="buy_once_sub">pay once, no renewal</string>
     <string name="buy_life">Lifetime $%1$s</string>
     <string name="buy_life_sub">pay once</string>
     <string name="buy_note">You pay in the browser; back here it takes effect by itself.</string>
@@ -234,8 +238,8 @@
     <string name="why_per_day_sub">Paid sends %1$d a day.</string>
     <string name="why_file_size">That file is over the %1$d MB limit</string>
     <string name="why_file_size_sub">Paid takes files up to %1$d MB.</string>
-    <string name="why_space">Your %1$d MB of space is full</string>
-    <string name="why_space_sub">Paid holds %1$d MB.</string>
+    <string name="why_space">Your %1$s of space is full</string>
+    <string name="why_space_sub">Paid holds %1$s.</string>
     <string name="why_queue">Too many items are waiting</string>
     <string name="why_queue_sub">Paid keeps up to %1$d.</string>
     <string name="why_devices">All %1$d device slots are in use</string>

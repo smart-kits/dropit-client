@@ -340,7 +340,7 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
 internal fun upgradeWord(why: String?): String = when (why) {
     "per_day" -> stringResource(R.string.up_per_day, Plans.paid.perDay)
     "file_size" -> stringResource(R.string.up_file_size, Plans.paid.fileMB)
-    "space" -> stringResource(R.string.up_space, Plans.paid.spaceMB)
+    "space" -> stringResource(R.string.up_space, Plans.space(Plans.paid.spaceMB))
     "queue" -> stringResource(R.string.up_queue, Plans.paid.queue)
     "devices" -> stringResource(R.string.up_devices, Plans.paid.devices)
     "realtime" -> stringResource(R.string.up_realtime)

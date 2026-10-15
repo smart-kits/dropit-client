@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -27,11 +28,13 @@ data class Me(
     val itemBytesLimit: Long?,
     val bytesUsed: Long,
     val bytesLimit: Long,
-    /** Lifetime, a year, a month — or null on the free plan */
+    /** Lifetime or a year — or null on the free plan */
     val paidKind: String?,
     val paidUntil: Long?,
     /** Where a free account upgrades; the service gives it to free accounts only */
     val upgradeUrl: String?,
+    /** Whether subscribing starts with the first month at its own price: once per account; unless the service says no, yes */
+    val trialAvailable: Boolean,
 ) {
     val paid: Boolean get() = plan == "paid"
 
@@ -46,6 +49,7 @@ data class Me(
             paidKind = o["paid_kind"]?.jsonPrimitive?.contentOrNull,
             paidUntil = o["paid_until"]?.jsonPrimitive?.longOrNull,
             upgradeUrl = o["upgrade_url"]?.jsonPrimitive?.contentOrNull,
+            trialAvailable = o["trial_available"]?.jsonPrimitive?.booleanOrNull ?: true,
         )
     }
 }
