@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -280,6 +281,16 @@ fun AddDeviceScreen(go: (Screen) -> Unit, onBack: () -> Unit) {
                             val clock = "%d:%02d".format(left / 60_000, left / 1000 % 60)
                             Txt(stringResource(R.string.add_expires, clock), sans(12.5.sp).copy(fontFeatureSettings = "tnum"), c.dim)
                             QrCode(pairingLink(code!!), Modifier.padding(top = 12.dp))
+                            // The new device may have nothing yet: say where to get it, once, under the code it will need. The link opens here;
+                            // sharing sends it to the new device, so nothing has to be typed there
+                            Txt(stringResource(R.string.add_install), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(top = 12.dp), align = TextAlign.Center)
+                            Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Txt(
+                                    "dropit.smart-kits.xyz", sans(13.5.sp).copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), c.navy,
+                                    Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { ctx.openLink(xyz.smart_kits.dropit.shared.INSTALL_URL) }.padding(vertical = 10.dp),
+                                )
+                                LinkAction({ ctx.shareText(xyz.smart_kits.dropit.shared.INSTALL_URL) }, text = stringResource(R.string.add_install_share), icon = Icons.Share, color = c.navy)
+                            }
                         } else {
                             Txt(stringResource(R.string.add_expired), sans(12.5.sp), c.red)
                             Btn(stringResource(R.string.add_new_code), { round++ }, Modifier.padding(top = 12.dp), small = true)

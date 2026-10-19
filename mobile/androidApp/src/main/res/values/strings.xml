@@ -128,6 +128,7 @@
     <string name="more">More</string>
     <string name="empty_title">Nothing here yet.</string>
     <string name="empty_body">Send something from your computer; it shows up here.</string>
+    <string name="empty_body_alone">This is the first device on the account. Phones, computers, browsers and Obsidian all work; add another, and what you drop has somewhere to land.</string>
     <string name="sent_mark">✓ Sent · %1$s</string>
     <string name="from_page">From %1$s</string>
     <string name="open">Open</string>
@@ -215,6 +216,8 @@
     <string name="dev_remove_note">A removed device is told so on its next request, and its slot frees up at once.</string>
     <string name="dev_remove_ask">Remove %1$s?</string>
     <string name="add_help">Type this code on the new device, or scan the QR code with its camera</string>
+    <string name="add_install">Not installed on the new device yet? Scan the QR code with it, or open the link to install, then enter these 6 characters:</string>
+    <string name="add_install_share">Share to the new device</string>
     <string name="add_expires">Expires in %1$s · single use</string>
     <string name="add_expired">This code has expired</string>
     <string name="add_new_code">New code</string>
@@ -342,5 +345,5 @@
     <string name="slow_net_load">The connection is slow — still loading…</string>
     <string name="other_plans">Other plans</string>
     <string name="no_browser">No app could open the link. Install or enable a browser and try again</string>
-    <string name="chip_upgrade_price">Upgrade %s</string>
+    <string name="chip_upgrade_price">Free %s</string>
 </resources>

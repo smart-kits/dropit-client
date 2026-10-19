@@ -15,6 +15,9 @@ import kotlinx.serialization.json.put
 
 const val DEFAULT_ENDPOINT = "https://dropit.smart-kits.xyz"
 const val PRIVACY_URL = "$DEFAULT_ENDPOINT/privacy"
+
+/** The page that lists every client, the one for this device recommended: where a new device gets dropit */
+const val INSTALL_URL = "$DEFAULT_ENDPOINT/#install"
 const val SOURCE_URL = "https://github.com/smart-kits/dropit-client"
 
 /** What a pairing QR code holds: the page that opens the right client with the code filled in */

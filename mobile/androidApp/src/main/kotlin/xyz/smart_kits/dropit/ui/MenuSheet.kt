@@ -89,15 +89,13 @@ fun PlanCard(go: (Screen) -> Unit, modifier: Modifier = Modifier, onGo: () -> Un
     }
 }
 
-/** The menu behind the icon at the top right: the plan card, then settings, the account and about, each a full-height row */
+/** The menu behind the icon at the top right: settings, the account and about, each a full-height row. The plan is not here: it is the pill beside this icon, and the top of the account page */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MenuSheet(go: (Screen) -> Unit, buy: Buy, onDismiss: () -> Unit) {
+fun MenuSheet(go: (Screen) -> Unit, onDismiss: () -> Unit) {
     val c = ink
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = c.paper) {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
-            PlanCard(go, onGo = onDismiss, buy = buy)
-            Spacer(Modifier.padding(top = 8.dp))
             MenuRow(R.string.label_settings, R.string.menu_settings_sub) { onDismiss(); go(Screen.Settings) }
             MenuRow(R.string.label_group_account, R.string.menu_account_sub) { onDismiss(); go(Screen.Account) }
             MenuRow(R.string.label_group_about, R.string.menu_about_sub) { onDismiss(); go(Screen.About) }

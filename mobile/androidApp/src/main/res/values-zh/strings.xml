@@ -115,6 +115,7 @@
     <string name="more">更多</string>
     <string name="empty_title">还没有内容。</string>
     <string name="empty_body">在电脑上投一条试试，它会出现在这里。</string>
+    <string name="empty_body_alone">这是账号里的第一台设备。手机、电脑、浏览器、Obsidian 都能装，再加一台，投出去的东西才有地方收。</string>
     <string name="sent_mark">✓ 已投递 · %1$s</string>
     <string name="from_page">来自 %1$s</string>
     <string name="open">打开</string>
@@ -198,6 +199,8 @@
     <string name="dev_remove_note">移除后，那台设备再请求时会收到「已从账号移除」，名额立刻空出来。</string>
     <string name="dev_remove_ask">移除 %1$s？</string>
     <string name="add_help">在新设备上输入这个码，或用它的相机扫二维码</string>
+    <string name="add_install">新设备还没装 dropit？用它扫上面的二维码，或点开链接去安装，装好后输入这 6 位：</string>
+    <string name="add_install_share">分享给新设备</string>
     <string name="add_expires">%1$s 后失效 · 只能用一次</string>
     <string name="add_expired">这个码已过期</string>
     <string name="add_new_code">换一个码</string>
@@ -322,5 +325,5 @@
     <string name="slow_net_load">网络较慢，还在加载…</string>
     <string name="other_plans">其他方案</string>
     <string name="no_browser">没有应用能打开这个链接。请安装或启用浏览器后再试</string>
-    <string name="chip_upgrade_price">升级 %s</string>
+    <string name="chip_upgrade_price">免费版 %s</string>
 </resources>

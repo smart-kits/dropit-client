@@ -258,7 +258,7 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
                 val offering = BuildConfig.PAYMENTS && ctx.app.plans.offering && !it.paid
                 when {
                     offering -> {
-                        // The pill is the way to pay, so it says so, and what it costs: the first month when the account can still have it
+                        // The pill says what the account is (the free plan) and what it costs to leave it, with the arrow that says it can be tapped: the first month's price when the account can still have it
                         val year = ctx.app.plans.catalog.value?.offer("year")
                         val price = year?.let { y -> if (y.trialCents != null && it.trialAvailable) Plans.money(y.trialCents!!, y.currency) else Plans.money(y.cents, y.currency) }
                         PlanChip(
@@ -277,7 +277,7 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
             LinkAction({ menuOpen = true }, icon = Icons.Menu, name = stringResource(R.string.menu_name), iconSize = 26.dp, minSize = 48.dp)
         }
         buy.error?.let { ErrorLine(errorText(it), Modifier.padding(bottom = 10.dp)) }
-        if (menuOpen) MenuSheet(go, buy, onDismiss = { menuOpen = false })
+        if (menuOpen) MenuSheet(go, onDismiss = { menuOpen = false })
 
         SetupTips(resumed)
 
@@ -421,7 +421,8 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
         if (letters.isEmpty()) {
             Column(Modifier.fillMaxWidth().dashed(c.line, radius = 3.dp).padding(horizontal = 16.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Txt(stringResource(R.string.empty_title), sans(13.5.sp), c.dim, align = TextAlign.Center)
-                Txt(stringResource(R.string.empty_body), sans(13.5.sp), c.dim, align = TextAlign.Center)
+                // Alone on the account: say what makes dropit useful (a second device) instead of asking for something to be sent
+                Txt(stringResource(if ((me?.devicesUsed ?: 0) <= 1) R.string.empty_body_alone else R.string.empty_body), sans(13.5.sp), c.dim, align = TextAlign.Center)
                 Txt(
                     stringResource(R.string.label_add_device), sans(13.5.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
                     Modifier.clickable(role = Role.Button) { go(Screen.AddDevice) }.padding(vertical = 10.dp),
