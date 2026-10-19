@@ -36,6 +36,12 @@ class Store(context: Context) : ClientStore {
         set(v) = prefs.edit().putString(ME, v).putLong(ME_AT, System.currentTimeMillis()).apply()
     val meAt: Long get() = prefs.getLong(ME_AT, 0)
 
+    /** The last `/v1/plans` answer (what is on sale and for how much) and when it was fetched */
+    var plansJson: String?
+        get() = prefs.getString(PLANS, null)
+        set(v) = prefs.edit().putString(PLANS, v).putLong(PLANS_AT, System.currentTimeMillis()).apply()
+    val plansAt: Long get() = prefs.getLong(PLANS_AT, 0)
+
     /**
      * When the clipboard's content was put there (its own timestamp) for the newest clip dropit already dealt
      * with: sent, from any way in, or waved away. Only a newer one is offered on opening the app.
@@ -48,6 +54,34 @@ class Store(context: Context) : ClientStore {
     var waiting: Set<String>
         get() = prefs.getStringSet(WAITING, null).orEmpty()
         set(v) = prefs.edit().putStringSet(WAITING, v).apply()
+
+    /** Background receiving: on unless the person turned it off. What it came to is [receiveState] */
+    var receiveOn: Boolean
+        get() = prefs.getBoolean(RECEIVE_ON, true)
+        set(v) = prefs.edit().putBoolean(RECEIVE_ON, v).apply()
+
+    /** `push` when a test push got through; `none` when it did not; `refused:<message key>` when the service said no; null: not tried */
+    var receiveState: String?
+        get() = prefs.getString(RECEIVE_STATE, null)
+        set(v) = prefs.edit().putString(RECEIVE_STATE, v).apply()
+
+    /** Where the next pull starts. 0 until the first one: the service then only gives what came after this phone joined */
+    var cursor: Long
+        get() = prefs.getLong(CURSOR, 0)
+        set(v) = prefs.edit().putLong(CURSOR, v).apply()
+
+    /** The push address the service was last told about, so it is told again only when it changed */
+    var pushToken: String?
+        get() = prefs.getString(PUSH_TOKEN, null)
+        set(v) = prefs.edit().putString(PUSH_TOKEN, v).apply()
+
+    /** The website's version file as last read, and when */
+    var updateJson: String?
+        get() = prefs.getString(UPDATE_JSON, null)
+        set(v) = prefs.edit().putString(UPDATE_JSON, v).apply()
+    var updateAt: Long
+        get() = prefs.getLong(UPDATE_AT, 0)
+        set(v) = prefs.edit().putLong(UPDATE_AT, v).apply()
 
     /** Whether the "Send clipboard" tile is in quick settings (the tile says so when added or shown) */
     var tileAdded: Boolean
@@ -67,7 +101,7 @@ class Store(context: Context) : ClientStore {
     override suspend fun setEndpoints(list: List<String>) { prefs.edit().putString(ENDPOINTS, list.joinToString("\n")).apply() }
 
     fun signedIn(token: String, deviceId: String) {
-        prefs.edit().putString(TOKEN, Vault.seal(token)).putString(DEVICE_ID, deviceId).remove(PREVIOUS).remove(ME).apply()
+        prefs.edit().putString(TOKEN, Vault.seal(token)).putString(DEVICE_ID, deviceId).remove(PREVIOUS).remove(ME).remove(CURSOR).remove(PUSH_TOKEN).remove(RECEIVE_STATE).apply()
     }
 
     /**
@@ -76,7 +110,7 @@ class Store(context: Context) : ClientStore {
      */
     fun forget() {
         val old = tokenNow()
-        prefs.edit().remove(TOKEN).remove(DEVICE_ID).remove(ME).apply()
+        prefs.edit().remove(TOKEN).remove(DEVICE_ID).remove(ME).remove(CURSOR).remove(PUSH_TOKEN).remove(RECEIVE_STATE).apply()
         if (old != null) previousToken = old
     }
 
@@ -89,7 +123,15 @@ class Store(context: Context) : ClientStore {
         const val TILE_ADDED = "tile_added"
         const val ME = "me"
         const val ME_AT = "me_at"
+        const val PLANS = "plans"
+        const val PLANS_AT = "plans_at"
         const val ENDPOINTS = "endpoints"
+        const val RECEIVE_ON = "receive_on"
+        const val RECEIVE_STATE = "receive_state"
+        const val CURSOR = "cursor"
+        const val UPDATE_JSON = "update_json"
+        const val UPDATE_AT = "update_at"
+        const val PUSH_TOKEN = "push_token"
     }
 }
 

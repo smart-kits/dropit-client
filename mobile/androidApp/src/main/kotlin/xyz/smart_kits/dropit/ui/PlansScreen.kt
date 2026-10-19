@@ -1,6 +1,8 @@
 package xyz.smart_kits.dropit.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import xyz.smart_kits.dropit.ui.kit.Btn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +41,8 @@ import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.Me
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.shared.Offer
+import xyz.smart_kits.dropit.shared.PlanLimits
 import xyz.smart_kits.dropit.shared.Plans
 import xyz.smart_kits.dropit.shared.Requests
 import xyz.smart_kits.dropit.shared.fileSize
@@ -47,7 +51,7 @@ import xyz.smart_kits.dropit.ui.kit.Burst
 import xyz.smart_kits.dropit.ui.kit.Meter
 import xyz.smart_kits.dropit.ui.kit.Panel
 import xyz.smart_kits.dropit.ui.kit.PanelRow
-import xyz.smart_kits.dropit.ui.kit.Returned
+import xyz.smart_kits.dropit.ui.kit.ErrorLine
 import xyz.smart_kits.dropit.ui.kit.Txt
 import xyz.smart_kits.dropit.ui.theme.ink
 import xyz.smart_kits.dropit.ui.theme.label
@@ -66,33 +70,28 @@ fun PlansScreen(resumed: Int, why: String?, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val c = ink
     var me by remember { mutableStateOf<Me?>(null) }
-    var error by remember { mutableStateOf<Throwable?>(null) }
-    var opening by remember { mutableStateOf<String?>(null) }
+    val buyer = rememberBuy()
+    val error = buyer.error
+    val opening = buyer.opening
+    // What is on sale and for how much comes from the service; reading it here redraws this screen when it changes
+    val plans = ctx.app.plans
+    val cat = plans.catalog.value
+    var asked by remember { mutableStateOf(false) }
+    LaunchedEffect(resumed) { plans.refresh(); asked = true }
+    val slowPlans = xyz.smart_kits.dropit.ui.kit.rememberSlow(cat == null && !asked)
     // Back from paying in the browser: the plan is asked for again, and the page changes by itself
     LaunchedEffect(resumed) {
-        if (me == null) me = ctx.app.account.me()
+        if (me == null) me = ctx.app.account.me(stale = true)
         me = ctx.app.account.me(fresh = true)
     }
     val paid = me?.paid == true
 
-    fun buy(plan: String) {
-        if (opening != null) return
-        opening = plan; error = null
-        scope.launch {
-            try {
-                ctx.app.client.send(Requests.checkout(plan)).str("checkout_url")?.let(ctx::openLink)
-            } catch (e: Throwable) {
-                error = e
-            } finally {
-                opening = null
-            }
-        }
-    }
+    fun buy(plan: String) = buyer.start(plan)
 
     Page(stringResource(if (why != null && !paid) R.string.label_upgrade else R.string.label_plan), onBack) {
         if (why != null && !paid) {
-            val f = Plans.free
-            val p = Plans.paid
+            val f = plans.free
+            val p = plans.paid
             val (head, sub) = when (why) {
                 "per_day" -> stringResource(R.string.why_per_day, f.perDay) to stringResource(R.string.why_per_day_sub, p.perDay)
                 "file_size" -> stringResource(R.string.why_file_size, f.fileMB) to stringResource(R.string.why_file_size_sub, p.fileMB)
@@ -100,6 +99,9 @@ fun PlansScreen(resumed: Int, why: String?, onBack: () -> Unit) {
                 "queue" -> stringResource(R.string.why_queue) to stringResource(R.string.why_queue_sub, p.queue)
                 "devices" -> stringResource(R.string.why_devices, f.devices) to stringResource(R.string.why_devices_sub, p.devices)
                 "realtime" -> stringResource(R.string.why_realtime, f.realtimeTrialDays ?: 0) to stringResource(R.string.why_realtime_sub)
+                "uploads" -> stringResource(R.string.why_uploads) to stringResource(R.string.why_uploads_sub)
+                "downloads" -> stringResource(R.string.why_downloads, f.downloads) to stringResource(R.string.why_downloads_sub, p.downloads)
+                "kept" -> stringResource(R.string.why_kept) to stringResource(R.string.why_kept_sub, f.days, p.days)
                 else -> null to null
             }
             if (head != null) {
@@ -124,47 +126,72 @@ fun PlansScreen(resumed: Int, why: String?, onBack: () -> Unit) {
             }
         }
 
-        PlanTable(mine = if (paid) 2 else 1, bold = why.takeIf { !paid })
+        PlanTable(plans.free, plans.paid, cat?.offer("year")?.takeIf { cat.canBuy }, mine = if (paid) 2 else 1, bold = why.takeIf { !paid })
 
         // Prices and paying only in the build from the website; a store build says what the limits are and stops
         if (BuildConfig.PAYMENTS && !paid) {
-            // One subscription tile: an account that has never had the first month gets it, everyone else the yearly price
-            val trial = me?.trialAvailable != false
-            BuyTile(
-                if (trial) stringResource(R.string.buy_trial, Plans.price(Plans.PRICE_TRIAL)) else stringResource(R.string.buy_year, Plans.price(Plans.PRICE_YEAR)),
-                if (trial) stringResource(R.string.buy_trial_sub, Plans.price(Plans.PRICE_YEAR)) else stringResource(R.string.buy_year_sub),
-                solid = true, busy = opening == "year", modifier = Modifier.fillMaxWidth().padding(top = 22.dp), onClick = { buy("year") },
-            ) {
-                // With the first month on offer, that is the deal the sticker shouts; without it, what the subscription saves
-                if (trial) Burst(stringResource(R.string.label_try_month), small = stringResource(R.string.label_try).uppercase(), size = 56.dp)
-                else Burst("${Plans.yearSaves}%", small = stringResource(R.string.label_save).uppercase())
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                BuyTile(
-                    stringResource(R.string.buy_once, Plans.price(Plans.PRICE_YEAR_ONCE)), stringResource(R.string.buy_once_sub),
-                    busy = opening == "yearOnce", modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { buy("yearOnce") },
+            val year = cat?.offer("year")
+            val once = cat?.offer("year_once")
+            val life = cat?.offer("life")
+            if (cat == null && !asked) {
+                // Not answered yet: what is coming has its place, instead of a line that says nothing is known
+                xyz.smart_kits.dropit.ui.kit.LoadingRows(slowPlans, Modifier.padding(top = 22.dp), rows = 3)
+            } else if (cat == null || !cat.canBuy || year == null || once == null || life == null) {
+                // The service has not said what is on sale (nothing kept and it can't be reached), or says it is closed: no price tags, one line says so
+                Txt(
+                    stringResource(if (cat == null) R.string.buy_unknown else R.string.buy_closed),
+                    sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(top = 22.dp),
                 )
-                BuyTile(
-                    stringResource(R.string.buy_life, Plans.price(Plans.PRICE_LIFE)), stringResource(R.string.buy_life_sub),
-                    busy = opening == "life", modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { buy("life") },
-                ) { Burst(stringResource(R.string.label_limited).uppercase()) }
+            } else {
+                // The same order and the same look as the website (DESIGN.md, "Plans and the sale sticker"): the two it recommends first,
+                // each with a heavier blue edge and a sale sticker — the subscription (its first month, when the account can still have it
+                // and the service offers one; else what it saves) and lifetime — then, quietly, a year paid once. Every card ends in its own button.
+                val trial = year.trialCents != null && me?.trialAvailable != false
+                val yearly = Plans.money(year.cents, year.currency)
+                val perMonth = Plans.perMonthCents(year.cents)?.let { Plans.money(it, year.currency) }
+                BuyCard(
+                    stringResource(R.string.tile_year_name),
+                    if (trial) Plans.money(year.trialCents!!, year.currency) else yearly,
+                    stringResource(if (trial) R.string.tile_per_first_month else R.string.plan_per_year),
+                    when {
+                        trial && perMonth != null -> stringResource(R.string.tile_year_sub_trial, yearly, perMonth)
+                        trial -> stringResource(R.string.tile_trial_note, yearly)
+                        perMonth != null -> stringResource(R.string.tile_year_sub, perMonth)
+                        else -> stringResource(R.string.tile_year_note)
+                    },
+                    if (trial) stringResource(R.string.tile_year_btn_trial, Plans.money(year.trialCents!!, year.currency)) else stringResource(R.string.tile_year_btn, yearly),
+                    hero = true, busy = opening == "year", modifier = Modifier.fillMaxWidth().padding(top = 22.dp), onClick = { buy("year") },
+                ) {
+                    if (trial) Burst(stringResource(R.string.label_try_month), small = stringResource(R.string.label_try).uppercase(), size = 56.dp)
+                    else cat.yearSaves?.let { Burst("$it%", small = stringResource(R.string.label_save).uppercase()) }
+                }
+                val years = Plans.lifetimeInYears(life.cents, year.cents)?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }
+                BuyCard(
+                    stringResource(R.string.tile_life_name), Plans.money(life.cents, life.currency), null,
+                    if (years != null) stringResource(R.string.tile_life_sub, years) else stringResource(R.string.tile_life_note),
+                    stringResource(R.string.tile_life_btn),
+                    hero = false, busy = opening == "life", modifier = Modifier.fillMaxWidth().padding(top = 22.dp), onClick = { buy("life") },
+                ) { Burst(stringResource(R.string.label_best_big), small = stringResource(R.string.label_best_small), size = 56.dp) }
+                BuyRow(
+                    stringResource(R.string.tile_once_name), Plans.money(once.cents, once.currency), stringResource(R.string.tile_once_note),
+                    stringResource(R.string.tile_once_btn), busy = opening == "year_once", modifier = Modifier.fillMaxWidth().padding(top = 12.dp), onClick = { buy("year_once") },
+                )
+                Txt(stringResource(R.string.buy_note), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(top = 10.dp))
             }
-            Txt(stringResource(R.string.buy_note), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(top = 10.dp))
         }
-        error?.let { Returned(listOf(errorText(it)), Modifier.padding(top = 12.dp)) }
+        error?.let { ErrorLine(errorText(it), Modifier.padding(top = 12.dp)) }
     }
 }
 
 /** Free and Paid side by side, a row per limit. `mine`: which column is the account's; `bold`: the limit just hit */
 @Composable
-private fun PlanTable(mine: Int, bold: String?) {
+private fun PlanTable(f: PlanLimits, p: PlanLimits, yearOffer: Offer?, mine: Int, bold: String?) {
     val c = ink
-    val f = Plans.free
-    val p = Plans.paid
     @Composable
     fun days(n: Int) = pluralStringResource(R.plurals.plan_days, n, n)
     val rows = listOf(
         Triple("per_day", stringResource(R.string.plan_row_per_day), f.perDay.toString() to p.perDay.toString()),
+        Triple("downloads", stringResource(R.string.plan_row_downloads), f.downloads.toString() to p.downloads.toString()),
         Triple("file_size", stringResource(R.string.plan_row_file), "${f.fileMB} MB" to "${p.fileMB} MB"),
         Triple("space", stringResource(R.string.plan_row_space), Plans.space(f.spaceMB) to Plans.space(p.spaceMB)),
         Triple("kept", stringResource(R.string.plan_row_kept), days(f.days) to days(p.days)),
@@ -177,9 +204,9 @@ private fun PlanTable(mine: Int, bold: String?) {
             for (col in 1..2) {
                 Column(Modifier.weight(.31f).fillMaxHeight().background(if (col == mine) c.wash else c.paper).padding(horizontal = 10.dp, vertical = 8.dp)) {
                     Txt(stringResource(if (col == 1) R.string.label_free else R.string.label_paid).uppercase(), label(15.sp, tracking = .02.em), c.ink)
-                    if (BuildConfig.PAYMENTS) {
+                    if (BuildConfig.PAYMENTS && yearOffer != null) {
                         Row(verticalAlignment = Alignment.Bottom) {
-                            Txt(if (col == 1) "$0" else "$" + Plans.price(Plans.PRICE_YEAR), label(18.sp), c.ink)
+                            Txt(if (col == 1) Plans.money(0, yearOffer.currency).removeSuffix(".00") else Plans.money(yearOffer.cents, yearOffer.currency), label(18.sp), c.ink)
                             if (col == 2) Txt(" " + stringResource(R.string.plan_per_year), sans(11.sp), c.dim, Modifier.padding(bottom = 2.dp))
                         }
                     }
@@ -209,22 +236,54 @@ private fun PlanTable(mine: Int, bold: String?) {
     }
 }
 
-/** A way to pay: its name with the price, and its one advantage under it; a sale sticker on the corner if it has one */
+/**
+ * One of the two ways to pay that are recommended: its name, the price large in the label face with what it is for beside it,
+ * one line on what it comes to, and its own button. A heavier blue edge (the subscription, [hero], also a tinted ground),
+ * and a sale sticker on the corner.
+ */
 @Composable
-private fun BuyTile(title: String, sub: String, onClick: () -> Unit, modifier: Modifier = Modifier, solid: Boolean = false, busy: Boolean = false, sticker: (@Composable () -> Unit)? = null) {
+private fun BuyCard(
+    name: String, price: String, per: String?, sub: String, button: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+    hero: Boolean = false, busy: Boolean = false, sticker: (@Composable () -> Unit)? = null,
+) {
     val c = ink
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(8.dp)
     Box(modifier) {
         Column(
-            Modifier.fillMaxWidth().fillMaxHeight().alpha(if (busy) .6f else 1f).clip(shape).background(if (solid) c.ink else c.paper).border(1.dp, if (solid) c.ink else c.line, shape)
-                .clickable(enabled = !busy, role = Role.Button, onClick = onClick).heightIn(min = 54.dp)
-                .padding(start = 12.dp, end = if (sticker != null) 40.dp else 12.dp, top = 8.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.Center,
+            Modifier.fillMaxWidth().alpha(if (busy) .6f else 1f).clip(shape).background(c.paper).background(if (hero) c.wash else Color.Transparent)
+                .border(2.dp, c.navy, shape).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
         ) {
-            val fg = if (solid) c.paper else c.ink
-            Txt(title, sans(14.5.sp, FontWeight.SemiBold, lineHeight = 19.sp).copy(fontFeatureSettings = "tnum"), fg)
-            Txt(sub, sans(11.5.sp, lineHeight = 16.sp), fg.copy(alpha = .72f))
+            Column(Modifier.padding(end = 52.dp)) {
+                Txt(name, sans(13.sp, FontWeight.SemiBold, lineHeight = 18.sp), c.dim)
+                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 4.dp)) {
+                    Txt(price, label(34.sp), c.ink)
+                    if (per != null) Txt(" $per", sans(14.sp), c.dim, Modifier.padding(start = 4.dp, bottom = 5.dp))
+                }
+            }
+            Txt(sub, sans(13.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(top = 6.dp))
+            Btn(button, onClick, Modifier.fillMaxWidth().padding(top = 12.dp), solid = hero, loading = busy, tint = c.navy)
         }
-        if (sticker != null) Box(Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-16).dp)) { sticker() }
+        if (sticker != null) Box(Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-18).dp)) { sticker() }
+    }
+}
+
+/** The way to pay that is not recommended, kept quiet: one row, the price and what it is, and a small button */
+@Composable
+private fun BuyRow(name: String, price: String, note: String, button: String, onClick: () -> Unit, modifier: Modifier = Modifier, busy: Boolean = false) {
+    val c = ink
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier.alpha(if (busy) .6f else 1f).clip(shape).background(c.paper).border(1.dp, c.line, shape)
+            .padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Txt(price, label(24.sp), c.ink)
+                Txt(" $name", sans(13.sp, FontWeight.SemiBold), c.dim, Modifier.padding(start = 6.dp, bottom = 3.dp))
+            }
+            Txt(note, sans(12.5.sp, lineHeight = 17.sp), c.dim)
+        }
+        Btn(button, onClick, small = true, enabled = !busy, tint = c.navy)
     }
 }

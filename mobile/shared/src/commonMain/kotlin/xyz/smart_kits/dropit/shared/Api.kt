@@ -50,10 +50,11 @@ data class RequestSpec(
         get() = if (query.isEmpty()) path else path + "?" + query.joinToString("&") { (k, v) -> "${encode(k)}=${encode(v)}" }
 
     /**
-     * Safe to send twice: reads, and sends (the service recognizes a repeat within a minute).
-     * Never joining or creating an account.
+     * Safe to send twice: reads, and sends (the service recognizes a repeat within a minute), and asking for a checkout (a second
+     * one is only another unpaid draft that nobody opens).
+     * Never joining or creating an account — except when no connection was ever made (see DropitClient.attempt).
      */
-    val retriable: Boolean get() = method == "GET" || path.startsWith("/v1/ingest")
+    val retriable: Boolean get() = method == "GET" || path.startsWith("/v1/ingest") || path == "/v1/checkout"
 }
 
 private const val UNRESERVED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~"
@@ -109,11 +110,13 @@ object Requests {
         },
     )
 
-    fun createAccount(deviceName: String, deviceKey: String?) = RequestSpec(
+    /** `pow`: the answer to a challenge the service sent back the first time (see [Pow]) */
+    fun createAccount(deviceName: String, deviceKey: String?, pow: JsonObject? = null) = RequestSpec(
         "POST", "/v1/accounts", auth = false,
         body = buildJsonObject {
             put("device_name", deviceName)
             deviceKey?.let { put("device_key", it) }
+            pow?.let { put("pow", it) }
         },
     )
 
@@ -127,7 +130,10 @@ object Requests {
 
     fun devices() = RequestSpec("GET", "/v1/devices")
 
-    /** Where to pay for `plan` (month, year or life): the answer holds `checkout_url`, opened in the browser */
+    /** What is on sale and for how much, and whether it can be bought at all: no sign-in needed. Nothing about money is written in the app */
+    fun plans() = RequestSpec("GET", "/v1/plans", auth = false)
+
+    /** Where to pay for `plan` (year, year_once or life): the answer holds `checkout_url`, opened in the browser */
     fun checkout(plan: String) = RequestSpec("POST", "/v1/checkout", body = buildJsonObject { put("plan", plan) })
 
     /** `why`: what set the pull off — `open`, `push`, `reconnect`, `manual`, `pair` (the service counts pulls by it) */
@@ -138,6 +144,12 @@ object Requests {
             why?.let { add("why" to it) }
         },
     )
+
+    /**
+     * One item again, for a fresh download address (the one it came with works for five minutes): the pull after the one before it.
+     * It never moves the phone's place in the list, and the item is simply missing when the service no longer has it (expired).
+     */
+    fun itemAgain(seq: Long) = pull(seq - 1, limit = 1, why = "manual")
 
     /** This phone's address at the system push service; a blank `token` takes it off again */
     fun registerPush(token: String?) = RequestSpec(
@@ -184,8 +196,16 @@ class ApiError(val status: Int, val code: String?, val data: JsonObject) : Excep
         if (nowMs == null) errorMessage(code, data, status) else errorMessage(code, data, status, nowMs)
 }
 
-class OfflineError(cause: Throwable?) : Exception("offline", cause) {
-    val sentence: Message get() = Message("offline")
+class OfflineError(private val why: Throwable?) : Exception("offline", why) {
+    /** Why, as far as it is known: no answer in time, no connection made, a name that would not resolve — or just "unavailable" */
+    val sentence: Message get() = Message(
+        when {
+            why is AttemptTimeout -> "offlineSlow"
+            why is io.ktor.client.network.sockets.ConnectTimeoutException -> "offlineConnect"
+            why != null && why::class.simpleName == "UnknownHostException" -> "offlineDns"
+            else -> "offline"
+        },
+    )
 }
 
 /** An answer that worked. `deduped`: the same thing was sent a moment ago — still a success. */

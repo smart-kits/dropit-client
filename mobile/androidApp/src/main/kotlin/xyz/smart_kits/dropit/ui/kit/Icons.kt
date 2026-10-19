@@ -32,6 +32,7 @@ private fun circle(cx: Float, cy: Float, r: Float) = "M${cx + r} ${cy}a$r $r 0 1
 object Icons {
     val Clip by lazy { line("clip", "M20.5 11.5l-8.2 8.2a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8") }
     val File by lazy { line("file", "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5") }
+    val Down by lazy { line("down", "M12 4v11M7 11l5 5 5-5M5 20h14") }
     val Copy by lazy { line("copy", "M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z", "M5 15V6a2 2 0 0 1 2-2h8") }
     val Pull by lazy { line("pull", "M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5") }
     val Plus by lazy { line("plus", "M12 5v14M5 12h14") }
@@ -43,6 +44,10 @@ object Icons {
             "M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
         )
     }
+    val Up by lazy { line("up", "M12 19V6M6.5 11.5L12 6l5.5 5.5") }
+    val Menu by lazy { line("menu", "M4 7h16M4 12h16M4 17h16") }
+    val Check by lazy { line("check", "M5 12.5l4.5 4.5L19 7") }
+    val Alert by lazy { line("alert", "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z", "M12 8v5", "M12 16v.01") }
     val Scan by lazy { line("scan", "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3", "M8 12h8") }
     val Torch by lazy { line("torch", "M8 3h8l-1 6H9z", "M9 9h6v11a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z", "M12 13v3") }
     val Dots by lazy { line("dots", circle(5f, 12f, 1f), circle(12f, 12f, 1f), circle(19f, 12f, 1f)) }

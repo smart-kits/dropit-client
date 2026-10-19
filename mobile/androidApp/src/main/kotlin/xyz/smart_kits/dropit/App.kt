@@ -15,8 +15,16 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import xyz.smart_kits.dropit.entry.ClipboardActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import xyz.smart_kits.dropit.receive.Arrivals
+import xyz.smart_kits.dropit.receive.Downloader
+import xyz.smart_kits.dropit.receive.Receiving
 import xyz.smart_kits.dropit.shared.DropitClient
 import xyz.smart_kits.dropit.shared.Strings
+import xyz.smart_kits.dropit.update.Updater
 import xyz.smart_kits.dropit.work.Outbox
 import java.util.Locale
 
@@ -27,8 +35,21 @@ class App : Application() {
         private set
     lateinit var account: Account
         private set
+    lateinit var plans: PlansRepo
+        private set
+    lateinit var downloader: Downloader
+        private set
     lateinit var letters: LetterBox
         private set
+    lateinit var receiving: Receiving
+        private set
+    lateinit var arrivals: Arrivals
+        private set
+    lateinit var updater: Updater
+        private set
+
+    /** For what has to go on after the screen is gone: telling the service this phone's push address, catching up */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val strings: Strings get() = Strings.forLanguage(Locale.getDefault().toLanguageTag())
 
@@ -61,17 +82,48 @@ class App : Application() {
         super.onCreate()
         store = Store(this)
         val http = HttpClient(OkHttp) {
+            // A connection is the expensive part on a bad phone network (measured here: ~0.9 s round trip, a third of packets lost, so
+            // opening one takes 5–8 s): it is kept and used again. A small heartbeat keeps it alive and notices a dead one in seconds
+            // instead of at the read timeout. Ordinary requests have their own deadline in the client; the socket limit is for files
+            engine {
+                config {
+                    pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
             install(HttpTimeout) {
-                connectTimeoutMillis = 15_000
+                connectTimeoutMillis = 12_000
                 socketTimeoutMillis = 60_000
             }
         }
-        client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','))
+        client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','), trace = { android.util.Log.i("dropit-net", it) })
         account = Account(this, store, client)
+        plans = PlansRepo(store, client)
         letters = LetterBox(this)
+        arrivals = Arrivals(this)
+        downloader = Downloader(this, client, letters)
+        receiving = Receiving(this, store, client, letters, arrivals) {
+            // The service keeps things 1 day on the free plan and 10 on the paid one (the service's numbers when it has said them)
+            val days = if (account.me()?.paid == true) plans.paid.days else plans.free.days
+            days * 86_400_000L
+        }
+        receiving.init()
+        updater = Updater(this, store)
         createChannels()
         addShortcuts()
         Outbox(this).sweep()
+        if (updater.enabled) scope.launch { updater.check() }
+        // What is on sale and for how much: asked for again when what is kept is more than an hour old
+        scope.launch { plans.refresh() }
+        // Each start: the service is told the push address if it changed; if the last check could not be made (no network,
+        // the service could not send), it is made again now. What is waiting is NOT fetched here: this runs for every process
+        // start, including the one a push wakes — and a quiet pull here would take what that push is about to announce.
+        // The screen fetches it when it opens (MainActivity.onResume), whatever became of the push address.
+        if (account.signedIn) {
+            scope.launch {
+                if (store.receiveOn && store.receiveState == null) receiving.enable()
+                else receiving.register()
+            }
+        }
     }
 
     private fun createChannels() {
@@ -80,6 +132,11 @@ class App : Application() {
             NotificationChannel(CHANNEL_SEND, getString(R.string.channel_send), NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = getString(R.string.channel_send_desc)
                 setSound(null, null)
+            },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_RECEIVE, getString(R.string.channel_receive), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = getString(R.string.channel_receive_desc)
             },
         )
     }
@@ -106,6 +163,7 @@ class App : Application() {
 
     companion object {
         const val CHANNEL_SEND = "send"
+        const val CHANNEL_RECEIVE = "receive"
     }
 }
 

@@ -2,12 +2,14 @@
 
 **English** · [简体中文](./README.zh-CN.md)
 
-> In development, not released yet. Nothing here is installable from a store or the website.
+> Version 0.2.0 is the first release: download the APK from the Releases page or from the dropit website. Not on Google Play yet.
 
 Send without opening the app: *Share* → **dropit**, select text → **dropit**, *Open with* → **dropit**, or
 *Send clipboard* from quick settings or a long press on the icon. Open the app to write, attach files and see
 what this phone sent. Join by scanning the QR code another device shows, or by typing its pairing code; add
-and remove devices; see what each plan gives. Receiving on the phone is being built.
+and remove devices; see what each plan gives. When another device sends something, the phone shows a notification (system push; it needs Google Play services on the phone) with Copy, Open and Share on it. Files that arrive wait for a tap: **Save** puts one in Downloads/dropit, then Open, Share (and Copy image for a picture) work without the network. Each file says until when the service still has it (1 day on the free plan, 10 on the paid one): after that it shows as expired and can't be saved, because dropit delivers, it doesn't store; a file already saved stays on the phone. Each save counts against the account's downloads for the day. Saving needs Android 10 or newer. The build from the website checks for updates by itself.
+
+When many accounts were created from one network in a day, creating one more may take a few seconds of computing on the phone first: it shows "Getting the account ready…", then goes on by itself.
 
 It looks like the rest of dropit: an airmail envelope you send from, a red stamp that sends, a RETURNED mark
 on what did not go. English by default, Chinese when the phone is set to Chinese; light and dark follow the system.
@@ -46,3 +48,8 @@ anything; any other QR code is ignored.
 Two flavors: `site` (from the website, updates itself) and `play` (Google Play). Release signing reads a
 `keystore.properties` kept outside this repository: the path in `DROPIT_SIGNING`, otherwise
 `../../signing/keystore.properties`. Its `storeFile` is relative to that file. Without it, release builds are unsigned.
+
+## The other devices
+
+dropit has a client for each of your devices, and they all join the same account with a pairing code. Which ones send, which receive, and how to
+combine them: [all the clients](../README.md#on-every-device-you-own). Or open [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) on any device: it recommends one.

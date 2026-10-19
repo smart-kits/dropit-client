@@ -1,11 +1,13 @@
 package xyz.smart_kits.dropit.ui
 
+import kotlinx.coroutines.launch
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +18,8 @@ import xyz.smart_kits.dropit.ui.theme.DropitTheme
 /** Where the app is. Home is underneath everything; the rest stack on it and go back to it. */
 sealed interface Screen {
     data object Settings : Screen
+    data object Account : Screen
+    data object About : Screen
     data object Devices : Screen
     data object AddDevice : Screen
     /** `why`: what limit was just hit, when that is what brought the person here */
@@ -49,16 +53,21 @@ class MainActivity : ComponentActivity() {
                 val back: () -> Unit = { stack.removeLastOrNull() }
                 BackHandler(enabled = stack.isNotEmpty(), onBack = back)
                 val top = stack.lastOrNull()
+                val update by app.updater.state.collectAsState()
                 when {
                     !signedIn && top == Screen.Scan -> ScanScreen(onCode = { incomingCode = it; scanned = true; back() }, onBack = back)
                     !signedIn -> JoinScreen(incomingCode, resumed, joinNow = scanned, onJoined = ::joined, onScan = { scanned = false; go(Screen.Scan) })
                     top == null || top == Screen.Scan -> HomeScreen(resumed, offer, onOfferDone = ::offerDone, onSignedOut = ::signedOut, go = go)
                     top is Screen.Onboarding -> OnboardingScreen(resumed, top.gesturesOnly, onDone = { app.store.onboarded = true; back() })
-                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
+                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back)
+                    top == Screen.Account -> AccountScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
+                    top == Screen.About -> AboutScreen(onBack = back)
                     top == Screen.Devices -> DevicesScreen(resumed, go = go, onBack = back)
                     top == Screen.AddDevice -> AddDeviceScreen(go = go, onBack = back)
                     top is Screen.Plans -> PlansScreen(resumed, top.why, onBack = back)
                 }
+                // A newer build: a dialog on any screen; one that must be installed cannot be closed
+                UpdateDialog(update)
             }
         }
     }
@@ -69,6 +78,8 @@ class MainActivity : ComponentActivity() {
         scanned = false
         stack.clear()
         app.sendWaiting()
+        // Background receiving starts on; if the account can't have it, settings say why
+        app.scope.launch { app.receiving.enable() }
         if (!app.store.onboarded) stack += Screen.Onboarding()
     }
 
@@ -80,6 +91,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (signedIn && !app.account.signedIn) signedOut()
+        else if (signedIn) app.scope.launch { app.receiving.pullNow("open") }   // coming back: what came meanwhile (not more than every 30 s)
         resumed++
     }
 

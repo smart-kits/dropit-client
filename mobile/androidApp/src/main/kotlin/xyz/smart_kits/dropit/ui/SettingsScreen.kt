@@ -15,7 +15,11 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +36,8 @@ import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.Me
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.receive.ReceiveStatus
+import xyz.smart_kits.dropit.update.UpdateUi
 import xyz.smart_kits.dropit.shared.PRIVACY_URL
 import xyz.smart_kits.dropit.shared.SOURCE_URL
 import xyz.smart_kits.dropit.shared.fileSize
@@ -44,6 +50,7 @@ import xyz.smart_kits.dropit.ui.kit.Panel
 import xyz.smart_kits.dropit.ui.kit.PanelDivider
 import xyz.smart_kits.dropit.ui.kit.PanelRow
 import xyz.smart_kits.dropit.ui.kit.TitleBar
+import xyz.smart_kits.dropit.ui.kit.Toggle
 import xyz.smart_kits.dropit.ui.kit.Txt
 import xyz.smart_kits.dropit.ui.theme.ink
 import xyz.smart_kits.dropit.ui.theme.sans
@@ -65,17 +72,11 @@ internal fun Page(title: String, onBack: () -> Unit, trailing: @Composable andro
  * Every number comes from the service.
  */
 @Composable
-fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSignedOut: () -> Unit) {
+fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val c = ink
-    var me by remember { mutableStateOf<Me?>(null) }
-    var leaving by remember { mutableStateOf(false) }
     val unrestricted = remember(resumed) { ctx.app.runsInBackground }
-    LaunchedEffect(resumed) {
-        if (me == null) me = ctx.app.account.me()
-        me = ctx.app.account.me(fresh = true)
-    }
 
     Page(stringResource(R.string.label_settings), onBack) {
         // The system keeps the app's language from Android 13 on: one value, changed here or in system settings
@@ -90,6 +91,27 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
 
         GroupHead(stringResource(R.string.label_group_phone))
         Panel {
+            if (ctx.app.receiving.available) {
+                val receive by ctx.app.receiving.status.collectAsState()
+                val notifyOff = remember(resumed) { !ctx.app.arrivals.allowed }
+                PanelRow(
+                    stringResource(R.string.set_receive),
+                    sub = when {
+                        receive == ReceiveStatus.Off -> stringResource(R.string.set_receive_off)
+                        notifyOff -> stringResource(R.string.set_receive_notify)
+                        receive == ReceiveStatus.Push -> stringResource(R.string.set_receive_push)
+                        receive == ReceiveStatus.NoPush -> stringResource(R.string.set_receive_none)
+                        receive is ReceiveStatus.Refused -> ctx.app.strings.render((receive as ReceiveStatus.Refused).why)
+                        else -> stringResource(R.string.set_receive_unknown)
+                    },
+                    subColor = if (receive == ReceiveStatus.Push && !notifyOff) c.navy else c.dim,
+                ) {
+                    Toggle(receive != ReceiveStatus.Off, { on ->
+                        scope.launch { if (on) ctx.app.receiving.enable() else ctx.app.receiving.disable() }
+                    }, name = stringResource(R.string.set_receive))
+                }
+                PanelDivider()
+            }
             PanelRow(stringResource(R.string.set_device_name)) { Txt(ctx.app.account.deviceName(), sans(13.sp), c.dim) }
             PanelDivider()
             PanelRow(
@@ -102,8 +124,26 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
             PanelDivider()
             PanelRow(stringResource(R.string.label_gestures), onClick = { go(Screen.Onboarding(gesturesOnly = true)) }) { Glyph(Icons.Chevron, c.dim, size = 16.dp) }
         }
+    }
+}
 
-        GroupHead(stringResource(R.string.label_group_account))
+/** The account: its devices and plan, and leaving it */
+@Composable
+fun AccountScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSignedOut: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val c = ink
+    var me by remember { mutableStateOf<Me?>(null) }
+    var leaving by remember { mutableStateOf(false) }
+    var signingOut by remember { mutableStateOf(false) }
+    LaunchedEffect(resumed) {
+        if (me == null) me = ctx.app.account.me(stale = true)
+        me = ctx.app.account.me(fresh = true)
+    }
+
+    Box {
+    Page(stringResource(R.string.label_group_account), onBack) {
+        PlanCard(go, Modifier.padding(bottom = 6.dp))
         Panel {
             PanelRow(
                 stringResource(R.string.label_devices), sub = me?.let { stringResource(R.string.set_devices_sub, it.devicesUsed, it.devicesLimit) },
@@ -117,15 +157,6 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
             ) { Glyph(Icons.Chevron, c.dim, size = 16.dp) }
         }
 
-        GroupHead(stringResource(R.string.label_group_about))
-        Panel {
-            PanelRow(stringResource(R.string.set_version), sub = BuildConfig.VERSION_NAME)
-            PanelDivider()
-            PanelRow(stringResource(R.string.privacy), onClick = { ctx.openLink(PRIVACY_URL) }) { Glyph(Icons.External, c.dim, size = 16.dp) }
-            PanelDivider()
-            PanelRow(stringResource(R.string.set_source), onClick = { ctx.openLink(SOURCE_URL) }) { Glyph(Icons.External, c.dim, size = 16.dp) }
-        }
-
         GroupHead(stringResource(R.string.label_group_leave))
         Panel {
             // Red only for what cannot be taken back
@@ -136,9 +167,57 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
     if (leaving) {
         Confirm(
             stringResource(R.string.sign_out_ask), stringResource(R.string.set_sign_out_sub), stringResource(R.string.sign_out_confirm),
-            onConfirm = { leaving = false; scope.launch { ctx.app.account.signOut(); ctx.app.letters.clear(); onSignedOut() } },
+            onConfirm = { leaving = false; signingOut = true; scope.launch { ctx.app.account.signOut(); ctx.app.letters.clear(); onSignedOut() } },
             onDismiss = { leaving = false },
         )
+    }
+    // Leaving waits for the service for a few seconds at most; until then the screen says so and takes no more taps
+    if (signingOut) {
+        Box(
+            Modifier.matchParentSize().background(c.ground.copy(alpha = .85f)).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = {}),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                xyz.smart_kits.dropit.ui.kit.Spinner(c.ink, 20.dp)
+                Txt(stringResource(R.string.signing_out), sans(15.sp), c.ink)
+            }
+        }
+    }
+    }
+}
+
+
+/** The version, updates, privacy and the source */
+@Composable
+fun AboutScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val c = ink
+
+    Page(stringResource(R.string.label_group_about), onBack) {
+        Panel {
+            var checking by remember { mutableStateOf<Boolean?>(null) }   // null: not asked; true: asking; false: asked
+            val update by ctx.app.updater.state.collectAsState()
+            PanelRow(
+                stringResource(R.string.set_version),
+                sub = when {
+                    !BuildConfig.SELF_UPDATE -> BuildConfig.VERSION_NAME
+                    checking == true -> stringResource(R.string.update_checking)
+                    update != UpdateUi.None -> stringResource(R.string.update_available_sub, BuildConfig.VERSION_NAME)
+                    checking == false -> stringResource(R.string.update_latest, BuildConfig.VERSION_NAME)
+                    else -> stringResource(R.string.update_check_sub, BuildConfig.VERSION_NAME)
+                },
+                onClick = if (BuildConfig.SELF_UPDATE && checking != true) ({
+                    checking = true
+                    scope.launch { ctx.app.updater.check(asked = true); checking = false }
+                }) else null,
+            ) { if (checking == true) xyz.smart_kits.dropit.ui.kit.Spinner(c.dim, 16.dp) }
+            if (BuildConfig.SELF_UPDATE && update != UpdateUi.None) UpdateCard(update, Modifier.padding(12.dp))
+            PanelDivider()
+            PanelRow(stringResource(R.string.privacy), onClick = { ctx.openLink(PRIVACY_URL) }) { Glyph(Icons.External, c.dim, size = 16.dp) }
+            PanelDivider()
+            PanelRow(stringResource(R.string.set_source), onClick = { ctx.openLink(SOURCE_URL) }) { Glyph(Icons.External, c.dim, size = 16.dp) }
+        }
     }
 }
 

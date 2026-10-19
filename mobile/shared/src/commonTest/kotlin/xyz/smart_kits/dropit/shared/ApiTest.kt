@@ -3,6 +3,8 @@ package xyz.smart_kits.dropit.shared
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -80,6 +82,33 @@ class ApiTest {
         assertEquals(Message("quotaBytes"), full.sentence())
     }
 
+    @Test fun `limits that say which one and when room frees up`() {
+        val up = assertFailsWith<ApiError> { parse(429, """{"error":"RATE_LIMITED","window":"day","field":"uploads","retry_after":3600}""") }
+        assertEquals("rateDayUploads", up.sentence().key)
+        // Accounts per network per day: says when it opens again, and how many a network may make
+        val limited = ApiError(429, "SIGNUP_LIMITED", buildJsonObject { put("error", "SIGNUP_LIMITED"); put("retry_after", 3600); put("limit", 5) })
+        assertEquals("signupLimitedAt", limited.sentence(0L).key)
+        assertEquals(2, limited.sentence(0L).args.size)
+        assertEquals("5", limited.sentence(0L).args[1])
+        // Offline says why when it knows: no answer in time, no connection made, or just unavailable
+        assertEquals("offlineSlow", OfflineError(AttemptTimeout()).sentence.key)
+        assertEquals("offline", OfflineError(null).sentence.key)
+        assertEquals("offline", OfflineError(Exception("reset")).sentence.key)
+        // without a time it is still the plain sentence
+        assertEquals("errors.SIGNUP_LIMITED", ApiError(429, "SIGNUP_LIMITED", buildJsonObject { put("error", "SIGNUP_LIMITED") }).sentence(0L).key)
+        val down = assertFailsWith<ApiError> { parse(429, """{"error":"RATE_LIMITED","window":"day","field":"downloads","retry_after":3600}""") }
+        assertEquals("rateDayDownloads", down.sentence().key)
+        assertEquals("rateDay", assertFailsWith<ApiError> { parse(429, """{"error":"RATE_LIMITED","window":"day","retry_after":3600}""") }.sentence().key)
+        val bytes = assertFailsWith<ApiError> { parse(507, """{"error":"QUOTA_EXCEEDED","field":"bytes","frees_in":7200}""") }
+        assertEquals(Message("quotaBytesIn", listOf("7200")), bytes.sentence())
+        assertEquals("Storage is full — the oldest item expires in about 2 hours and frees up room", Strings.EN.render(bytes.sentence()))
+        assertEquals("空间已满，最早的一条约 2 小时后到期，到时自动腾出位置", Strings.ZH.render(bytes.sentence()))
+        val items = assertFailsWith<ApiError> { parse(507, """{"error":"QUOTA_EXCEEDED","field":"items","frees_in":600}""") }
+        assertEquals("Too many items waiting — the oldest expires in under an hour and frees up room", Strings.EN.render(items.sentence()))
+        assertEquals("积压的内容太多了，最早的一条不到 1 小时后到期，到时自动腾出位置", Strings.ZH.render(items.sentence()))
+        assertEquals("about 3 days", Strings.EN.render(Message("quotaItemsIn", listOf("200000"))).substringAfter("expires in ").substringBefore(" and"))
+    }
+
     @Test fun `U-E8 an unavailable service and an answer that is not JSON`() {
         assertEquals(Failure.UNAVAILABLE, assertFailsWith<ApiError> { parse(503, """{"error":"GLOBAL_CIRCUIT_OPEN"}""") }.failure)
         val odd = assertFailsWith<ApiError> { parse(500, "<html>oops</html>") }
@@ -90,7 +119,7 @@ class ApiTest {
 
     @Test fun `U-T1 U-T3 every sentence exists in both languages`() {
         assertEquals(Strings.EN.keys, Strings.ZH.keys)
-        for (m in listOf(Message("tooLarge", listOf("5 MB")), Message("rateDay", listOf("08:00")), Message("errors.PAIRING_LIMITED"), Message("offline"))) {
+        for (m in listOf(Message("tooLarge", listOf("5 MB")), Message("rateDay", listOf("08:00")), Message("rateDayUploads", listOf("08:00")), Message("rateDayDownloads", listOf("08:00")), Message("signupLimitedAt", listOf("08:00", "5")), Message("offlineSlow"), Message("offlineConnect"), Message("offlineDns"), Message("errors.PAIRING_LIMITED"), Message("offline"))) {
             for (s in listOf(Strings.EN, Strings.ZH)) {
                 val text = s.render(m)
                 assertFalse(text == m.key, "missing ${m.key}")

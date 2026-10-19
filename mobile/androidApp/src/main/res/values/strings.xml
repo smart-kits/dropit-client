@@ -12,6 +12,11 @@
     <string name="label_sending">Sending</string>
     <string name="label_returned">Returned</string>
     <string name="label_received">Received</string>
+    <string name="label_pull">Pull new items</string>
+    <string name="pulling">Pulling…</string>
+    <string name="pull_none">Nothing new</string>
+    <string name="pull_n">%1$d new</string>
+    <string name="pull_failed">Couldn’t reach the service — try again</string>
     <string name="label_kind_text">Text</string>
     <string name="label_kind_link">Link</string>
     <string name="label_kind_image">Image</string>
@@ -48,7 +53,6 @@
     <string name="label_save">SAVE</string>
     <string name="label_try">Try</string>
     <string name="label_try_month">1 MONTH</string>
-    <string name="label_limited">Limited</string>
     <string name="label_ob_notify">Sent or received —\na notification tells you</string>
     <string name="label_ob_background">Let dropit\nfinish the job</string>
     <string name="label_ob_tile">Copied something?\nPull down and tap</string>
@@ -57,6 +61,14 @@
     <!-- Channels -->
     <string name="channel_send">Send results</string>
     <string name="channel_send_desc">Progress and results of what you send</string>
+    <string name="channel_receive">Arrivals</string>
+    <string name="channel_receive_desc">What your other devices send to this phone</string>
+    <string name="set_receive">Background receiving</string>
+    <string name="set_receive_off">Off: new items show when you open dropit</string>
+    <string name="set_receive_unknown">Couldn’t check just now — it tries again when you open dropit</string>
+    <string name="set_receive_push">On: new items arrive as a notification, even when dropit is closed</string>
+    <string name="set_receive_none">This phone can’t get system push, so new items show when you open dropit</string>
+    <string name="set_receive_notify">Notifications for dropit are off — turn them on to hear about new items</string>
 
     <!-- Sending -->
     <string name="sending_n">Sending %1$d of %2$d…</string>
@@ -92,6 +104,7 @@
     <string name="first_device">First device?</string>
     <string name="create_account">Create a new account</string>
     <string name="create_agree">Agree and create a new account</string>
+    <string name="create_preparing">Getting the account ready…</string>
     <string name="create_note">A new account is separate from any dropit you already use. Creating one sends the same two things as joining.</string>
     <plurals name="join_waiting">
         <item quantity="one">Join, and what you just shared goes out.</item>
@@ -142,6 +155,9 @@
     <string name="up_devices">Paid fits %1$d devices</string>
     <string name="up_realtime">Paid stays real-time</string>
     <string name="up_generic">See what Paid gives you</string>
+    <string name="up_uploads">Keep sending files — a higher daily limit</string>
+    <string name="up_downloads">Keep downloading — %1$d a day</string>
+    <string name="up_kept">Paid keeps items %1$d days</string>
 
     <!-- Onboarding -->
     <string name="ob_step">%1$d / %2$d</string>
@@ -223,14 +239,50 @@
     <string name="plan_first_days">First %1$d days</string>
     <string name="plan_always">Always on</string>
     <string name="plan_per_year">/ year</string>
-    <string name="buy_year">Yearly $%1$s</string>
-    <string name="buy_year_sub">renews each year, cancel anytime</string>
-    <string name="buy_trial">Yearly — first month $%1$s</string>
-    <string name="buy_trial_sub">Less than a coffee, every limit lifted now · then $%1$s a year, cancel anytime</string>
-    <string name="buy_once">One year $%1$s</string>
-    <string name="buy_once_sub">pay once, no renewal</string>
-    <string name="buy_life">Lifetime $%1$s</string>
-    <string name="buy_life_sub">pay once</string>
+    <string name="tile_year_name">Yearly</string>
+    <string name="tile_once_name">One year</string>
+    <string name="tile_life_name">Lifetime</string>
+    <string name="tile_per_first_month">first month</string>
+    <string name="tile_year_note">renews each year · cancel anytime</string>
+    <string name="tile_trial_note">every limit lifted now · then %1$s a year · cancel anytime</string>
+    <string name="tile_once_note">pay once · no renewal</string>
+    <string name="tile_life_note">pay once · yours for good</string>
+    <string name="file_save">Save</string>
+    <string name="file_saving">Saving…</string>
+    <string name="file_saved">Saved to Downloads/dropit.</string>
+    <string name="file_until">Save it before %1$s: after that the service no longer has it.</string>
+    <string name="file_expired">Expired: the service no longer has it. dropit delivers, it doesn\'t store.</string>
+    <string name="file_limit">Today\'s downloads for this account are used up. They start again tomorrow.</string>
+    <string name="file_offline">No connection. Try again when you\'re online.</string>
+    <string name="file_failed">Couldn\'t save it. Try again.</string>
+    <string name="file_unsupported">Saving files needs Android 10 or newer.</string>
+    <string name="file_gone">It was deleted from this phone. Save it again if it hasn\'t expired.</string>
+    <string name="file_copy_image">Copy image</string>
+    <string name="file_image_copied">Image copied.</string>
+    <string name="plan_row_downloads">Downloads a day</string>
+    <string name="plan_name_free">Free plan</string>
+    <string name="plan_name_paid">Paid plan</string>
+    <string name="chip_free">Free</string>
+    <string name="chip_upgrade_label">Upgrade</string>
+    <string name="chip_paid">Paid</string>
+    <string name="menu_name">Menu</string>
+    <string name="menu_settings_sub">Language · background receiving · battery</string>
+    <string name="menu_account_sub">Devices · plan and usage · sign out</string>
+    <string name="menu_about_sub">Version · privacy</string>
+    <string name="card_used">%1$s of %2$s used</string>
+    <string name="card_upgrade_trial">Upgrade: try a month for %1$s</string>
+    <string name="card_upgrade">Upgrade · %1$s a year</string>
+    <string name="tile_year_btn_trial">Try a month · %1$s</string>
+    <string name="tile_year_btn">Subscribe · %1$s a year</string>
+    <string name="tile_year_sub_trial">Then %1$s a year, about %2$s a month · cancel anytime</string>
+    <string name="tile_year_sub">About %1$s a month · renews each year, cancel anytime</string>
+    <string name="tile_life_sub">About %1$s years of the yearly plan, then nothing more to pay</string>
+    <string name="tile_life_btn">Buy lifetime</string>
+    <string name="tile_once_btn">Buy a year</string>
+    <string name="label_best_big">VALUE</string>
+    <string name="label_best_small">BEST</string>
+    <string name="buy_unknown">Prices aren\'t available right now. Check your connection and try again.</string>
+    <string name="buy_closed">Paid plans can\'t be bought right now. Free keeps working as it is.</string>
     <string name="buy_note">You pay in the browser; back here it takes effect by itself.</string>
     <string name="plan_paid_until">Paid until %1$s</string>
     <string name="plan_paid_life">Paid for life</string>
@@ -245,6 +297,12 @@
     <string name="why_devices">All %1$d device slots are in use</string>
     <string name="why_devices_sub">Paid fits %1$d devices.</string>
     <string name="why_realtime">Your %1$d days of real-time delivery are over</string>
+    <string name="why_uploads">Today’s file uploads are used up</string>
+    <string name="why_uploads_sub">Paid has a much higher daily limit.</string>
+    <string name="why_downloads">Today’s downloads are used up (%1$d on Free)</string>
+    <string name="why_downloads_sub">Paid downloads %1$d a day.</string>
+    <string name="why_kept">That file has expired</string>
+    <string name="why_kept_sub">Free keeps items %1$d day, Paid keeps them %2$d days. An expired file can’t be brought back, but the next one will last.</string>
     <string name="why_realtime_sub">Paid stays real-time.</string>
     <!-- Samples shown in the first-run pictures -->
     <string name="ob_sample_app">dropit · now</string>
@@ -258,4 +316,31 @@
     <string name="try_again">Try again</string>
     <string name="add_replace">Replace</string>
     <string name="shortcut_devices">My devices</string>
+
+    <string name="update_version">dropit %1$s is available</string>
+    <string name="update_must">This version can’t be used any more. Update to carry on.</string>
+    <string name="update_now">Update</string>
+    <string name="update_install">Install</string>
+    <string name="update_downloading">Downloading…</string>
+    <string name="update_downloading_of">Downloading… %1$s of %2$s</string>
+    <string name="update_failed">Couldn’t download it. Check your connection and try again.</string>
+    <string name="update_mismatch">The downloaded file isn’t the one expected, so it wasn’t installed. Try again.</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_latest">%1$s · up to date</string>
+    <string name="update_check_sub">%1$s · tap to check for updates</string>
+    <string name="update_available_sub">%1$s · an update is ready</string>
+    <string name="update_later">Later</string>
+    <string name="sel_count">%d selected</string>
+    <string name="sel_all">All</string>
+    <string name="sel_clear">Clear</string>
+    <string name="sel_start">Select to clear</string>
+    <string name="cleared_n">Cleared %d from this list</string>
+    <string name="undo">Undo</string>
+    <string name="slow_net">The connection is slow — still working…</string>
+    <string name="signing_out">Signing out…</string>
+    <string name="removing_device">Removing %s…</string>
+    <string name="slow_net_load">The connection is slow — still loading…</string>
+    <string name="other_plans">Other plans</string>
+    <string name="no_browser">No app could open the link. Install or enable a browser and try again</string>
+    <string name="chip_upgrade_price">Upgrade %s</string>
 </resources>

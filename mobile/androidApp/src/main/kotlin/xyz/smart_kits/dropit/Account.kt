@@ -1,6 +1,7 @@
 package xyz.smart_kits.dropit
 
 import android.annotation.SuppressLint
+import kotlinx.coroutines.withTimeoutOrNull
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -18,6 +19,7 @@ import xyz.smart_kits.dropit.shared.DropitClient
 import xyz.smart_kits.dropit.shared.Failure
 import xyz.smart_kits.dropit.shared.OfflineError
 import xyz.smart_kits.dropit.shared.Requests
+import xyz.smart_kits.dropit.shared.createAccount
 import xyz.smart_kits.dropit.shared.deviceKey
 
 /** What `/v1/me` says, as far as this app uses it */
@@ -54,6 +56,9 @@ data class Me(
     }
 }
 
+/** How long leaving waits for the service to take this device off before leaving anyway */
+private const val SIGN_OUT_WAIT_MS = 5_000L
+
 class Account(private val context: Context, private val store: Store, private val client: DropitClient) {
     val signedIn: Boolean get() = store.tokenNow() != null
 
@@ -73,7 +78,25 @@ class Account(private val context: Context, private val store: Store, private va
         client.send(Requests.claim(code.trim().uppercase(), deviceName(), fingerprint(), store.previousToken)),
     )
 
-    suspend fun createAccount() = signIn(client.send(Requests.createAccount(deviceName(), fingerprint())))
+    /** `onPreparing`: told when the service has asked for a little computing first, and when that is done */
+    suspend fun createAccount(onPreparing: (Boolean) -> Unit = {}) =
+        signIn(client.createAccount(deviceName(), fingerprint(), onPreparing))
+
+    /**
+     * An account just created is a free one: written down at once as what `/v1/me` would say, so the home screen can show its plan
+     * without waiting for the first answer (on a slow connection that is several seconds). The numbers are the ones the app already
+     * has from the service's plan list; the next real answer replaces all of it.
+     */
+    fun assumeFree(devices: Int, spaceBytes: Long, fileBytes: Long) {
+        store.meJson = JsonObject(mapOf(
+            "plan" to kotlinx.serialization.json.JsonPrimitive("free"),
+            "devices_used" to kotlinx.serialization.json.JsonPrimitive(1),
+            "devices_limit" to kotlinx.serialization.json.JsonPrimitive(devices),
+            "bytes_used" to kotlinx.serialization.json.JsonPrimitive(0),
+            "bytes_limit" to kotlinx.serialization.json.JsonPrimitive(spaceBytes),
+            "item_bytes_limit" to kotlinx.serialization.json.JsonPrimitive(fileBytes),
+        )).toString()
+    }
 
     private fun signIn(a: Answer) {
         store.signedIn(a.str("token") ?: error("no token in answer"), a.str("device_id") ?: "")
@@ -85,14 +108,19 @@ class Account(private val context: Context, private val store: Store, private va
      * on this phone takes this device's place.
      */
     suspend fun signOut() {
-        store.deviceId?.let { id -> runCatching { client.send(Requests.revoke(id)) } }
+        // Bounded: on a slow or half-dead connection the request could otherwise hold the screen for a minute. Not removed in time
+        // is the same as offline: the key is kept as previous_token below, and joining again takes this device's place
+        store.deviceId?.let { id -> withTimeoutOrNull(SIGN_OUT_WAIT_MS) { runCatching { client.send(Requests.revoke(id)) } } }
         store.forget()
     }
 
-    /** The account line: cached for an hour, refreshed when asked. Null when it can't be had. */
-    suspend fun me(fresh: Boolean = false): Me? {
+    /**
+     * The account line: cached for an hour, refreshed when asked. Null when it can't be had. [stale]: whatever was kept, however old, is
+     * fine — for drawing a screen at once while the real answer is on its way (the caller asks again with [fresh]).
+     */
+    suspend fun me(fresh: Boolean = false, stale: Boolean = false): Me? {
         val cached = store.meJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-        if (!fresh && cached != null && System.currentTimeMillis() - store.meAt < 3_600_000) return Me.from(cached)
+        if (!fresh && cached != null && (stale || System.currentTimeMillis() - store.meAt < 3_600_000)) return Me.from(cached)
         return try {
             val data = client.send(Requests.me()).data
             store.meJson = data.toString()

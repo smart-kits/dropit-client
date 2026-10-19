@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -69,7 +70,10 @@ fun Txt(
     BasicText(text, modifier, style.copy(color = color, textAlign = align ?: TextAlign.Unspecified), maxLines = maxLines, overflow = overflow)
 }
 
-/** Ink fill for the one thing to do on a screen that has no stamp; hairline outline for the rest */
+/**
+ * Ink fill for the one thing to do on a screen that has no stamp; hairline outline for the rest. With [tint] (the brand blue, for
+ * the ways to pay) the fill is that colour, and an outline button is drawn in it, a little heavier
+ */
 @Composable
 fun Btn(
     text: String,
@@ -79,25 +83,36 @@ fun Btn(
     enabled: Boolean = true,
     small: Boolean = false,
     icon: ImageVector? = null,
+    tint: Color? = null,
+    /** Working on it: a small spinner in front, and no second press */
+    loading: Boolean = false,
 ) {
     val c = ink
     val shape = RoundedCornerShape(6.dp)
+    val accent = tint ?: c.ink
+    val live = enabled && !loading
     Row(
         modifier
             .alpha(if (enabled) 1f else .6f)
             .clip(shape)
-            .background(if (solid) c.ink else c.paper)
-            .border(1.dp, if (solid) c.ink else c.line, shape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .background(if (solid) accent else c.paper)
+            .border(if (tint != null && !solid) 1.5.dp else 1.dp, if (solid) accent else tint ?: c.line, shape)
+            .clickable(enabled = live, role = Role.Button, onClick = onClick)
             .defaultMinSize(minHeight = if (small) 34.dp else 44.dp)
             .padding(horizontal = if (small) 12.dp else 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val fg = if (solid) c.paper else c.ink
-        if (icon != null) Glyph(icon, fg)
+        val fg = if (solid) c.paper else tint ?: c.ink
+        if (loading) Spinner(fg) else if (icon != null) Glyph(icon, fg)
         Txt(text, sans(if (small) 13.sp else 15.sp, if (solid) FontWeight.SemiBold else FontWeight.Normal, lineHeight = 20.sp), fg, align = TextAlign.Center)
     }
+}
+
+/** A small turning ring in the colour of the words next to it */
+@Composable
+fun Spinner(color: Color, size: Dp = 16.dp, modifier: Modifier = Modifier) {
+    androidx.compose.material3.CircularProgressIndicator(modifier.size(size), color = color, strokeWidth = 2.dp)
 }
 
 /** A quiet action in a row: pencil-grey words, an icon in front if it has one. Red only for removing. */
@@ -111,18 +126,22 @@ fun LinkAction(
     name: String? = null,
     enabled: Boolean = true,
     underline: Boolean = false,
+    iconSize: androidx.compose.ui.unit.Dp = 18.dp,
+    minSize: androidx.compose.ui.unit.Dp = 40.dp,
+    /** Working on it: the icon turns into a small spinner */
+    loading: Boolean = false,
 ) {
     Row(
         modifier
             .alpha(if (enabled) 1f else .5f)
             .clip(RoundedCornerShape(6.dp))
             .clickable(enabled = enabled, role = Role.Button, onClickLabel = name, onClick = onClick)
-            .defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
+            .defaultMinSize(minWidth = minSize, minHeight = minSize)
             .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Glyph(icon, color, name = if (text == null) name else null)
+        if (loading) Spinner(color, iconSize - 4.dp) else if (icon != null) Glyph(icon, color, size = iconSize, name = if (text == null) name else null)
         if (text != null) {
             Txt(text, sans(13.sp).let { if (underline) it.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline) else it }, color, maxLines = 1)
         }
@@ -205,7 +224,9 @@ fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = M
     Box(
         modifier
             .size(width = 48.dp, height = 40.dp)
-            .toggleable(checked, remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange),
+            .toggleable(checked, remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange)
+            // Read out with its name (the row's text is a separate node: a bare switch says only "switch")
+            .semantics { if (name != null) contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(width = 38.dp, height = 22.dp).clip(CircleShape).background(if (checked) c.navy else c.line)) {

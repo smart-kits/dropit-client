@@ -7,8 +7,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
 import xyz.smart_kits.dropit.shared.Letter
+import xyz.smart_kits.dropit.shared.LetterFile
 import xyz.smart_kits.dropit.shared.keepRecent
 import xyz.smart_kits.dropit.shared.withLetter
+import xyz.smart_kits.dropit.shared.withoutLetters
 import java.io.File
 
 /**
@@ -34,6 +36,37 @@ class LetterBox(context: Context) {
     @Synchronized
     fun clear() = save(emptyList())
 
+    // The small pictures of letters just cleared stay until the undo is over, so a letter put back still has its picture
+    private var held: Set<String> = emptySet()
+
+    /** Clear these letters from the list. Returns them, for [restore]; their small pictures are kept until [release]. */
+    @Synchronized
+    fun remove(ids: Set<String>): List<Letter> {
+        val gone = state.value.filter { it.id in ids }
+        held = gone.flatMap { l -> l.files.mapNotNull { it.thumb } }.toSet()
+        save(withoutLetters(state.value, ids))
+        return gone
+    }
+
+    @Synchronized
+    fun restore(letters: List<Letter>) {
+        var list = state.value
+        val now = System.currentTimeMillis()
+        for (l in letters) list = withLetter(list, l, now)
+        held = emptySet()
+        save(list)
+    }
+
+    /** The undo is over: the cleared letters' pictures can go */
+    @Synchronized
+    fun release() { held = emptySet(); save(state.value) }
+
+    /** Change one file of one letter: it was saved (where), or the service no longer has it */
+    @Synchronized
+    fun update(letterId: String, seq: Long?, change: (LetterFile) -> LetterFile) = save(
+        state.value.map { l -> if (l.id != letterId) l else l.copy(files = l.files.map { f -> if (f.seq == seq) change(f) else f }) },
+    )
+
     private fun save(list: List<Letter>) {
         state.value = list
         runCatching {
@@ -42,7 +75,7 @@ class LetterBox(context: Context) {
             tmp.renameTo(file)
         }
         // Small copies of pictures whose letter is gone go with it
-        val kept = list.flatMap { l -> l.files.mapNotNull { it.thumb } }.toSet()
+        val kept = list.flatMap { l -> l.files.mapNotNull { it.thumb } }.toSet() + held
         thumbs.listFiles()?.filter { it.absolutePath !in kept }?.forEach { it.delete() }
     }
 

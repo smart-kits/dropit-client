@@ -1,6 +1,7 @@
 package xyz.smart_kits.dropit.shared
 
 import io.ktor.client.HttpClient
+import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
@@ -24,6 +25,58 @@ class ClientTest {
 
     private val json = headersOf(HttpHeaders.ContentType, "application/json")
     private fun dropped(): Nothing = throw Exception("connection reset")
+
+    @Test fun `a request that goes quiet is given up after the deadline and a read is tried again, a write is not`() = runTest {
+        var n = 0
+        val engine = MockEngine { _ ->
+            n++
+            if (n == 1) kotlinx.coroutines.delay(5_000)     // a connection that went quiet
+            respond("""{"devices":[]}""", HttpStatusCode.OK, json)
+        }
+        val waits = mutableListOf<Long>()
+        val t0 = kotlin.time.TimeSource.Monotonic.markNow()
+        val a = DropitClient(HttpClient(engine), Store(), listOf("https://a.example"), sleep = { waits += it }, attemptMs = 300).send(Requests.devices())
+        assertEquals(2, n)
+        assertEquals(listOf(RETRY_MS[0]), waits)
+        assertTrue(t0.elapsedNow().inWholeMilliseconds < 3_000, "gave up at the deadline, not when the quiet connection finally answered")
+        assertTrue(a.data.containsKey("devices"))
+
+        var m = 0
+        val stuck = MockEngine { _ -> m++; kotlinx.coroutines.delay(5_000); respond("{}", HttpStatusCode.OK, json) }
+        assertFailsWith<OfflineError> { DropitClient(HttpClient(stuck), Store(), listOf("https://a.example"), sleep = {}, attemptMs = 300).send(Requests.createAccount("Phone", null)) }
+        assertEquals(1, m)
+    }
+
+    @Test fun `asking for a checkout is tried again when no answer comes, creating an account is not`() = runTest {
+        var n = 0
+        val engine = MockEngine { _ ->
+            n++
+            if (n == 1) kotlinx.coroutines.delay(5_000)
+            respond("""{"checkout_url":"https://x.example/upgrade?_ptxn=txn_1","transaction_id":"txn_1"}""", HttpStatusCode.OK, json)
+        }
+        val a = DropitClient(HttpClient(engine), Store(), listOf("https://a.example"), sleep = {}, attemptMs = 300).send(Requests.checkout("year"))
+        assertEquals(2, n)
+        assertTrue(a.str("checkout_url")!!.contains("_ptxn"))
+    }
+
+    @Test fun `a connection that never opened is tried again even for creating an account, a dropped one is not`() = runTest {
+        var n = 0
+        val engine = MockEngine { _ ->
+            n++
+            if (n <= 2) throw ConnectTimeoutException("connect", null)
+            respond("""{"user_id":"u","device_id":"d","token":"dk_x"}""", HttpStatusCode.OK, json)
+        }
+        val waits = mutableListOf<Long>()
+        val a = DropitClient(HttpClient(engine), Store(), listOf("https://a.example"), sleep = { waits += it }).send(Requests.createAccount("Phone", null))
+        assertEquals("dk_x", a.str("token"))
+        assertEquals(3, n)
+        assertEquals(RETRY_MS, waits)
+
+        var m = 0
+        val dropping = MockEngine { _ -> m++; dropped() }
+        assertFailsWith<OfflineError> { DropitClient(HttpClient(dropping), Store(), listOf("https://a.example"), sleep = {}).send(Requests.createAccount("Phone", null)) }
+        assertEquals(1, m)
+    }
 
     @Test fun `U-R1 the second address works and is remembered first`() = runTest {
         val seen = mutableListOf<String>()

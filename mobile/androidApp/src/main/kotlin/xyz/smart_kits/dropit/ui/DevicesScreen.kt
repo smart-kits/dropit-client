@@ -41,6 +41,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import xyz.smart_kits.dropit.BuildConfig
+import kotlinx.coroutines.withTimeoutOrNull
+import xyz.smart_kits.dropit.shared.AttemptTimeout
+import xyz.smart_kits.dropit.shared.OfflineError
+import xyz.smart_kits.dropit.ui.kit.GIVE_UP_AFTER_MS
+import xyz.smart_kits.dropit.ui.kit.LoadingRows
+import xyz.smart_kits.dropit.ui.kit.rememberSlow
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.Plans
@@ -52,6 +58,7 @@ import xyz.smart_kits.dropit.ui.kit.Icons
 import xyz.smart_kits.dropit.ui.kit.LinkAction
 import xyz.smart_kits.dropit.ui.kit.Panel
 import xyz.smart_kits.dropit.ui.kit.PanelDivider
+import xyz.smart_kits.dropit.ui.kit.ErrorLine
 import xyz.smart_kits.dropit.ui.kit.Returned
 import xyz.smart_kits.dropit.ui.kit.Tag
 import xyz.smart_kits.dropit.ui.kit.Txt
@@ -119,25 +126,28 @@ fun DevicesScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
     var error by remember { mutableStateOf<Throwable?>(null) }
     var limit by remember { mutableStateOf(0) }
     var removing by remember { mutableStateOf<Device?>(null) }
+    var removingNow by remember { mutableStateOf<String?>(null) }
     var round by remember { mutableStateOf(0) }
     val me = ctx.app.store.deviceId
 
     LaunchedEffect(resumed, round) {
-        try {
-            devices = Device.listFrom(ctx.app.client.send(Requests.devices()).data)
-            error = null
-        } catch (e: Throwable) {
-            error = e
+        // A wait has an end: past it the page says so and offers to try again, instead of turning for ever
+        error = null
+        val finished = withTimeoutOrNull(GIVE_UP_AFTER_MS) {
+            try { devices = Device.listFrom(ctx.app.client.send(Requests.devices()).data) } catch (e: Throwable) { error = e }
+            true
         }
-        limit = ctx.app.account.me(fresh = true)?.devicesLimit ?: limit
+        if (finished == null) error = OfflineError(AttemptTimeout())
+        limit = withTimeoutOrNull(8_000) { ctx.app.account.me(fresh = true)?.devicesLimit } ?: limit
     }
+    val slow = rememberSlow(devices == null && error == null)
 
     Page(stringResource(R.string.label_devices), onBack, trailing = {
         devices?.let { Txt(stringResource(R.string.dev_count, it.size, limit), mono(12.sp), c.dim, Modifier.padding(end = 4.dp)) }
     }) {
         val list = devices
         when {
-            list == null && error == null -> Txt(stringResource(R.string.loading), sans(13.sp), c.dim, Modifier.padding(vertical = 16.dp))
+            list == null && error == null -> LoadingRows(slow, Modifier.padding(top = 4.dp))
             list != null -> {
                 val now = remember(list) { System.currentTimeMillis() }
                 Panel {
@@ -150,12 +160,13 @@ fun DevicesScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
                         }
                     }
                 }
+                removingNow?.let { n -> Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { xyz.smart_kits.dropit.ui.kit.Spinner(c.dim, 14.dp); Txt(stringResource(R.string.removing_device, n), sans(13.sp), c.dim) } }
                 Btn(stringResource(R.string.label_add_device), { go(Screen.AddDevice) }, Modifier.fillMaxWidth().padding(top = 14.dp), icon = Icons.Plus)
                 Txt(stringResource(R.string.dev_remove_note), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(top = 10.dp))
             }
         }
         error?.let {
-            Returned(listOf(errorText(it)), Modifier.padding(top = 12.dp))
+            ErrorLine(errorText(it), Modifier.padding(top = 12.dp))
             Btn(stringResource(R.string.try_again), { round++ }, Modifier.padding(top = 10.dp), small = true)
         }
     }
@@ -165,8 +176,10 @@ fun DevicesScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
             stringResource(R.string.dev_remove_ask, d.name), stringResource(R.string.dev_remove_note), stringResource(R.string.remove),
             onConfirm = {
                 removing = null
+                removingNow = d.name
                 scope.launch {
                     try { ctx.app.client.send(Requests.revoke(d.id)) } catch (e: Throwable) { error = e }
+                    removingNow = null
                     round++
                 }
             },
@@ -182,6 +195,7 @@ fun DevicesScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
 @Composable
 fun AddDeviceScreen(go: (Screen) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
+    val buy = rememberBuy()
     val c = ink
     var devices by remember { mutableStateOf<List<Device>?>(null) }
     var limit by remember { mutableStateOf<Int?>(null) }
@@ -194,28 +208,36 @@ fun AddDeviceScreen(go: (Screen) -> Unit, onBack: () -> Unit) {
     var round by remember { mutableStateOf(0) }
     val me = ctx.app.store.deviceId
 
-    LaunchedEffect(Unit) {
-        try {
-            devices = Device.listFrom(ctx.app.client.send(Requests.devices()).data)
-            limit = ctx.app.account.me(fresh = true)?.devicesLimit
-        } catch (e: Throwable) {
-            error = e
+    // Keyed on [round] too: "try again" starts the whole thing over, including the list of devices when that was what failed
+    LaunchedEffect(round) {
+        if (devices != null) return@LaunchedEffect
+        error = null
+        val finished = withTimeoutOrNull(GIVE_UP_AFTER_MS) {
+            try {
+                devices = Device.listFrom(ctx.app.client.send(Requests.devices()).data)
+                limit = withTimeoutOrNull(8_000) { ctx.app.account.me(fresh = true)?.devicesLimit }
+            } catch (e: Throwable) { error = e }
+            true
         }
+        if (finished == null) error = OfflineError(AttemptTimeout())
     }
     val list = devices
     val full = list != null && limit != null && list.size >= limit!!
     // A code is asked for once it is known whose place it takes (or that there is room)
     LaunchedEffect(list, replace, round) {
         if (list == null || (full && replace == null)) return@LaunchedEffect
-        try {
-            val a = ctx.app.client.send(Requests.pair(replace?.id))
-            code = a.str("code")
-            expiresAt = a.data["expires_at"]?.jsonPrimitive?.longOrNull ?: (System.currentTimeMillis() + 300_000)
-            error = null
-        } catch (e: Throwable) {
-            error = e
+        error = null
+        val finished = withTimeoutOrNull(GIVE_UP_AFTER_MS) {
+            try {
+                val a = ctx.app.client.send(Requests.pair(replace?.id))
+                code = a.str("code")
+                expiresAt = a.data["expires_at"]?.jsonPrimitive?.longOrNull ?: (System.currentTimeMillis() + 300_000)
+            } catch (e: Throwable) { error = e }
+            true
         }
+        if (finished == null) error = OfflineError(AttemptTimeout())
     }
+    val slow = rememberSlow(error == null && code == null && joined == null && !(full && replace == null && list != null))
     // Count down, and look every few seconds for the new device: when it is there, say so and stop
     LaunchedEffect(code) {
         val before = list.orEmpty().map { it.id }.toSet()
@@ -247,7 +269,7 @@ fun AddDeviceScreen(go: (Screen) -> Unit, onBack: () -> Unit) {
                     }
                 }
                 // The other way out, said once: a paid plan has room for more
-                if (BuildConfig.PAYMENTS) Btn(upgradeWord("devices"), { go(Screen.Plans("devices")) }, Modifier.fillMaxWidth().padding(top = 14.dp))
+                if (BuildConfig.PAYMENTS && LocalContext.current.app.plans.offering) Btn(upgradeWord("devices"), { buy.start() }, Modifier.fillMaxWidth().padding(top = 14.dp), loading = buy.opening != null)
             }
             code != null -> {
                 Panel {
@@ -266,10 +288,10 @@ fun AddDeviceScreen(go: (Screen) -> Unit, onBack: () -> Unit) {
                     }
                 }
             }
-            error == null -> Txt(stringResource(R.string.loading), sans(13.sp), c.dim, Modifier.padding(vertical = 16.dp))
+            error == null -> LoadingRows(slow, Modifier.padding(top = 4.dp), rows = 2)
         }
         error?.let {
-            Returned(listOf(errorText(it)), Modifier.padding(top = 12.dp))
+            ErrorLine(errorText(it), Modifier.padding(top = 12.dp))
             Btn(stringResource(R.string.try_again), { round++ }, Modifier.padding(top = 10.dp), small = true)
         }
     }

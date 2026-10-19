@@ -11,6 +11,11 @@ plugins {
 // storeFile=dropit-release.jks, storePassword=…, keyAlias=dropit, keyPassword=…
 val keystoreFile = System.getenv("DROPIT_SIGNING")?.let(::File)
     ?: rootProject.file("../../signing/keystore.properties")
+// The system push project's identifiers: from local.properties or the environment (FIREBASE_APP_ID, FIREBASE_API_KEY,
+// FIREBASE_PROJECT_ID, FIREBASE_SENDER_ID), never from the repository. Without them the build has no system push.
+val localProps = Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) }
+fun firebase(name: String): String = System.getenv("FIREBASE_$name") ?: localProps.getProperty("firebase.${name.lowercase()}").orEmpty()
+
 val keystore = keystoreFile.takeIf { it.exists() }?.let { f ->
     Properties().apply { f.inputStream().use(::load) }
 }
@@ -23,9 +28,10 @@ android {
         applicationId = "xyz.smart_kits.dropit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         buildConfigField("String", "ENDPOINTS", "\"https://dropit.smart-kits.xyz\"")
+        for (name in listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID")) buildConfigField("String", "FIREBASE_$name", "\"${firebase(name)}\"")
     }
 
     flavorDimensions += "dist"
@@ -34,10 +40,10 @@ android {
         create("site") {
             dimension = "dist"
             buildConfigField("boolean", "SELF_UPDATE", "true")
-            // Off while the website isn't taking payments: the plan table stays, the buy tiles don't show
-            buildConfigField("boolean", "PAYMENTS", "false")
+            // On: what is on sale and for how much comes from the service (GET /v1/plans), and when it says payments are closed the screens say so
+            buildConfigField("boolean", "PAYMENTS", "true")
         }
-        // From Google Play: Play updates it; prices and payment links stay out (store rules)
+        // From Google Play: Play updates it; prices and payment links stay out whatever the service says (store rules)
         create("play") {
             dimension = "dist"
             buildConfigField("boolean", "SELF_UPDATE", "false")
@@ -104,6 +110,8 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.zxing.core)
+    // System push: only says "something new arrived"; what arrived is fetched from the service
+    implementation(libs.firebase.messaging)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)

@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!-- Whether Google Play services are on this phone: tells "no system push here" from "no network just now" (Android 11+ hides other apps unless named) -->
+    <queries>
+        <package android:name="com.google.android.gms" />
+    </queries>
+
     <application
         android:name=".App"
         android:allowBackup="false"
@@ -88,6 +93,14 @@
         </service>
 
         <receiver android:name=".work.SendActions" android:exported="false" />
+        <receiver android:name=".receive.ReceiveActions" android:exported="false" />
+
+        <!-- The system's push: says that something arrived, never what -->
+        <service android:name=".receive.PushService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

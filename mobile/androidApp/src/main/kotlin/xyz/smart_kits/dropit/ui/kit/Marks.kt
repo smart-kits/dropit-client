@@ -137,3 +137,21 @@ fun Burst(big: String, modifier: Modifier = Modifier, small: String? = null, siz
         }
     }
 }
+
+/**
+ * Something that did not work, that is not a letter coming back: a list that would not load, a checkout that would not open, an
+ * account that could not be made. A plain red line with a mark in front. The "Returned" stamp is for what was posted and could not
+ * be delivered, and only that.
+ */
+@Composable
+fun ErrorLine(text: String, modifier: Modifier = Modifier) {
+    val red = ink.red
+    Row(
+        modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Assertive },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Glyph(Icons.Alert, red, Modifier.padding(top = 1.dp), size = 18.dp)
+        Txt(text, sans(13.sp, FontWeight.SemiBold, lineHeight = 19.sp), red, Modifier.weight(1f))
+    }
+}

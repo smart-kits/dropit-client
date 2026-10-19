@@ -9,7 +9,18 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +39,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
@@ -75,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -83,6 +96,9 @@ import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.Me
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.shared.FileState
+import xyz.smart_kits.dropit.shared.state
+import xyz.smart_kits.dropit.receive.Downloader
 import xyz.smart_kits.dropit.shared.Letter
 import xyz.smart_kits.dropit.shared.LetterFile
 import xyz.smart_kits.dropit.shared.LetterShape
@@ -96,6 +112,7 @@ import xyz.smart_kits.dropit.ui.kit.Glyph
 import xyz.smart_kits.dropit.ui.kit.Icons
 import xyz.smart_kits.dropit.ui.kit.LinkAction
 import xyz.smart_kits.dropit.ui.kit.Postmark
+import xyz.smart_kits.dropit.ui.kit.ErrorLine
 import xyz.smart_kits.dropit.ui.kit.Returned
 import xyz.smart_kits.dropit.ui.kit.SectionHead
 import xyz.smart_kits.dropit.ui.kit.Stamp
@@ -146,6 +163,7 @@ private fun Context.describe(uri: Uri): Picked {
 fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit, onSignedOut: () -> Unit, go: (Screen) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    var menuOpen by remember { mutableStateOf(false) }
     val c = ink
     val draft = rememberTextFieldState()
     val files = remember { mutableStateListOf<Picked>() }
@@ -153,12 +171,28 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
     var progress by remember { mutableStateOf(0 to 0) }
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     var me by remember { mutableStateOf<Me?>(null) }
+    // A free account, with paying on offer: the places that meet a limit can offer the way past it (the plans screen, naming it)
+    val upgradeOffered = BuildConfig.PAYMENTS && ctx.app.plans.offering && me?.paid == false
     val letters by ctx.app.letters.all.collectAsState()
+    // Every way to upgrade on this screen goes straight to the checkout (see Buy)
+    val buy = rememberBuy()
+    // Clearing the list: a long press picks a letter, then taps pick more; the heading says how many and offers all / clear.
+    // Clearing takes effect at once and can be undone for a few seconds, so there is no "are you sure"
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    var undo by remember { mutableStateOf<List<Letter>?>(null) }
+    val selecting = picked.isNotEmpty()
+    LaunchedEffect(letters) { picked = picked.filter { id -> letters.any { it.id == id } }.toSet() }
+    BackHandler(enabled = selecting) { picked = emptySet() }
+    LaunchedEffect(undo) {
+        val shown = undo ?: return@LaunchedEffect
+        delay(6000)
+        if (undo === shown) { undo = null; ctx.app.letters.release() }
+    }
 
     // What was known shows at once; then the service's answer, each time the screen comes back (devices and
     // plan change elsewhere: another device joins, a payment goes through)
     LaunchedEffect(resumed) {
-        if (me == null) me = ctx.app.account.me()
+        if (me == null) me = ctx.app.account.me(stale = true)
         me = ctx.app.account.me(fresh = true)
         if (!ctx.app.account.signedIn) onSignedOut()
     }
@@ -215,15 +249,35 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
     ) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Brand()
+            Spacer(Modifier.weight(1f))
+            // Until the plan is known the pill's place is held, so it does not pop in and push things
+            if (me == null) Box(Modifier.size(width = 84.dp, height = 34.dp).clip(RoundedCornerShape(17.dp)).border(1.5.dp, c.line, RoundedCornerShape(17.dp)))
             me?.let {
-                val plan = stringResource(if (it.paid) R.string.label_paid else R.string.label_free)
-                Txt(
-                    stringResource(R.string.plan_line, plan, it.devicesUsed, it.devicesLimit), sans(12.sp).copy(fontFeatureSettings = "tnum"), c.dim,
-                    Modifier.weight(1f).padding(start = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            } ?: Spacer(Modifier.weight(1f))
-            LinkAction({ go(Screen.Settings) }, icon = Icons.Gear, name = stringResource(R.string.settings))
+                // Where an upgrade starts: a free account, when paying is on offer, gets a pill that says so and opens the plans in one tap.
+                // Anything else (paid; or paying is off in this build) is just a statement of the plan, and says nothing about buying
+                val offering = BuildConfig.PAYMENTS && ctx.app.plans.offering && !it.paid
+                when {
+                    offering -> {
+                        // The pill is the way to pay, so it says so, and what it costs: the first month when the account can still have it
+                        val year = ctx.app.plans.catalog.value?.offer("year")
+                        val price = year?.let { y -> if (y.trialCents != null && it.trialAvailable) Plans.money(y.trialCents!!, y.currency) else Plans.money(y.cents, y.currency) }
+                        PlanChip(
+                            if (price != null) stringResource(R.string.chip_upgrade_price, price) else stringResource(R.string.chip_free),
+                            accent = true, moving = true, loading = buy.opening != null, action = stringResource(R.string.chip_upgrade_label),
+                        ) { buy.start() }
+                    }
+                    it.paid -> PlanChip(stringResource(R.string.chip_paid), accent = false) { go(Screen.Account) }
+                    else -> Txt(
+                        stringResource(R.string.plan_line, stringResource(R.string.label_free), it.devicesUsed, it.devicesLimit), sans(12.sp).copy(fontFeatureSettings = "tnum"), c.dim,
+                        Modifier.padding(end = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))     // the pill and the menu are two targets: far enough apart that one finger picks one
+            LinkAction({ menuOpen = true }, icon = Icons.Menu, name = stringResource(R.string.menu_name), iconSize = 26.dp, minSize = 48.dp)
         }
+        buy.error?.let { ErrorLine(errorText(it), Modifier.padding(bottom = 10.dp)) }
+        if (menuOpen) MenuSheet(go, buy, onDismiss = { menuOpen = false })
 
         SetupTips(resumed)
 
@@ -309,15 +363,61 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
                 }
                 is Outcome.Failed -> {
                     Returned(o.reasons, Modifier.padding(top = 12.dp))
-                    if (o.upgrade != null && BuildConfig.PAYMENTS) {
-                        Btn(upgradeWord(o.why), { go(Screen.Plans(o.why)) }, Modifier.fillMaxWidth().padding(top = 10.dp), solid = true)
+                    if (o.upgrade != null && BuildConfig.PAYMENTS && LocalContext.current.app.plans.offering) {
+                        Btn(upgradeWord(o.why), { buy.start() }, Modifier.fillMaxWidth().padding(top = 10.dp), solid = true, loading = buy.opening != null)
                     }
                 }
                 null -> {}
             }
         }
 
-        SectionHead(stringResource(R.string.label_received), Modifier.padding(top = 18.dp, bottom = 4.dp), count = letters.size.takeIf { it > 0 }?.toString())
+        val appContext = LocalContext.current
+        var pulling by remember { mutableStateOf(false) }
+        var pullLine by remember { mutableStateOf<String?>(null) }
+        if (selecting) {
+            SectionHead(stringResource(R.string.sel_count, picked.size), Modifier.padding(top = 18.dp, bottom = 4.dp)) {
+                if (picked.size < letters.size) LinkAction({ picked = letters.map { it.id }.toSet() }, text = stringResource(R.string.sel_all), color = c.navy)
+                LinkAction({
+                    undo = ctx.app.letters.remove(picked)
+                    picked = emptySet()
+                }, text = stringResource(R.string.sel_clear), icon = Icons.Check, color = c.navy, underline = false)
+            }
+        } else SectionHead(stringResource(R.string.label_received), Modifier.padding(top = 18.dp, bottom = 4.dp), count = letters.size.takeIf { it > 0 }?.toString()) {
+            LinkAction(
+                onClick = {
+                    pulling = true
+                    scope.launch {
+                        val r = ctx.app.receiving.pullNow("manual")
+                        pulling = false
+                        pullLine = when {
+                            r.failed -> appContext.getString(R.string.pull_failed)
+                            r.count == 0 -> appContext.getString(R.string.pull_none)
+                            else -> appContext.getString(R.string.pull_n, r.count)
+                        }
+                        delay(3000)
+                        pullLine = null
+                    }
+                },
+                text = when {
+                    pulling -> stringResource(R.string.pulling)
+                    pullLine != null -> pullLine!!
+                    else -> stringResource(R.string.label_pull)
+                },
+                icon = Icons.Pull,
+                enabled = !pulling,
+                loading = pulling,
+                color = c.navy,
+            )
+        }
+        undo?.let { gone ->
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(3.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(3.dp)).padding(start = 12.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Txt(stringResource(R.string.cleared_n, gone.size), sans(13.5.sp), c.ink, Modifier.weight(1f))
+                LinkAction({ ctx.app.letters.restore(gone); undo = null }, text = stringResource(R.string.undo), color = c.navy)
+            }
+        }
         if (letters.isEmpty()) {
             Column(Modifier.fillMaxWidth().dashed(c.line, radius = 3.dp).padding(horizontal = 16.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Txt(stringResource(R.string.empty_title), sans(13.5.sp), c.dim, align = TextAlign.Center)
@@ -329,7 +429,11 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (l in letters) LetterCard(l, resumed)
+                for (l in letters) LetterCard(
+                    l, resumed, upgrade = if (upgradeOffered) { _ -> buy.start() } else null,
+                    picked = if (selecting) l.id in picked else null,
+                    onPick = { picked = if (l.id in picked) picked - l.id else picked + l.id },
+                )
             }
         }
     }
@@ -337,14 +441,20 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
 
 /** What the upgrade button says, by what was hit: what the paid plan gives for exactly that */
 @Composable
-internal fun upgradeWord(why: String?): String = when (why) {
-    "per_day" -> stringResource(R.string.up_per_day, Plans.paid.perDay)
-    "file_size" -> stringResource(R.string.up_file_size, Plans.paid.fileMB)
-    "space" -> stringResource(R.string.up_space, Plans.space(Plans.paid.spaceMB))
-    "queue" -> stringResource(R.string.up_queue, Plans.paid.queue)
-    "devices" -> stringResource(R.string.up_devices, Plans.paid.devices)
-    "realtime" -> stringResource(R.string.up_realtime)
-    else -> stringResource(R.string.up_generic)
+internal fun upgradeWord(why: String?): String {
+    val paid = LocalContext.current.app.plans.paid   // the service's numbers when it has answered
+    return when (why) {
+        "per_day" -> stringResource(R.string.up_per_day, paid.perDay)
+        "file_size" -> stringResource(R.string.up_file_size, paid.fileMB)
+        "space" -> stringResource(R.string.up_space, Plans.space(paid.spaceMB))
+        "queue" -> stringResource(R.string.up_queue, paid.queue)
+        "devices" -> stringResource(R.string.up_devices, paid.devices)
+        "realtime" -> stringResource(R.string.up_realtime)
+        "uploads" -> stringResource(R.string.up_uploads)
+        "downloads" -> stringResource(R.string.up_downloads, paid.downloads)
+        "kept" -> stringResource(R.string.up_kept, paid.days)
+        else -> stringResource(R.string.up_generic)
+    }
 }
 
 /**
@@ -398,8 +508,9 @@ private fun relative(ctx: Context, at: Long, now: Long): String {
 }
 
 /** One drop as one letter. What arrived carries a postmark; what this phone sent says so instead. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LetterCard(l: Letter, resumed: Int) {
+private fun LetterCard(l: Letter, resumed: Int, upgrade: ((String) -> Unit)? = null, picked: Boolean? = null, onPick: () -> Unit = {}) {
     val ctx = LocalContext.current
     val c = ink
     val now = remember(resumed, l.id) { System.currentTimeMillis() }
@@ -412,11 +523,26 @@ private fun LetterCard(l: Letter, resumed: Int) {
         is LetterShape.Files -> pluralStringResource(R.plurals.label_n_files, s.n, s.n)
         is LetterShape.TextAndFiles -> pluralStringResource(R.plurals.label_text_n_files, s.n, s.n)
     }
+    val selecting = picked != null
+    val shape = RoundedCornerShape(3.dp)
+    Box(
+        Modifier.fillMaxWidth()
+            // Long press starts picking (the buttons inside a letter still take their own taps)
+            .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onLongClickLabel = stringResource(R.string.sel_start), onLongClick = onPick, onClick = {}),
+    ) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(3.dp))
+        Modifier.fillMaxWidth().clip(shape).background(if (picked == true) c.navy.copy(alpha = .07f) else c.paper)
+            .border(if (picked == true) 2.dp else 1.dp, if (picked == true) c.navy else c.line, shape)
             .padding(start = 11.dp, end = 7.dp, top = 9.dp, bottom = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
+        if (selecting) {
+            Box(
+                Modifier.padding(end = 10.dp, top = 2.dp).size(20.dp).clip(RoundedCornerShape(10.dp))
+                    .background(if (picked == true) c.navy else Color.Transparent).border(1.5.dp, if (picked == true) c.navy else c.dim, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) { if (picked == true) Glyph(Icons.Check, c.paper, size = 14.dp) }
+        }
         Column(Modifier.weight(1f)) {
             Row(Modifier.padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Txt(kind.uppercase(), label(12.5.sp, tracking = .06.em), c.dim, maxLines = 1)
@@ -440,7 +566,7 @@ private fun LetterCard(l: Letter, resumed: Int) {
                 }
             }
             l.fromTitle?.let { Txt(stringResource(R.string.from_page, it), sans(12.sp), c.dim, Modifier.padding(top = 3.dp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            LetterFiles(l.files)
+            LetterFiles(l, upgrade)
             if (l.mine) {
                 val clock = remember(l.at) { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(l.at)) }
                 Txt(stringResource(R.string.sent_mark, clock), mono(12.sp), c.navy, Modifier.padding(top = 4.dp, bottom = 4.dp))
@@ -460,12 +586,21 @@ private fun LetterCard(l: Letter, resumed: Int) {
             Postmark(date, time, l.source ?: "dropit", l.seqs.firstOrNull() ?: 0, Modifier.padding(start = 8.dp))
         }
     }
+    // While picking, a tap anywhere on the letter picks it (nothing inside it opens or copies by accident)
+    if (selecting) Box(Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Checkbox, onClickLabel = null, onClick = onPick).semantics { selected = picked == true })
+    }
 }
 
 @Composable
-private fun LetterFiles(files: List<LetterFile>) {
+private fun LetterFiles(letter: Letter, upgrade: ((String) -> Unit)? = null) {
+    val files = letter.files
     if (files.isEmpty()) return
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val c = ink
+    val now = remember(letter) { System.currentTimeMillis() }
+    var saving by remember { mutableStateOf(setOf<Long>()) }     // each file saves on its own: several at once, each its own spinner
+    var note by remember { mutableStateOf<Int?>(null) }
     val pictures = files.filter { it.thumb != null }
     if (pictures.isNotEmpty()) {
         Row(Modifier.padding(top = 6.dp).widthIn(max = if (pictures.size == 1) 120.dp else 200.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -481,21 +616,105 @@ private fun LetterFiles(files: List<LetterFile>) {
         }
         if (pictures.size > 3) Txt("+${pictures.size - 3}", mono(11.5.sp), c.dim, Modifier.padding(top = 3.dp))
     }
-    for (f in files.filter { it.thumb == null }) {
-        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Glyph(Icons.File, c.dim, size = 16.dp)
-            Txt(f.name, sans(13.5.sp), c.ink, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
-            Txt(fileSize(f.size), mono(11.5.sp), c.dim)
+    for (f in files) {
+        val state = f.state(now)
+        Column(Modifier.padding(top = 5.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Glyph(Icons.File, c.dim, size = 16.dp)
+                Txt(f.name, sans(13.5.sp), if (state == FileState.EXPIRED) c.dim else c.ink, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+                Txt(fileSize(f.size), mono(11.5.sp), c.dim)
+            }
+            when (state) {
+                // On the phone: open it, share it, whatever the service has done with its copy
+                FileState.SAVED -> Row(Modifier.offset(x = (-6).dp)) {
+                    LinkAction({
+                        if (ctx.app.downloader.stillThere(f.saved!!)) ctx.openSaved(f) else { ctx.app.letters.update(letter.id, f.seq) { it.copy(saved = null) }; note = R.string.file_gone }
+                    }, text = stringResource(R.string.open), icon = Icons.Open)
+                    LinkAction({
+                        if (ctx.app.downloader.stillThere(f.saved!!)) ctx.shareSaved(f) else { ctx.app.letters.update(letter.id, f.seq) { it.copy(saved = null) }; note = R.string.file_gone }
+                    }, text = stringResource(R.string.share), icon = Icons.Share)
+                    if (f.mime.orEmpty().startsWith("image/")) {
+                        LinkAction({ if (ctx.copyImage(f)) note = R.string.file_image_copied else note = R.string.file_gone }, text = stringResource(R.string.file_copy_image), icon = Icons.Copy)
+                    }
+                }
+                // Gone from the service: dropit delivers, it does not store
+                FileState.EXPIRED -> {
+                    Txt(stringResource(R.string.file_expired), sans(12.sp, lineHeight = 17.sp), c.dim, Modifier.padding(top = 2.dp))
+                    // A free account lost this to the one-day keep; Paid keeps longer, for the next one
+                    if (upgrade != null) LinkAction({ upgrade("kept") }, text = upgradeWord("kept"), color = c.navy, modifier = Modifier.offset(x = (-6).dp))
+                }
+                FileState.AVAILABLE -> {
+                    Row(Modifier.offset(x = (-6).dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (f.seq in saving) {
+                            Row(Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                xyz.smart_kits.dropit.ui.kit.Spinner(c.dim, 14.dp)
+                                Txt(stringResource(R.string.file_saving), sans(13.sp), c.dim)
+                            }
+                        } else {
+                            LinkAction({
+                                saving = saving + (f.seq ?: return@LinkAction); note = null
+                                scope.launch {
+                                    note = when (ctx.app.downloader.save(letter, f)) {
+                                        is Downloader.Result.Saved -> R.string.file_saved
+                                        Downloader.Result.Expired -> R.string.file_expired
+                                        Downloader.Result.LimitToday -> R.string.file_limit
+                                        Downloader.Result.Offline -> R.string.file_offline
+                                        Downloader.Result.Unsupported -> R.string.file_unsupported
+                                        Downloader.Result.Failed -> R.string.file_failed
+                                    }
+                                    saving = saving - (f.seq ?: 0L)
+                                }
+                            }, text = stringResource(R.string.file_save), icon = Icons.Down)
+                        }
+                    }
+                    f.expires?.let { Txt(stringResource(R.string.file_until, untilText(it, now)), sans(11.5.sp, lineHeight = 16.sp), c.dim) }
+                }
+            }
         }
+    }
+    note?.let { Txt(stringResource(it), sans(12.sp, lineHeight = 17.sp), if (it == R.string.file_saved || it == R.string.file_image_copied) c.navy else c.dim, Modifier.padding(top = 4.dp)) }
+    // The two things Paid fixes, said right where they are met: today's downloads used up, a file that has expired
+    val why = when (note) { R.string.file_limit -> "downloads"; R.string.file_expired -> "kept"; else -> null }
+    if (why != null && upgrade != null) LinkAction({ upgrade(why) }, text = upgradeWord(why), color = c.navy, modifier = Modifier.offset(x = (-6).dp))
+}
+
+/** When the service lets go of a file, in words a person plans by: "14:20" if that is today, else the day too */
+private fun untilText(at: Long, now: Long): String {
+    val dayOf = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+    val today = dayOf.format(Date(at)) == dayOf.format(Date(now))
+    return SimpleDateFormat(if (today) "HH:mm" else "MM-dd HH:mm", Locale.getDefault()).format(Date(at))
+}
+
+private fun Context.fileUri(f: LetterFile): Uri? = f.saved?.let(Uri::parse)
+
+internal fun Context.openSaved(f: LetterFile) {
+    val uri = fileUri(f) ?: return
+    runCatching {
+        startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, f.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 
-internal fun Context.openLink(url: String) {
-    runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+internal fun Context.shareSaved(f: LetterFile) {
+    val uri = fileUri(f) ?: return
+    val send = Intent(Intent.ACTION_SEND).setType(f.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    runCatching { startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
+/** The picture itself on the clipboard, to paste into another app */
+internal fun Context.copyImage(f: LetterFile): Boolean {
+    val uri = fileUri(f) ?: return false
+    if (!app.downloader.stillThere(f.saved!!)) return false
+    getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newUri(contentResolver, "dropit", uri))
+    app.store.clipSeen = System.currentTimeMillis()
+    return true
+}
+
+/** True when something took the address */
+internal fun Context.openLink(url: String): Boolean =
+    runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+
 internal fun Context.copy(text: String) {
-    getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("dropit", text))
+    getSystemService(ClipboardManager::class.java).setPrimaryClip(sensitiveClip(text))
     // What dropit itself put there is not offered back as "new on your clipboard"
     app.store.clipSeen = System.currentTimeMillis()
 }
@@ -503,4 +722,38 @@ internal fun Context.copy(text: String) {
 internal fun Context.shareText(text: String) {
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
     runCatching { startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** Text for the clipboard that the system keeps out of its on-screen preview (Android 13 and newer): what arrived is the person's own, not for the screen to show */
+internal fun sensitiveClip(text: String): ClipData = ClipData.newPlainText("dropit", text).also { clip ->
+    if (android.os.Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true) }
+}
+
+/**
+ * The plan at the top of the home screen: a pill in the brand blue when it leads to an upgrade, with a small arrow that keeps
+ * rising (it is the one thing on this screen that moves, so the way to upgrade is seen without a banner or a dot); a quiet pill
+ * when it only says what the account is
+ */
+@Composable
+private fun PlanChip(text: String, accent: Boolean, moving: Boolean = false, loading: Boolean = false, action: String? = null, onClick: () -> Unit) {
+    val c = ink
+    val shape = RoundedCornerShape(17.dp)
+    Row(
+        Modifier.clip(shape).border(1.5.dp, if (accent) c.navy else c.line, shape)
+            .clickable(enabled = !loading, role = Role.Button, onClickLabel = action, onClick = onClick)
+            .defaultMinSize(minHeight = 34.dp).padding(start = 13.dp, end = if (moving) 9.dp else 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Txt(text, sans(13.sp, FontWeight.SemiBold), if (accent) c.navy else c.dim)
+        if (loading) {
+            xyz.smart_kits.dropit.ui.kit.Spinner(c.navy, 14.dp)
+        } else if (moving) {
+            val rise by rememberInfiniteTransition(label = "upgrade").animateFloat(
+                initialValue = 2f, targetValue = -2.5f,
+                animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "rise",
+            )
+            Glyph(Icons.Up, c.navy, Modifier.offset(y = rise.dp), size = 16.dp)
+        }
+    }
 }

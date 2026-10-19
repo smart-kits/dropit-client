@@ -113,15 +113,20 @@ data class Arrival(
 data class Download(val seq: Long, val letterId: String, val url: String, val name: String, val mime: String?, val size: Long)
 
 /** Whether a file of this size downloads by itself */
-fun autoDownload(size: Long, unmetered: Boolean): Boolean = unmetered || size <= AUTO_DOWNLOAD_CELLULAR_MAX
+fun autoDownload(size: Long, unmetered: Boolean, cellularMax: Long = AUTO_DOWNLOAD_CELLULAR_MAX): Boolean = unmetered || size <= cellularMax
 
 /**
  * Turn pulled items into letters and notices.
  * @param myDevice  this phone's device id: what it sent comes back in the pull and is skipped
  * @param known     the letters the phone already keeps
  * @param unmetered on Wi-Fi (or any network that isn't counted): every file downloads by itself
+ * @param retentionMs how long the account's plan keeps things on the service: each file letter is told when its file goes
+ * @param cellularMax the largest file that downloads by itself on a counted network (negative: none does)
  */
-fun arrive(items: List<Incoming>, myDevice: String?, known: List<Letter>, cursor: Long, unmetered: Boolean): Arrival {
+fun arrive(
+    items: List<Incoming>, myDevice: String?, known: List<Letter>, cursor: Long, unmetered: Boolean,
+    retentionMs: Long? = null, cellularMax: Long = AUTO_DOWNLOAD_CELLULAR_MAX,
+): Arrival {
     val next = maxOf(cursor, items.maxOfOrNull { it.seq } ?: cursor)
     val theirs = items.filter { it.deviceId == null || it.deviceId != myDevice }
     val fresh = mutableListOf<Letter>()
@@ -131,24 +136,24 @@ fun arrive(items: List<Incoming>, myDevice: String?, known: List<Letter>, cursor
         val before = known.firstOrNull { it.id == id && !it.mine }
         val added = pieces.filter { before == null || it.seq !in before.seqs }
         if (added.isEmpty()) continue
-        val letter = letterOf(id, added, before)
+        val letter = letterOf(id, added, before, retentionMs)
         (if (before == null) fresh else grown) += letter
-        for (p in added) if (p.isFile && autoDownload(p.bytes, unmetered)) {
+        for (p in added) if (p.isFile && autoDownload(p.bytes, unmetered, cellularMax)) {
             downloads += Download(p.seq, id, p.url!!, p.filename ?: "file", p.mime, p.bytes)
         }
     }
     val notices = if (fresh.size > BACKLOG_OVER) {
         listOf(Notice(id = "backlog", summary = Message("noticeBacklog", listOf(fresh.sumOf { it.seqs.size }.toString())), opensApp = true))
     } else {
-        fresh.map { l -> noticeFor(l, ready = l.files.all { autoDownload(it.size, unmetered) }) }
+        fresh.map { l -> noticeFor(l, ready = l.files.all { autoDownload(it.size, unmetered, cellularMax) }) }
     }
     return Arrival(next, fresh + grown, downloads, notices)
 }
 
-private fun letterOf(id: String, pieces: List<Incoming>, before: Letter?): Letter {
+private fun letterOf(id: String, pieces: List<Incoming>, before: Letter?, retentionMs: Long?): Letter {
     val ordered = pieces.sortedBy { it.group?.i ?: 0 }
     val words = ordered.firstOrNull { !it.isFile }
-    val files = ordered.filter { it.isFile }.map { LetterFile(it.filename ?: "file", it.bytes, it.mime, it.seq) }
+    val files = ordered.filter { it.isFile }.map { LetterFile(it.filename ?: "file", it.bytes, it.mime, it.seq, expires = retentionMs?.let { ms -> it.at + ms }) }
     val base = before ?: Letter(id = id, mine = false, at = pieces.minOf { it.at })
     return base.copy(
         seqs = (base.seqs + pieces.map { it.seq }).distinct().sorted(),
@@ -202,3 +207,7 @@ fun noticeFor(letter: Letter, ready: Boolean = letter.files.all { it.saved != nu
         is LetterShape.TextAndFiles -> Notice(letter.id, summary = Message("noticeTextAndFiles", listOf(shape.n.toString())), from = from, opensApp = true)
     }
 }
+
+/** The fresh download address of file `seq` in the answer to [Requests.itemAgain]; null when the service no longer has it */
+fun freshAddress(answer: Answer, seq: Long): String? =
+    pullPage(answer, seq - 1).items.firstOrNull { it.seq == seq && it.isFile }?.url

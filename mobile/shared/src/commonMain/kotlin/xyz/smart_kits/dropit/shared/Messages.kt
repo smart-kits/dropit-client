@@ -33,14 +33,32 @@ fun errorMessage(code: String?, data: JsonObject, status: Int, nowMs: Long = Clo
     val window = data.str("window")
     return when {
         code == "PAYLOAD_TOO_LARGE" && field == "size" && limit != null && limit > 0 -> Message("tooLarge", listOf(mb(limit)))
-        code == "RATE_LIMITED" && window == "day" -> Message("rateDay", listOf(clock(data.long("retry_after") ?: 0, nowMs)))
+        // Today's uploads and downloads have their own daily limits and say so (today's sends have no field)
+        code == "RATE_LIMITED" && window == "day" -> {
+            val back = clock(data.long("retry_after") ?: 0, nowMs)
+            Message(when (field) { "uploads" -> "rateDayUploads"; "downloads" -> "rateDayDownloads"; else -> "rateDay" }, listOf(back))
+        }
         code == "RATE_LIMITED" && window == "hour" -> Message("rateHour")
-        code == "QUOTA_EXCEEDED" && field == "items" -> Message("quotaItems")
-        code == "QUOTA_EXCEEDED" && field == "bytes" -> Message("quotaBytes")
+        // Accounts per network per day: say when it opens again (the service counts by UTC day, shown in the phone's own clock)
+        code == "SIGNUP_LIMITED" && data.long("retry_after") != null -> Message("signupLimitedAt", listOf(clock(data.long("retry_after") ?: 0, nowMs), (data.long("limit") ?: 0).toString()))
+        // When the service says when the oldest item expires, so does this: waiting has an end
+        code == "QUOTA_EXCEEDED" && field == "items" -> data.long("frees_in")?.let { Message("quotaItemsIn", listOf(it.toString())) } ?: Message("quotaItems")
+        code == "QUOTA_EXCEEDED" && field == "bytes" -> data.long("frees_in")?.let { Message("quotaBytesIn", listOf(it.toString())) } ?: Message("quotaBytes")
         code == "DEVICE_REVOKED" && data.str("reason") == "replaced" -> Message("revokedReplaced")
         code != null && code in Strings.EN.errors -> Message("errors.$code")
         else -> Message("httpFailed", listOf(status.toString()))
     }
+}
+
+/** How long until the oldest item expires and frees room, in words: "under an hour", "about 3 hours", "about 2 days" */
+private fun spanEn(sec: Long): String {
+    val h = (sec + 3599) / 3600
+    return if (sec < 3600) "under an hour" else if (h < 48) "about $h hour${if (h == 1L) "" else "s"}" else "about ${(sec + 86399) / 86400} days"
+}
+
+private fun spanZh(sec: Long): String {
+    val h = (sec + 3599) / 3600
+    return if (sec < 3600) "不到 1 小时" else if (h < 48) "约 $h 小时" else "约 ${(sec + 86399) / 86400} 天"
 }
 
 /** Interface text, English and Simplified Chinese. Keys and wording follow the browser extension. */
@@ -78,6 +96,9 @@ class Strings private constructor(
             ),
             plain = mapOf(
                 "offline" to "Network unavailable",
+                "offlineSlow" to "The connection is too slow — no answer came in time. Try again",
+                "offlineConnect" to "Could not connect to the service. Check the network and try again",
+                "offlineDns" to "Could not find the service. Check the network and try again",
                 "rateHour" to "Sending too fast — try again within the hour",
                 "quotaItems" to "Too many items waiting — wait for old ones to expire",
                 "quotaBytes" to "Storage is full — wait for old items to expire",
@@ -90,6 +111,11 @@ class Strings private constructor(
                 "httpFailed" to { a -> "Request failed: HTTP ${a[0]}" },
                 "tooLarge" to { a -> "Larger than ${a[0]}, the most one item can be" },
                 "rateDay" to { a -> "Today's sends are used up — back at ${a[0]}" },
+                "signupLimitedAt" to { a -> "This network has made its ${a[1]} accounts for today. Join an existing account with a pairing code, or try again after ${a[0]}" },
+                "rateDayUploads" to { a -> "Today's file uploads are used up — back at ${a[0]}" },
+                "rateDayDownloads" to { a -> "Today's downloads are used up — back at ${a[0]}" },
+                "quotaItemsIn" to { a -> "Too many items waiting — the oldest expires in ${spanEn(a[0].toLong())} and frees up room" },
+                "quotaBytesIn" to { a -> "Storage is full — the oldest item expires in ${spanEn(a[0].toLong())} and frees up room" },
                 "batchTooLarge" to { a -> "At most ${a[0]} files at once" },
                 "noticeFrom" to { a -> "From ${a[0]}" },
                 "noticeFiles" to { a -> "${a[0]} files" },
@@ -117,6 +143,9 @@ class Strings private constructor(
             ),
             plain = mapOf(
                 "offline" to "网络不可用",
+                "offlineSlow" to "网络太慢，没等到回应。再试一次",
+                "offlineConnect" to "连不上服务，请检查网络后再试",
+                "offlineDns" to "找不到服务，请检查网络后再试",
                 "rateHour" to "投得太快了，这一小时内再试",
                 "quotaItems" to "积压的内容太多了，等旧内容过期",
                 "quotaBytes" to "空间已满，等旧内容过期",
@@ -129,6 +158,11 @@ class Strings private constructor(
                 "httpFailed" to { a -> "请求失败 HTTP ${a[0]}" },
                 "tooLarge" to { a -> "超过了单条上限 ${a[0]}" },
                 "rateDay" to { a -> "今天的投递次数用完了，${a[0]} 恢复" },
+                "signupLimitedAt" to { a -> "这个网络今天已经建了 ${a[1]} 个账号，到上限了。可以用配对码加入已有账号，或者 ${a[0]} 以后再试" },
+                "rateDayUploads" to { a -> "今天的文件上传次数用完了，${a[0]} 恢复" },
+                "rateDayDownloads" to { a -> "今天的下载次数用完了，${a[0]} 恢复" },
+                "quotaItemsIn" to { a -> "积压的内容太多了，最早的一条${spanZh(a[0].toLong())}后到期，到时自动腾出位置" },
+                "quotaBytesIn" to { a -> "空间已满，最早的一条${spanZh(a[0].toLong())}后到期，到时自动腾出位置" },
                 "batchTooLarge" to { a -> "一次最多 ${a[0]} 个文件" },
                 "noticeFrom" to { a -> "来自 ${a[0]}" },
                 "noticeFiles" to { a -> "${a[0]} 个文件" },

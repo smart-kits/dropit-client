@@ -72,7 +72,7 @@ import xyz.smart_kits.dropit.ui.kit.Btn
 import xyz.smart_kits.dropit.ui.kit.Envelope
 import xyz.smart_kits.dropit.ui.kit.Glyph
 import xyz.smart_kits.dropit.ui.kit.Icons
-import xyz.smart_kits.dropit.ui.kit.Returned
+import xyz.smart_kits.dropit.ui.kit.ErrorLine
 import xyz.smart_kits.dropit.ui.kit.Tip
 import xyz.smart_kits.dropit.ui.kit.Txt
 import xyz.smart_kits.dropit.ui.theme.ink
@@ -122,10 +122,15 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var errorAt by remember { mutableStateOf("join") }      // where the last try was made: its answer is shown there, under what was pressed
+    var preparing by remember { mutableStateOf(false) }
+    var slow by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+    // Working for a while with nothing back: say so, so a slow connection doesn't look like a dead button
+    LaunchedEffect(busy) { slow = false; if (busy) { kotlinx.coroutines.delay(4_000); slow = true } }
 
-    fun run(block: suspend () -> Unit) {
-        busy = true; error = null
+    fun run(where: String = "join", block: suspend () -> Unit) {
+        busy = true; error = null; errorAt = where
         scope.launch {
             try { block(); onJoined() } catch (e: Throwable) { error = e } finally { busy = false }
         }
@@ -192,7 +197,7 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
                         }
                     },
                 )
-                Btn(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, solid = true, enabled = !busy && typed.length == 6)
+                Btn(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, solid = true, enabled = typed.length == 6, loading = busy && errorAt == "join")
             }
             Row(Modifier.padding(top = 10.dp)) {
                 Txt(stringResource(R.string.consent), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.weight(1f))
@@ -201,7 +206,8 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
                 stringResource(R.string.privacy), sans(12.5.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
                 Modifier.padding(top = 2.dp).clickable(role = Role.Button) { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }.padding(vertical = 8.dp),
             )
-            error?.let { Returned(listOf(errorText(it)), Modifier.padding(top = 4.dp)) }
+            if (busy && slow && !preparing && errorAt == "join") Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(top = 6.dp))
+            if (errorAt == "join") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 4.dp)) }
         }
         Spacer(Modifier.height(14.dp))
         if (!creating) {
@@ -215,7 +221,16 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
         } else {
             // One more tap, with what it means said first: a second account by mistake is hard to undo
             Txt(stringResource(R.string.create_note), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
-            Btn(stringResource(R.string.create_agree), { run { ctx.app.account.createAccount() } }, Modifier.fillMaxWidth(), enabled = !busy)
+            Btn(stringResource(R.string.create_agree), { run("create") {
+                ctx.app.account.createAccount { preparing = it }
+                val f = ctx.app.plans.free
+                ctx.app.account.assumeFree(f.devices, f.spaceMB * 1_048_576L, f.fileMB * 1_048_576L)
+            } }, Modifier.fillMaxWidth(), loading = busy)
+            // The answer to creating is shown here, under the button that was pressed, not up in the join box
+            if (busy && slow && !preparing) Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+            if (errorAt == "create") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 8.dp)) }
+            // Only while the service wants a moment: a line, not a dialog
+            if (preparing) Txt(stringResource(R.string.create_preparing), sans(12.5.sp), c.dim, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
         }
     }
 }

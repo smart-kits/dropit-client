@@ -1,17 +1,90 @@
 package xyz.smart_kits.dropit.shared
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-// The prices themselves are checked against the website by the website's tests; this is how they're written
+// What the service says about plans is read as it is; no price is written in the app, so these are checked against a sample answer.
+// The limits the app starts from are checked against the service's by the website's tests.
 class PlansTest {
+    private val sample = """
+        {"v":1,"rev":"abc","payments":{"open":true,"provider":"paddle","checkout":{"provider":"paddle","client_token":"x"}},
+         "plans":[
+           {"id":"year","kind":"subscription","interval":"year","price":{"cents":1990,"currency":"USD"},"trial":{"cents":190,"days":30}},
+           {"id":"year_once","kind":"once","interval":null,"price":{"cents":2990,"currency":"USD"},"trial":null},
+           {"id":"life","kind":"lifetime","interval":null,"price":{"cents":4990,"currency":"USD"},"trial":null}],
+         "limits":{"free":{"days":2,"perDay":40,"downloads":250,"realtimeTrialDays":10},"paid":{"devices":12,"realtimeTrialDays":null}}}
+    """.trimIndent()
+
+    private fun catalog(text: String = sample) = Catalog.from(Json.parseToJsonElement(text).jsonObject)
+
     @Test
-    fun pricesAreWrittenWithCents() {
-        assertEquals("1.90", Plans.price(1.9))
-        assertEquals("19.90", Plans.price(19.9))
-        assertEquals("49.90", Plans.price(49.9))
-        assertEquals("3.00", Plans.price(3.0))
-        assertEquals("1.66", Plans.price(19.9 / 12))
+    fun theThreePlansAndTheirPricesAreReadFromTheAnswer() {
+        val c = assertNotNull(catalog())
+        assertTrue(c.open)
+        assertEquals("paddle", c.provider)
+        assertEquals(1990L, c.offer("year")?.cents)
+        assertEquals(190L, c.offer("year")?.trialCents)
+        assertEquals(30, c.offer("year")?.trialDays)
+        assertEquals(2990L, c.offer("year_once")?.cents)
+        assertEquals(4990L, c.offer("life")?.cents)
+        assertNull(c.offer("year_once")?.trialCents)
+        assertNull(c.offer("month"))
+        assertTrue(c.canBuy)
+    }
+
+    @Test
+    fun theLimitsFromTheServiceReplaceTheStartingOnesOneByOne() {
+        val c = assertNotNull(catalog())
+        assertEquals(2, c.free.days)
+        assertEquals(40, c.free.perDay)
+        assertEquals(Plans.defaultFree.spaceMB, c.free.spaceMB)   // not said: the starting number stays
+        assertEquals(12, c.paid.devices)
+        assertNull(c.paid.realtimeTrialDays)                        // said null: always on
+        assertEquals(10, c.free.realtimeTrialDays)
+        assertEquals(250, c.free.downloads)                        // said: the service's number
+        assertEquals(Plans.defaultPaid.downloads, c.paid.downloads) // not said: the starting number stays
+    }
+
+    @Test
+    fun whatAPriceComesToIsWorkedOutNotWritten() {
+        assertEquals(166L, Plans.perMonthCents(1990))   // $19.90 a year is about $1.66 a month
+        assertEquals(100L, Plans.perMonthCents(1200))
+        assertNull(Plans.perMonthCents(0))              // no price: nothing to say
+        assertEquals(2.5, Plans.lifetimeInYears(4990, 1990))
+        assertEquals(3.0, Plans.lifetimeInYears(5970, 1990))
+        assertNull(Plans.lifetimeInYears(4990, 0))
+        assertNull(Plans.lifetimeInYears(0, 1990))
+    }
+
+    @Test
+    fun closedOrIncompleteMeansNothingCanBeBought() {
+        assertFalse(assertNotNull(catalog("""{"v":1,"payments":{"open":false,"provider":null},"plans":[],"limits":{}}""")).canBuy)
+        // open, but a plan has no price: not all three ways to pay can be shown
+        val noLife = """{"payments":{"open":true,"provider":"paddle"},"plans":[
+            {"id":"year","kind":"subscription","price":{"cents":1990,"currency":"USD"}},
+            {"id":"year_once","kind":"once","price":{"cents":2990,"currency":"USD"}}]}"""
+        assertTrue(assertNotNull(catalog(noLife)).open)
+        assertFalse(assertNotNull(catalog(noLife)).canBuy)
+    }
+
+    @Test
+    fun nonsenseIsNoAnswer() {
+        assertNull(Catalog.from(Json.parseToJsonElement("""{"plans":"nope","payments":[]}""").jsonObject))
+    }
+
+    @Test
+    fun aChangedPriceOrCurrencyIsWrittenAsTheServiceSaysIt() {
+        assertEquals("$19.90", Plans.money(1990))
+        assertEquals("$1.90", Plans.money(190, "USD"))
+        assertEquals("$0.05", Plans.money(5))
+        assertEquals("€12.90", Plans.money(1290, "EUR"))
+        assertEquals("CHF 9.00", Plans.money(900, "CHF"))
     }
 
     @Test
@@ -23,6 +96,12 @@ class PlansTest {
 
     @Test
     fun theStickerIsWorkedOutFromThePrices() {
-        assertEquals(33, Plans.yearSaves)   // 1 - 19.9 / 29.9 = 33.4%
+        assertEquals(33, assertNotNull(catalog()).yearSaves)   // 1 - 19.90 / 29.90 = 33.4%
+        assertNull(assertNotNull(catalog("""{"payments":{"open":true},"plans":[{"id":"year","price":{"cents":1990}}]}""")).yearSaves)
+    }
+
+    @Test
+    fun theKeptAnswerIsFreshForAnHourAndNeverExpires() {
+        assertEquals(3_600_000L, Plans.FRESH_MS)
     }
 }

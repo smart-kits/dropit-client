@@ -204,3 +204,45 @@ class ReceiveTest {
         assertFalse(Requests.testPush().retriable)           // a second test push would be a second signal
     }
 }
+
+// ── Saving what arrives: how long the service has it, and a fresh address when it is asked for ──
+class SavingTest {
+    private fun item(seq: Long, at: Long) = Incoming(seq = seq, url = "https://x.test/v1/files/$seq?e=1", bytes = 10, at = at, filename = "a.pdf", mime = "application/pdf")
+
+    @Test
+    fun aFileLetterKnowsWhenTheServiceLetsGoOfIt() {
+        val a = arrive(listOf(item(1, at = 1_000_000)), null, emptyList(), 0, unmetered = false, retentionMs = 86_400_000, cellularMax = -1)
+        assertEquals(1_000_000 + 86_400_000, a.letters.single().files.single().expires)
+        assertTrue(a.downloads.isEmpty())   // saved on a tap: each one counts against the day's downloads
+        val none = arrive(listOf(item(2, at = 5)), null, emptyList(), 0, unmetered = false)
+        assertNull(none.letters.single().files.single().expires)
+    }
+
+    @Test
+    fun nothingDownloadsByItselfWhenTheAppSaysSo() {
+        val a = arrive(listOf(item(1, 1)), null, emptyList(), 0, unmetered = false, cellularMax = -1)
+        assertTrue(a.downloads.isEmpty())
+        // a file that waits for a tap says Download in its notice
+        assertEquals(NoticeAction.DOWNLOAD, a.notices.single().actions.first())
+    }
+
+    @Test
+    fun aFileIsSavedExpiredOrAvailable() {
+        val f = LetterFile("a.pdf", 10, "application/pdf", 1, expires = 1_000)
+        assertEquals(FileState.AVAILABLE, f.state(999))
+        assertEquals(FileState.EXPIRED, f.state(1_000))
+        assertEquals(FileState.SAVED, f.copy(saved = "content://x").state(5_000))   // on the phone: the service's end no longer matters
+        assertEquals(FileState.AVAILABLE, f.copy(expires = null).state(Long.MAX_VALUE))
+    }
+
+    @Test
+    fun theFreshAddressIsTheItemAgainOrNothingWhenExpired() {
+        val body = """{"items":[{"seq":7,"kind":"file","bytes":10,"created_at":1,"url":"https://x.test/v1/files/7?e=2","meta":{"filename":"a.pdf"}}],"has_more":false,"next_after":7}"""
+        val answer = parse(200, body)
+        assertEquals("https://x.test/v1/files/7?e=2", freshAddress(answer, 7))
+        assertNull(freshAddress(answer, 8))                                                   // another item
+        assertNull(freshAddress(parse(200, """{"items":[],"has_more":false,"next_after":6}"""), 7))   // expired: the pull leaves it out
+        val spec = Requests.itemAgain(7)
+        assertEquals("/v1/pull?after=6&limit=1&why=manual", spec.target)
+    }
+}

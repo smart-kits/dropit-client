@@ -1,5 +1,6 @@
 # Pinned on purpose, never with a range. Compose, core and Ktor (its OkHttp) are one release behind
 # the latest (2026-10-08): the latest need compileSdk 37; this project builds against 36.
+# firebase-messaging is also one release behind (26.0.0 is the latest).
 [versions]
 agp = "9.4.1"
 kotlin = "2.4.21"
@@ -14,6 +15,7 @@ compose-bom = "2026.06.01"
 work = "2.12.0"
 camerax = "1.6.2"
 zxing = "3.5.4"
+firebase-messaging = "25.1.3"
 
 [libraries]
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -31,6 +33,7 @@ androidx-work = { module = "androidx.work:work-runtime-ktx", version.ref = "work
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebase-messaging" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
