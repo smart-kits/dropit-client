@@ -76,6 +76,7 @@ const T = {
     replacedOld: (name) => `  took the place of this machine's earlier "${name}" — it no longer uses a device slot`,
     revokedReplaced: 'dropit was paired again on this machine, so this copy was signed out — pair again: dropit pair',
     codeValid: (time) => `Valid for 5 minutes (expires at ${time})`,
+    codeInstall: (url) => `Not installed on the new device yet? Open this link there to install it (Cmd/Ctrl+click in most terminals), then enter the code above:\n${url}`,
     nothingToSend: 'Nothing to send. Usage: dropit send <text or link>, or pipe text in',
     alreadySent: (seq) => `Already sent (#${seq})`,
     fileNotFound: (f) => `File not found: ${f}`,
@@ -331,6 +332,7 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     replacedOld: (name) => `  替换了这台机器之前的「${name}」，不再多占一台设备的名额`,
     revokedReplaced: '这台机器上重新配对过 dropit，这一份已退出 —— 重新配对：dropit pair',
     codeValid: (time) => `5 分钟内有效（${time} 过期）`,
+    codeInstall: (url) => `新设备还没装 dropit？在它上面打开这个链接去安装（多数终端里 Cmd/Ctrl+点击就能打开），装好后输入上面的码：\n${url}`,
     nothingToSend: '没有内容可投。用法：dropit send <文本或链接>，或从管道读入',
     alreadySent: (seq) => `已投过了（#${seq}）`,
     fileNotFound: (f) => `找不到文件：${f}`,
@@ -734,7 +736,7 @@ function machineId() {
 /** Issue a pairing code for another device */
 async function newCode() {
   const { code, expires_at } = await api(needToken(), 'POST', '/v1/pair');
-  console.log(`${code}\n${t.codeValid(new Date(expires_at).toLocaleTimeString())}`);
+  console.log(`${code}\n${t.codeValid(new Date(expires_at).toLocaleTimeString())}\n\n${t.codeInstall(`${DEFAULT_ENDPOINTS[0]}/#install`)}`);
 }
 
 async function send(args) {
