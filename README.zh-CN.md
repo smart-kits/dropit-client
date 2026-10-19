@@ -17,6 +17,7 @@
 | 在 | 用 | 最顺手的用法 | 说明 |
 |---|---|---|---|
 | **iPhone · iPad** | **dropit** 快捷指令 | 在任何 App 里「分享」→ **dropit** —— 照片、视频、文件、链接、文字。绑定到「轻点背面」后，敲两下手机背面就投剪贴板 | [shortcuts/](./shortcuts/README.zh-CN.md) |
+| **Android** | dropit App（官网或 Releases 里的 APK） | *分享* → **dropit**，不用打开 App 就能发；有内容到达时弹通知（需要手机有 Google Play 服务） | [mobile/](./mobile/README.zh-CN.md) |
 | **Chrome · Edge** | 扩展 | 点图标按<kbd>回车</kbd>，投这个页面连同标题；<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> 投选中的文字；右键图片投文件本身；截图直接粘贴 | [extension/](./extension/README.zh-CN.md) |
 | **Obsidian**（桌面、移动） | 插件 | 投来的一切都成为笔记 —— 有标题、图片嵌在里面、出处带链接；右键把笔记和文件发出去 | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian/blob/main/README.zh-CN.md) |
 | **终端**（macOS、Linux） | `dropit` | `pbpaste \| dropit send`、`dropit send -f report.pdf`；`dropit watch` 让一个文件夹自己长出内容；还能接 Raycast、Alfred、服务菜单 | [cli/](./cli/README.zh-CN.md) |
@@ -24,6 +25,30 @@
 
 在任何设备上打开 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz)，它会推荐适合这台设备的客户端，
 每个客户端的安装步骤都在「设备」页里。
+
+### 谁能发、谁能收
+
+一个账号，账号里的每台设备都互通。有的客户端只能发，挑之前先看清：
+
+| | 能发 | 能收 | 收到的东西出现在哪 |
+|---|---|---|---|
+| **iPhone 快捷指令** | ✓ | — | 在 Obsidian 手机版，或 Safari 里的网页收件箱里看 |
+| **Android App** | ✓ | ✓ | 弹一条通知（复制 · 打开 · 分享），App 里也有 |
+| **Chrome · Edge 扩展** | ✓ | — | 在 Obsidian、终端、手机 App 或网页收件箱里看 |
+| **Obsidian** | ✓（右键） | ✓ | 一篇笔记，有标题，图片嵌在里面 |
+| **终端** | ✓ | ✓ | 一个文件夹（`dropit watch`） |
+| **网页收件箱** | ✓ | ✓（点「拉取新内容」） | 网页上 |
+| **书签小工具** | ✓ | — | — |
+
+### 怎么搭配
+
+- **iPhone + 一台写东西的电脑。** iPhone：快捷指令（在任何 App 里发）。电脑：Obsidian，所有东西都落成笔记
+  （想在 iPhone 上看电脑发来的，用装了同一个插件的 Obsidian 手机版，或 Safari 里的网页收件箱）。
+- **Android + 一台电脑。** Android：装 App，能发能收。电脑：用浏览器扩展发你正在看的页面，用 Obsidian、终端或网页收件箱接收。
+- **什么都不想装。** 每台设备上都用网页收件箱：打字、粘贴、拖文件进来，再拉取新内容。
+- **脚本和构建。** 终端：`dropit send "构建完成 ✅"`，手机会通知你。
+
+每台设备用配对码加进来（见下面的「三步开始」）：在第一台上建号、显示配对码，其他设备输入它。
 
 ## 用上它的一天
 

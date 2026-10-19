@@ -18,6 +18,7 @@ This repository holds the open-source clients. The Obsidian plugin has its own:
 | On | Use | At its best | Guide |
 |---|---|---|---|
 | **iPhone · iPad** | The **dropit** shortcut | *Share* → **dropit** from any app — photos, videos, files, links, text. Bound to Back Tap, a double-tap on the back of the phone sends the clipboard | [shortcuts/](./shortcuts/) |
+| **Android** | The dropit app (the APK on the website or in Releases) | *Share* → **dropit** sends without opening the app; a notification when something arrives (it needs Google Play services) | [mobile/](./mobile/) |
 | **Chrome · Edge** | The extension | Click the icon and <kbd>Enter</kbd> sends the page with its title; <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> sends the selection; right-click an image to send the file; paste a screenshot | [extension/](./extension/) |
 | **Obsidian** (desktop, mobile) | The plugin | Everything you send arrives as a note — titled, images embedded, sources linked; right-click to send notes and files out | [dropit-obsidian](https://github.com/smart-kits/dropit-obsidian) |
 | **Terminal** (macOS, Linux) | `dropit` | `pbpaste \| dropit send`, `dropit send -f report.pdf`; `dropit watch` fills a folder; Raycast, Alfred and the Services menu on top | [cli/](./cli/) |
@@ -25,6 +26,31 @@ This repository holds the open-source clients. The Obsidian plugin has its own:
 
 Open [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) on any device: it recommends the client that fits
 that device, and every client's install steps are under *Devices*.
+
+### Who sends, who receives
+
+One account, every device on it. Some clients only send; know which before you pick:
+
+| | Sends | Receives | Where what arrives shows up |
+|---|---|---|---|
+| **iPhone shortcut** | ✓ | — | Read it in Obsidian mobile or in the web inbox in Safari |
+| **Android app** | ✓ | ✓ | A notification (Copy · Open · Share), and in the app |
+| **Chrome · Edge extension** | ✓ | — | Read it in Obsidian, the terminal, the phone app or the web inbox |
+| **Obsidian** | ✓ (right-click) | ✓ | A note, titled, images embedded |
+| **Terminal** | ✓ | ✓ | A folder (`dropit watch`) |
+| **Web inbox** | ✓ | ✓ (press *Pull new items*) | The page |
+| **Bookmarklet** | ✓ | — | — |
+
+### Which to use
+
+- **iPhone + a computer you write on.** iPhone: the shortcut (send from any app). Computer: Obsidian, where everything lands as notes
+  (and to read the computer's items on the iPhone, Obsidian mobile with the same plugin, or the web inbox in Safari).
+- **Android + a computer.** Android: the app, both ways. Computer: the browser extension to send what you're looking at, and Obsidian,
+  the terminal or the web inbox to receive.
+- **Don't want to install anything.** The web inbox on every device: type, paste or drag files in, and pull what's new.
+- **Scripts and builds.** The terminal: `dropit send "build done ✅"`, and your phone tells you.
+
+Add each device with a pairing code (*Start in three steps*, below): create the account on the first one, show a code, join from the others.
 
 ## A day with it
 
