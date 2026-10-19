@@ -16,7 +16,9 @@ import { join } from 'node:path';
 const HOME = mkdtempSync(join(tmpdir(), 'dropit-cli-test-'));
 process.env.HOME = HOME;
 process.env.USERPROFILE = HOME;
-const { T, filesOf, filesProblem, groupsFor, errorText, meLine, pairAction, FILES_MAX, deviceKey, machineFacts } = require('../cli/dropit');
+const { T, filesOf, filesProblem, groupsFor, errorText, withUpgrade, safeLink, meLine, pairAction, FILES_MAX, deviceKey, machineFacts } = require('../cli/dropit');
+const P = require('../cli/dropit');
+import { readFileSync } from 'node:fs';
 let pass = 0, fail = 0;
 const ok = (name, cond, detail = '') => {
   cond ? pass++ : fail++;
@@ -63,11 +65,29 @@ is('413 size, other limit → that number', errorText('PAYLOAD_TOO_LARGE', { fie
   '超过了单条上限 1.5 MB');
 is('413 without field → plain sentence', errorText('PAYLOAD_TOO_LARGE', {}, 413, en), en.errors.PAYLOAD_TOO_LARGE);
 is('429 hour', errorText('RATE_LIMITED', { window: 'hour', retry_after: 600 }, 429, en), en.rateHour);
+is('429 signup limit: how many, and when it opens again', [/5 accounts/.test(errorText('SIGNUP_LIMITED', { retry_after: 1800, limit: 5 }, 429, en, 0)), /5 个账号/.test(errorText('SIGNUP_LIMITED', { retry_after: 1800, limit: 5 }, 429, zh, 0))], [true, true]);
+is('429 signup limit without a time: the plain sentence', errorText('SIGNUP_LIMITED', {}, 429, en), en.errors.SIGNUP_LIMITED);
 is('429 day → local time it comes back', errorText('RATE_LIMITED', { window: 'day', retry_after: 7200 }, 429, en, now),
   "Today's sends are used up — back at 00:15");
 is('429 day, zh', errorText('RATE_LIMITED', { window: 'day', retry_after: 90 }, 429, zh, now),
   '今天的投递次数用完了，22:16 恢复');
 is('429 without window → old sentence', errorText('RATE_LIMITED', { retry_after: 30 }, 429, en), en.errors.RATE_LIMITED);
+is('429 day, uploads → its own sentence', errorText('RATE_LIMITED', { window: 'day', field: 'uploads', retry_after: 7200 }, 429, en, now), "Today's file uploads are used up — back at 00:15");
+is('429 day, downloads, zh → its own sentence', errorText('RATE_LIMITED', { window: 'day', field: 'downloads', retry_after: 90 }, 429, zh, now), '今天的下载次数用完了，22:16 恢复');
+is('space full → when room frees up', errorText('QUOTA_EXCEEDED', { field: 'bytes', frees_in: 7200 }, 507, en), 'Storage is full — the oldest item expires in about 2 hours and frees up room');
+is('queue full, zh → when room frees up', errorText('QUOTA_EXCEEDED', { field: 'items', frees_in: 90000 }, 507, zh), '积压的内容太多了，最早的一条约 25 小时后到期，到时自动腾出位置');
+is('space full, no time given → the plain sentence', errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, en), en.quotaBytes);
+is('a span under an hour', en.span(600), 'under an hour');
+// the way past a limit the paid plan lifts rides on the sentence (the service gives the link to free accounts only)
+const link = 'https://dropit.example/upgrade?u=1&why=per_day';
+is('upgrade link follows the sentence', withUpgrade('Too fast', { upgrade_url: link, why: 'per_day' }, en), `Too fast — Keep sending with Paid: ${link}`);
+is('upgrade link, zh', withUpgrade('投得太快', { upgrade_url: link, why: 'queue' }, zh), `投得太快 — 升级后可以积压更多: ${link}`);
+for (const [u, want] of [["https://dropit.example/upgrade?u=1", "https://dropit.example/upgrade?u=1"], ["http://127.0.0.1:8799/upgrade", "http://127.0.0.1:8799/upgrade"], ["http://localhost:8780/x", "http://localhost:8780/x"], ["javascript:alert(1)", null], ["data:text/html,<b>x</b>", null], ["file:///etc/passwd", null], ["obsidian://open?vault=x", null], ["http://evil.example/up", null], ["//evil.example/x", null], ["", null], [null, null]]) is(`a link from the service: ${String(u).slice(0, 40)}`, safeLink(u), want);
+is('a link that is not one to open is left out of the sentence', withUpgrade('Too fast', { upgrade_url: 'javascript:alert(1)', why: 'per_day' }, en), 'Too fast');
+is('no link from the service → the sentence alone (paid accounts, limits Paid does not lift)', withUpgrade('Too fast', { why: 'per_day' }, en), 'Too fast');
+for (const why of ['per_day', 'queue', 'space', 'file_size', 'devices', 'realtime', 'uploads', 'downloads', 'kept']) {
+  is(`an upgrade line for why=${why}, both languages`, [en.upgradeFor(why) !== en.upgradeFor('?'), zh.upgradeFor(why) !== zh.upgradeFor('?')], [true, true]);
+}
 is('507 items', errorText('QUOTA_EXCEEDED', { field: 'items' }, 507, en), en.quotaItems);
 is('507 bytes', errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, en), en.quotaBytes);
 is('507 without field → old sentence', errorText('QUOTA_EXCEEDED', {}, 507, en), en.errors.QUOTA_EXCEEDED);
@@ -299,6 +319,80 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
   is('front matter: an ordinary value as is', yamlValue('ios-shortcut'), 'ios-shortcut');
   is('…one YAML would misread, quoted', [yamlValue('@phone'), yamlValue('a: b')], ['"@phone"', '"a: b"']);
   process.exit = realExit;
+}
+
+
+// ── account-creation puzzle: the shared vectors, then when a client may solve and resend ──
+{
+  const hex = (b) => Buffer.from(b).toString('hex');
+  const POW = JSON.parse(readFileSync(new URL('./vectors/pow.json', import.meta.url), 'utf8'));
+  const nodeCrypto = (await import('node:crypto'));
+  const ref = (c, dk, nonce) => nodeCrypto.createHash('sha256').update(`${c.id}|${c.salt}|${dk ? nodeCrypto.createHash('sha256').update(dk).digest('hex') : '-'}|${nonce}`).digest();
+  for (const c of POW.hash.cases) {
+    const d = ref(c, c.device_key, c.nonce);
+    ok(`P hash ${c.name}`, hex(d) === c.digest_hex, hex(d));
+    ok(`P zeros ${c.name}`, P.zeroBits(d) === c.leading_zero_bits, String(P.zeroBits(d)));
+    ok(`P verdict ${c.name}`, (P.zeroBits(d) >= c.bits) === c.valid);
+  }
+  for (const c of POW.leadingZeroBits) is(`P leading zero bits ${c.digest_hex.slice(0, 8)}`, P.zeroBits(Buffer.from(c.digest_hex, 'hex')), c.expect);
+  // solving: what comes out passes the reference check, with and without a key
+  for (const c of POW.hash.cases.filter((x) => x.valid)) {
+    const ch = { v: 1, id: c.id, salt: c.salt, purpose: 'accounts.create', bits: c.bits };
+    const nonce = await P.powSolve(ch, c.device_key);
+    ok(`P solved ${c.name}`, nonce !== null && P.zeroBits(ref(ch, c.device_key, nonce)) >= c.bits, String(nonce));
+    is(`P first answer is the vector's nonce ${c.name}`, nonce, c.nonce);
+  }
+  {
+    const ch = { v: 1, id: 'q1w2e3r4t5y6u7i8o9p0aQ', salt: 'zXcVbNmLkJhGfDsAqWeRtY', purpose: 'accounts.create', bits: 16 };
+    const nonce = await P.powSolve(ch, 'k');
+    ok('P 16 bits solved, node agrees', P.zeroBits(ref(ch, 'k', nonce)) >= 16);
+    is('P out of time → null', await P.powSolve({ ...ch, bits: 26 }, 'k', { limitMs: 30 }), null);
+  }
+
+  // when to solve and resend
+  const chal = (o = {}) => ({ v: 1, id: 'AAAAAAAAAAAAAAAAAAAAAA', iat: 1, exp: 2, purpose: 'accounts.create', bits: 8, salt: 'BBBBBBBBBBBBBBBBBBBBBB', used: 3, sig: 'sig', ...o });
+  const refusal = (data) => Object.assign(new Error('refused'), { code: 'TURNSTILE_REQUIRED', status: 403, data });
+  const run = async (answers, body = { device_name: 'x', device_key: 'dk' }) => {
+    const sent = [];
+    let solving = 0;
+    const send = async (b) => { sent.push(b); const a = answers[Math.min(sent.length - 1, answers.length - 1)]; if (a instanceof Error) throw a; return a; };
+    let out;
+    try { out = { ok: await P.withPow(send, body, { onSolving: () => solving++ }) }; } catch (e) { out = { err: e }; }
+    return { sent, solving, ...out };
+  };
+  {
+    const r = await run([refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() }), { token: 't' }]);
+    is('P a puzzle → resent once, with the answer', [r.sent.length, r.solving, r.ok], [2, 1, { token: 't' }]);
+    const { pow, ...rest } = r.sent[1];
+    is('P the resend is the same request plus pow', rest, { device_name: 'x', device_key: 'dk' });
+    is('P pow echoes the puzzle and adds nonce', Object.keys(pow), ['v', 'id', 'iat', 'exp', 'purpose', 'bits', 'salt', 'used', 'sig', 'nonce']);
+    ok('P the nonce is a plain decimal string', /^(0|[1-9][0-9]*)$/.test(pow.nonce));
+    ok('P the nonce passes the reference check', P.zeroBits(ref(pow, 'dk', pow.nonce)) >= 8);
+  }
+  {
+    const r = await run([refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() }), { token: 't' }], { device_name: 'x' });
+    ok('P no key sent → solved against "-"', P.zeroBits(ref(r.sent[1].pow, null, r.sent[1].pow.nonce)) >= 8);
+  }
+  for (const [name, c] of [['bits 27', chal({ bits: 27 })], ['unknown v', chal({ v: 2 })], ['wrong purpose', chal({ purpose: 'other' })]]) {
+    const first = refusal({ error: 'TURNSTILE_REQUIRED', challenge: c });
+    const r = await run([first]);
+    ok(`P ${name} → not solved, the first error as it was`, r.sent.length === 1 && r.solving === 0 && r.err === first);
+  }
+  ok('P bits 26 is still tried', P.powChallengeOf({ challenge: chal({ bits: 26 }) }) !== null);
+  {
+    const first = refusal({ error: 'TURNSTILE_REQUIRED' });
+    const r = await run([first]);
+    ok('P no puzzle (older service) → the first error as it was', r.sent.length === 1 && r.solving === 0 && r.err === first);
+  }
+  {
+    const r = await run([refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() }), refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() })]);
+    ok('P refused again → one resend only, the error shows', r.sent.length === 2 && r.err?.code === 'TURNSTILE_REQUIRED');
+  }
+  {
+    const other = Object.assign(new Error('x'), { code: 'SIGNUP_LIMITED', data: { challenge: chal() } });
+    const r = await run([other]);
+    ok('P another error code is never retried', r.sent.length === 1 && r.err === other);
+  }
 }
 
 console.log(`\n${fail === 0 ? '✅' : '🛑'}  ${pass} passed, ${fail} failed\n`);

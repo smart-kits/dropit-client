@@ -146,6 +146,163 @@ WantedBy=default.target
 
 `systemctl --user enable --now dropit`. If `node` isn't found, add `Environment=PATH=…` with the folder `node` is in.
 
+## Process what arrives with an AI agent or a command
+
+Off until you turn it on. Once on, what `watch` receives is handed to an AI agent or a command you choose. Each received text
+or link becomes **one file**: what arrived, quoted, then the result. Nothing is added to your notes or to-do files.
+
+```bash
+dropit agents                                  # which of claude, codex, grok, gemini and pi are on this machine
+dropit handlers add                            # shows what will run, asks once, then it is on
+dropit watch ~/dropit                          # a new text or link turns into its result
+```
+
+A received text, `2026-10-04-44.md`, after it was processed:
+
+```markdown
+---
+dropit_seq: 44
+kind: text
+source: cli
+created: 2026-10-04T07:30:00.000Z
+---
+
+> Call Sam on Friday at 3pm about the invoice, and send him the signed contract by Monday.
+
+---
+
+This is a to-do. 1. Call Sam on Friday at 3pm about the invoice. 2. Send the signed contract by Monday.
+```
+
+The original text is the quote, so nothing is lost; if the agent fails, the file stays exactly as it arrived. A received **file**
+(an image, a PDF, a voice memo…) is always kept, and its result is a file beside it: `2026-10-04-45-trip.pdf` →
+`2026-10-04-45-trip.Auto.md`. To keep a received text as its own file too, add `--keep-source` (or
+`dropit handlers set auto keepSource=true`); the result is then a separate `<name>.<rule>.md`.
+
+- **One rule, four things to handle.** `--only ocr,audio,link,sum` picks what it takes: `ocr` images and PDFs (copy the text out),
+  `audio` voice and video (transcribe), `link` links (read the page), `sum` text (tidy and summarise). The default is all four.
+  Ticking writes the prompt; edit it with `dropit handlers edit auto` (it uses `$EDITOR`) or `set auto prompt=…`. A prompt you wrote
+  is not rewritten when you change the parts. Nothing is limited for you: `minChars=`, `kinds=`, `timeoutSec=` and more are yours.
+- **One call per item, and the agent decides.** It is told what arrived and what to do with each kind. dropit gives it only what that
+  kind needs (see below).
+- **Your own command.** `dropit handlers add -- my-script --flag` runs your program instead; the content goes to its standard input.
+  Pick an agent with `--agent codex`, `grok`, `gemini` or `pi`: it is started from the arguments its own help suggests, as a command
+  of your own, and you can change them with `set auto argv='["…"]'`.
+- **By hand:** `dropit run auto notes.txt`, or `pbpaste | dropit run auto -`. The result lands beside the file; a file you point at is
+  never changed.
+- **See before you trust:** `dropit handlers test auto` shows the exact command, the working folder, the environment and the full
+  input, using example content. It runs nothing unless you add `--run` and confirm.
+- **Pause or skip:** `dropit handlers pause`, or `dropit watch --no-handlers`. A failure is one line on stderr; receiving carries on.
+  A text that was pulled again is not processed twice.
+- **A backlog:** when many items arrive at once (a pull after being away), only the newest **3** go to the rule or `--exec`; the others
+  are still written, and one line says how many were left out. Change it with `dropit handlers recent <n>` (0 = all) or
+  `dropit watch --recent <n>`.
+- **Model:** for Claude, `dropit handlers set auto model=sonnet` passes `--model sonnet`; empty uses Claude's own default. For
+  any other agent or your own command, put the model flag in its arguments (`set auto argv='["…","--model","…"]'`).
+
+**What the agent is allowed to use**
+
+dropit decides this per item, from what arrived:
+
+| Arrived | Claude Code gets |
+|---|---|
+| A text | No tools at all: it reads what it is given and answers in text |
+| A link | One website: the one the link points to (a redirect elsewhere is not checked) |
+| An image, a video, a file | A copy of that one file in an empty folder, to read, and nothing else |
+
+Only Claude Code has been checked, on 2.1.301. It cannot read audio or video; for those, use a command that can (your own script
+around a speech-to-text tool, for instance), and the result says so when it can't. Codex, Grok, Gemini and Pi are found and can be
+chosen, but dropit has not checked what they can be held to, so for those the limits are yours.
+
+**Keep in mind**
+
+- **What arrives is untrusted input.** Anyone holding a send-only key for your account can put text in front of the agent. That is why
+  a text gets no tools, and why the content only ever goes to the agent's standard input, never onto a command line.
+- **The first time, you are told** that everything matching the rule is handed to the agent you chose; dropit does not handle or store it.
+- The rule lives in `~/.config/dropit/agents.json`, apart from the file that holds your key. dropit never deletes or overwrites it if it
+  can't be read; it tells you and leaves it alone.
+
+### Hand each item to your own command
+
+```bash
+dropit watch ~/dropit --exec ./on-receive.sh --some-flag
+```
+
+Everything after `--exec` is the command and its arguments. No shell is involved. Each new item, once its file is written, is
+handed over once, as **one line of JSON on standard input**; it is not retried and does not hold up the next item:
+
+```json
+{"v":1,"seq":44,"kind":"url","source":"chrome-extension","created":"2026-10-04T07:30:00.000Z","batch":null,
+ "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
+```
+
+`files` holds the absolute path of a received file. **Treat every field as untrusted input**: never paste it into a shell command line.
+
+## Process what arrives with an AI agent
+
+Off until you turn it on. Once on, what `watch` receives is handed to an AI agent you choose, and its answer is written
+beside the original. Nothing is added to your notes or to-do files, and the original is never changed.
+
+```bash
+dropit agents                                  # which agents are on this machine
+dropit handlers add --preset understand        # shows what will run, asks once, then it is on
+dropit watch ~/dropit                          # new items get a result file next to them
+```
+
+A result is a separate file named after the original and the rule, `2026-10-04-44.Understand and organize.md`:
+
+```markdown
+Original: 2026-10-04-44.md
+
+This is a to-do. 1. Call Sam on Friday at 3pm about the invoice. 2. Send the signed contract by Monday.
+```
+
+- **Three presets:** `understand` (says what it is, then key points and what you need to do; runs on everything that arrives),
+  `todos` and `summary` (text and links; run only when you ask). Change a rule with
+  `dropit handlers set <id> prompt=…` (or `edit <id>` to use `$EDITOR`), `minChars=`, `kinds=`, `auto=false`, `timeoutSec=` and more.
+  Nothing is limited for you: which items a rule takes is yours to set.
+- **By hand:** `dropit run summary notes.txt`, or `pbpaste | dropit run summary -`. The result lands beside the file.
+- **See before you trust:** `dropit handlers test <id>` shows the exact command, the working folder, the environment and the full
+  input, using example content. It runs nothing unless you add `--run` and confirm.
+- **Pause or skip:** `dropit handlers pause`, or `dropit watch --no-handlers`. A failure is one line on stderr; receiving carries on.
+  An item that already has a result is not processed again.
+
+**What the agent is allowed to do**
+
+| Permission | Means | Offered for |
+|---|---|---|
+| Text only (the default) | No tools at all: it reads what it is given and answers in text | Claude Code |
+| Files | Reads copies of this item's files in an empty folder, nothing else | Claude Code |
+| One website | Opens the site a link points to, or the one you name with `webDomain` (a redirect elsewhere is not checked) | Claude Code |
+
+Only Claude Code has been checked, on 2.1.301. Codex, Gemini and Ollama can be used as a **custom command**
+(`dropit handlers add --preset summary --agent custom -- <command> [arguments…]`), but dropit has not checked what permissions they
+can be held to, so for those the limits are yours to set.
+
+**Keep in mind**
+
+- **What arrives is untrusted input.** Anyone holding a send-only key for your account can put text in front of the agent. That is why
+  the default has no tools, and why the content only ever goes to the agent's standard input, never onto a command line.
+- **The first time, you are told** that everything matching a rule is handed to the agent you chose; dropit does not handle or store it.
+- The rules live in `~/.config/dropit/agents.json`, apart from the file that holds your key. dropit never deletes or overwrites it if it
+  can't be read; it tells you and leaves it alone.
+
+### Hand each item to your own command
+
+```bash
+dropit watch ~/dropit --exec ./on-receive.sh --some-flag
+```
+
+Everything after `--exec` is the command and its arguments. No shell is involved. Each new item, once its file is written, is
+handed over once, as **one line of JSON on standard input**; it is not retried and does not hold up the next item:
+
+```json
+{"v":1,"seq":44,"kind":"url","source":"chrome-extension","created":"2026-10-04T07:30:00.000Z","batch":null,
+ "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
+```
+
+`files` holds the absolute path of a received file. **Treat every field as untrusted input**: never paste it into a shell command line.
+
 ## From anywhere on your Mac
 
 The terminal is the engine; these put it one keystroke away.
@@ -194,11 +351,12 @@ Then join your account:
 ```bash
 dropit pair K7M2QX     # with a code from a device you already use (web inbox: Devices; Obsidian: Settings → dropit)
 dropit pair            # only on your very first device: creates the account
-dropit me              # free · 2/3 devices · 1.2/30 MB · files up to 5 MB · real-time trial: 3 days left
+dropit me              # free · 2/3 devices · 1.2/30 MB · files up to 10 MB · real-time trial: 3 days left
 ```
 
 > On a machine that's already joined, plain `dropit pair` stops and says so — it won't switch you to a new, empty account.
 > To join another account, give its code. To really start a separate account here, `dropit pair --new`.
+> On a network where many accounts were created today, creating one may take a few extra seconds ("Preparing the account…"). You are no longer sent to the browser for it.
 
 ## Your account from here
 
@@ -220,7 +378,7 @@ Pairing codes are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix
 | `Invalid token` · `This device was removed` | This machine was removed from your account | Get a new code, `dropit pair <code>` |
 | `Invalid pairing code` · `Pairing code expired` | Wrong, used or older than 5 minutes | Generate a fresh one |
 | `Device limit reached` | Your plan's device count is used up | `dropit devices`, then `dropit revoke <id>` one you don't use |
-| `Larger than 5 MB, the most one item can be` | The file is over your plan's size limit | Send a smaller file, or a link to it |
+| `Larger than 10 MB, the most one item can be` | The file is over your plan's size limit | Send a smaller file, or a link to it |
 | `Network unavailable (tried N addresses)` | No connection, or a proxy is blocking it | Check the network or proxy |
 | `Node.js < 22 has no global WebSocket` | Real-time needs Node.js 22+ | Upgrade Node.js, or run `watch` on a schedule |
 
@@ -231,6 +389,12 @@ Pairing codes are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix
 - The terminal joins as a full device: it can send, receive and add devices.
 - Output is in English, or Simplified Chinese when `LANG` is Chinese. `DROPIT_LANG=en` or `DROPIT_LANG=zh` overrides.
 - Problems or ideas: [open an issue](https://github.com/smart-kits/dropit-client/issues) (it's public — never paste a token, `dk_…`).
+
+
+## The other devices
+
+dropit has a client for each of your devices, and they all join the same account with a pairing code. Which ones send, which receive, and how to
+combine them: [all the clients](../README.md#on-every-device-you-own). Or open [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) on any device: it recommends one.
 
 ## License
 

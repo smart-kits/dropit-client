@@ -6,9 +6,10 @@
  */
 import {
   META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, endpointList, isPdf, seqRange,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, safeLink, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
+import * as P from '../extension/pow.js';
 import { readFileSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -120,9 +121,21 @@ for (const [lang, t] of Object.entries(STRINGS)) {
   eq(`E10 ${lang} meta too large falls back`, errorText('PAYLOAD_TOO_LARGE', { field: 'meta' }, 413, t), t.errors.PAYLOAD_TOO_LARGE);
   const now = new Date(2026, 9, 3, 23, 30).getTime();
   ok(`E11 ${lang} daily limit says when it's back`, errorText('RATE_LIMITED', { window: 'day', retry_after: 1800 }, 429, t, now).includes('00:00'));
+  ok(`E11b ${lang} signup limit says how many and when it opens again`, (() => { const x = errorText('SIGNUP_LIMITED', { retry_after: 1800, limit: 5 }, 429, t, now); return x.includes('5') && x.includes('00:00'); })());
+  eq(`E11c ${lang} signup limit without a time is the plain sentence`, errorText('SIGNUP_LIMITED', {}, 429, t, now), t.errors.SIGNUP_LIMITED);
   eq(`E11 ${lang} hourly limit`, errorText('RATE_LIMITED', { window: 'hour', retry_after: 1800 }, 429, t), t.rateHour);
   eq(`E11 ${lang} older service`, errorText('RATE_LIMITED', { retry_after: 1800 }, 429, t), t.errors.RATE_LIMITED);
+  eq(`E11 ${lang} today's uploads have their own sentence`, errorText('RATE_LIMITED', { window: 'day', field: 'uploads', retry_after: 1800 }, 429, t, now), t.rateDayUploads('00:00'));
+  eq(`E11 ${lang} today's downloads have theirs`, errorText('RATE_LIMITED', { window: 'day', field: 'downloads', retry_after: 1800 }, 429, t, now), t.rateDayDownloads('00:00'));
+  ok(`E11 ${lang} uploads and downloads are not called sends`, ![t.rateDayUploads('x'), t.rateDayDownloads('x')].includes(t.rateDay('x')));
+  ok(`E12 ${lang} space full says when room frees up`, errorText('QUOTA_EXCEEDED', { field: 'bytes', frees_in: 7200 }, 507, t) === t.quotaBytesIn(t.span(7200)) && t.span(7200).includes('2'));
+  ok(`E12 ${lang} queue full says when room frees up`, errorText('QUOTA_EXCEEDED', { field: 'items', frees_in: 90000 }, 507, t) === t.quotaItemsIn(t.span(90000)));
+  eq(`E12 ${lang} …and without the time the plain sentence`, errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, t), t.quotaBytes);
+  eq(`E12 ${lang} a span under an hour`, t.span(600), lang === 'zh' ? '不到 1 小时' : 'under an hour');
+  for (const why of ['per_day', 'queue', 'space', 'file_size', 'devices', 'realtime', 'uploads', 'downloads', 'kept']) ok(`E13 ${lang} an upgrade line for why=${why}`, typeof t.upgradeFor(why) === 'string' && t.upgradeFor(why) !== t.upgradeFor('nonsense'));
+  ok(`E13 ${lang} an unknown reason still says something`, t.upgradeFor('nonsense').length > 0);
   eq(`E12 ${lang} queue full`, errorText('QUOTA_EXCEEDED', { field: 'items' }, 507, t), t.quotaItems);
+  if (lang === 'en') for (const [u, want] of [["https://dropit.example/upgrade?u=1", "https://dropit.example/upgrade?u=1"], ["http://127.0.0.1:8799/upgrade", "http://127.0.0.1:8799/upgrade"], ["http://localhost:8780/x", "http://localhost:8780/x"], ["javascript:alert(1)", null], ["data:text/html,<b>x</b>", null], ["file:///etc/passwd", null], ["obsidian://open?vault=x", null], ["http://evil.example/up", null], ["//evil.example/x", null], ["", null], [null, null]]) eq(`E13 a link from the service: ${String(u).slice(0, 40)}`, safeLink(u), want);
   eq(`E12 ${lang} storage full`, errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, t), t.quotaBytes);
   ok(`E12 ${lang} unknown code`, errorText('NOPE', {}, 500, t).includes('500'));
 }
@@ -361,6 +374,85 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   }
   eq('V every error code has a sentence', V.errorCodes, Object.keys(STRINGS.en.errors));
   for (const [kind, facts, want] of V.deviceKey) eq(`V deviceKey ${kind}`, await deviceKey(kind, facts), want);
+}
+
+// ── account-creation puzzle: the shared vectors, then when a client may solve and resend ──
+{
+  const hex = (b) => Buffer.from(b).toString('hex');
+  const POW = JSON.parse(readFileSync(new URL('./vectors/pow.json', import.meta.url), 'utf8'));
+  const nodeCrypto = (await import('node:crypto'));
+  const ref = (c, dk, nonce) => nodeCrypto.createHash('sha256').update(`${c.id}|${c.salt}|${dk ? nodeCrypto.createHash('sha256').update(dk).digest('hex') : '-'}|${nonce}`).digest();
+  for (const c of POW.hash.cases) {
+    const d = P.tryNonce(c, c.device_key, c.nonce);
+    ok(`P hash ${c.name}`, hex(d) === c.digest_hex, hex(d));
+    ok(`P zeros ${c.name}`, P.zeroBits(d) === c.leading_zero_bits, String(P.zeroBits(d)));
+    ok(`P verdict ${c.name}`, (P.zeroBits(d) >= c.bits) === c.valid);
+    ok(`P key hash ${c.name}`, P.keyHash(c.device_key) === c.dkh);
+  }
+  for (const c of POW.leadingZeroBits) eq(`P leading zero bits ${c.digest_hex.slice(0, 8)}`, P.zeroBits(Buffer.from(c.digest_hex, 'hex')), c.expect);
+  // every hash length around the block edges agrees with node's
+  for (let n = 0; n < 200; n += 7) {
+    const bytes = Buffer.from('x'.repeat(n));
+    ok(`P sha256 of ${n} bytes`, Buffer.from(P.sha256(bytes)).equals(nodeCrypto.createHash('sha256').update(bytes).digest()));
+  }
+  // solving: what comes out passes the reference check, with and without a key
+  for (const c of POW.hash.cases.filter((x) => x.valid)) {
+    const ch = { v: 1, id: c.id, salt: c.salt, purpose: 'accounts.create', bits: c.bits };
+    const nonce = await P.solve(ch, c.device_key);
+    ok(`P solved ${c.name}`, nonce !== null && P.zeroBits(ref(ch, c.device_key, nonce)) >= c.bits, String(nonce));
+    eq(`P first answer is the vector's nonce ${c.name}`, nonce, c.nonce);
+  }
+  {
+    const ch = { v: 1, id: 'q1w2e3r4t5y6u7i8o9p0aQ', salt: 'zXcVbNmLkJhGfDsAqWeRtY', purpose: 'accounts.create', bits: 16 };
+    const nonce = await P.solve(ch, 'k');
+    ok('P 16 bits solved, node agrees', P.zeroBits(ref(ch, 'k', nonce)) >= 16);
+    eq('P out of time → null', await P.solve({ ...ch, bits: 26 }, 'k', { limitMs: 30 }), null);
+  }
+
+  // when to solve and resend
+  const chal = (o = {}) => ({ v: 1, id: 'AAAAAAAAAAAAAAAAAAAAAA', iat: 1, exp: 2, purpose: 'accounts.create', bits: 8, salt: 'BBBBBBBBBBBBBBBBBBBBBB', used: 3, sig: 'sig', ...o });
+  const refusal = (data) => Object.assign(new Error('refused'), { code: 'TURNSTILE_REQUIRED', status: 403, data });
+  const run = async (answers, body = { device_name: 'x', device_key: 'dk' }) => {
+    const sent = [];
+    let solving = 0;
+    const send = async (b) => { sent.push(b); const a = answers[Math.min(sent.length - 1, answers.length - 1)]; if (a instanceof Error) throw a; return a; };
+    let out;
+    try { out = { ok: await P.withPow(send, body, { onSolving: () => solving++ }) }; } catch (e) { out = { err: e }; }
+    return { sent, solving, ...out };
+  };
+  {
+    const r = await run([refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() }), { token: 't' }]);
+    eq('P a puzzle → resent once, with the answer', [r.sent.length, r.solving, r.ok], [2, 1, { token: 't' }]);
+    const { pow, ...rest } = r.sent[1];
+    eq('P the resend is the same request plus pow', rest, { device_name: 'x', device_key: 'dk' });
+    eq('P pow echoes the puzzle and adds nonce', Object.keys(pow), ['v', 'id', 'iat', 'exp', 'purpose', 'bits', 'salt', 'used', 'sig', 'nonce']);
+    ok('P the nonce is a plain decimal string', /^(0|[1-9][0-9]*)$/.test(pow.nonce));
+    ok('P the nonce passes the reference check', P.zeroBits(ref(pow, 'dk', pow.nonce)) >= 8);
+  }
+  {
+    const r = await run([refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() }), { token: 't' }], { device_name: 'x' });
+    ok('P no key sent → solved against "-"', P.zeroBits(ref(r.sent[1].pow, null, r.sent[1].pow.nonce)) >= 8);
+  }
+  for (const [name, c] of [['bits 27', chal({ bits: 27 })], ['unknown v', chal({ v: 2 })], ['wrong purpose', chal({ purpose: 'other' })]]) {
+    const first = refusal({ error: 'TURNSTILE_REQUIRED', challenge: c });
+    const r = await run([first]);
+    ok(`P ${name} → not solved, the first error as it was`, r.sent.length === 1 && r.solving === 0 && r.err === first);
+  }
+  ok('P bits 26 is still tried', P.challengeOf({ challenge: chal({ bits: 26 }) }) !== null);
+  {
+    const first = refusal({ error: 'TURNSTILE_REQUIRED' });
+    const r = await run([first]);
+    ok('P no puzzle (older service) → the first error as it was', r.sent.length === 1 && r.solving === 0 && r.err === first);
+  }
+  {
+    const r = await run([refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() }), refusal({ error: 'TURNSTILE_REQUIRED', challenge: chal() })]);
+    ok('P refused again → one resend only, the error shows', r.sent.length === 2 && r.err?.code === 'TURNSTILE_REQUIRED');
+  }
+  {
+    const other = Object.assign(new Error('x'), { code: 'SIGNUP_LIMITED', data: { challenge: chal() } });
+    const r = await run([other]);
+    ok('P another error code is never retried', r.sent.length === 1 && r.err === other);
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

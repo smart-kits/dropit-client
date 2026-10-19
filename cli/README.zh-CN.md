@@ -139,6 +139,138 @@ WantedBy=default.target
 
 `systemctl --user enable --now dropit`。找不到 `node` 的话，加一行 `Environment=PATH=…`，写上 `node` 所在的目录。
 
+## 用 AI agent 或你自己的命令处理收到的内容
+
+默认关着。打开之后，`watch` 收到的内容会交给你选的 AI agent 或命令。收到的每条文字或链接会变成**一个文件**：上面引用收到的原样，下面是处理结果。不会往你的笔记或待办文件里加任何东西。
+
+```bash
+dropit agents                                  # 这台机器上有 claude、codex、grok、gemini、pi 里的哪些
+dropit handlers add                            # 先显示会运行什么、问你一次，然后就启用了
+dropit watch ~/dropit                          # 新收到的文字或链接，会变成处理后的样子
+```
+
+收到的一条文字 `2026-10-04-44.md`，处理之后：
+
+```markdown
+---
+dropit_seq: 44
+kind: text
+source: cli
+created: 2026-10-04T07:30:00.000Z
+---
+
+> 周五下午 3 点给小王回电话，说发票的事；周一前把签好的合同发给他。
+
+---
+
+这是一条待办。1. 周五下午 3 点给小王回电话，说发票的事。2. 周一前把签好的合同发给他。
+```
+
+原文就在引用里，所以不会丢；agent 失败的话，文件保持收到时的样子。收到的**文件**（图片、PDF、语音……）总是保留，结果是它旁边的一个文件：`2026-10-04-45-行程.pdf` → `2026-10-04-45-行程.自动处理.md`。想把收到的文字也另存一份，加 `--keep-source`（或 `dropit handlers set auto keepSource=true`），结果就会是单独的 `<文件名>.<规则名>.md`。
+
+- **一条规则，四类内容。** `--only ocr,audio,link,sum` 选它处理什么：`ocr` 图片和 PDF（把文字抽出来）、`audio` 语音和视频（转写）、`link` 链接（读正文）、`sum` 文字（整理并总结）。默认四类都要。
+  勾选会写好提示词；要改，用 `dropit handlers edit auto`（用 `$EDITOR`）或 `set auto prompt=…`。你自己写过的提示词，改选类型时不会被重写。工具不替你设任何限制：`minChars=`、`kinds=`、`timeoutSec=` 等都由你自己定。
+- **每条内容调用一次，由 agent 自己判断。** 它会被告知收到了什么、每一类该怎么处理。dropit 只给它这一类需要的东西（见下）。
+- **你自己的命令。** `dropit handlers add -- my-script --flag` 运行你自己的程序，内容走它的标准输入。
+  也可以用 `--agent codex`、`grok`、`gemini` 或 `pi` 选一个：它会从它自己的帮助里建议的参数开始，当作你自己的命令，要改参数用 `set auto argv='["…"]'`。
+- **手动：** `dropit run auto notes.txt`，或 `pbpaste | dropit run auto -`。结果就落在那个文件旁边；你指定的文件从不被改动。
+- **先看清再信它：** `dropit handlers test auto` 用示例内容显示确切的命令、工作目录、环境变量和完整输入。不加 `--run` 并确认，就什么都不运行。
+- **暂停或跳过：** `dropit handlers pause`，或 `dropit watch --no-handlers`。失败只在 stderr 输出一行，接收照常。重新拉取到的文字不会被处理两次。
+- **积压：** 一次到了很多条（离开一阵后拉取）时，只有最新的 **3** 条交给规则或 `--exec`，其余照常写入，并用一行说明漏了几条。用 `dropit handlers recent <n>`（0 = 全部）或 `dropit watch --recent <n>` 修改。
+- **模型：** Claude 用 `dropit handlers set auto model=sonnet`，等于传 `--model sonnet`；留空用 Claude 自己的默认。其他 agent 或你自己的命令，把模型参数写进命令参数（`set auto argv='["…","--model","…"]'`）。
+
+**agent 被允许用什么**
+
+dropit 按收到的内容分别决定：
+
+| 收到的是 | Claude Code 得到 |
+|---|---|
+| 文字 | 没有任何工具：读到什么就用文字回答 |
+| 链接 | 一个网站：链接指向的那个（跳转到别处不做检查） |
+| 图片、视频、文件 | 空文件夹里那一个文件的副本，只读，别的都不行 |
+
+目前只验证过 Claude Code（2.1.301）。它读不了音频和视频；要处理它们，用能读的命令（比如你自己包一层语音转文字工具的脚本），读不了时结果里会直接说。Codex、Grok、Gemini、Pi 能被找到、也能选，但 dropit 没有验证过它们的权限能被限制到什么程度，所以这些的限制要你自己来设。
+
+**请记住**
+
+- **收到的内容是不可信输入。** 持有你账号「只投递」密钥的人，也能把文字送到 agent 面前。所以文字不给任何工具，内容也只会走 agent 的标准输入，从不放进命令行。
+- **第一次启用时会告诉你：** 所有符合规则的内容，都会交给你选的 agent；dropit 不经手、不存。
+- 规则存在 `~/.config/dropit/agents.json`，和存放密钥的文件分开。这个文件读不了的时候，dropit 从不删除或覆盖它，只会告诉你，然后不去动它。
+
+### 把每条内容交给你自己的命令
+
+```bash
+dropit watch ~/dropit --exec ./on-receive.sh --some-flag
+```
+
+`--exec` 后面的所有参数都是命令和它的参数，不经过 shell。每条新内容在文件写好之后只交一次，以**一行 JSON 走标准输入**；不重试，也不拖住下一条：
+
+```json
+{"v":1,"seq":44,"kind":"url","source":"chrome-extension","created":"2026-10-04T07:30:00.000Z","batch":null,
+ "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
+```
+
+`files` 里是收到的文件的绝对路径。**每个字段都是不可信输入**：绝不要把它拼进 shell 命令行。
+
+## 用你的 AI agent 处理收到的内容
+
+默认关着。打开之后，`watch` 收到的内容会交给你选的 AI agent，它的回答写在原文旁边。不会往你的笔记或待办文件里加任何东西，原文也从不被改动。
+
+```bash
+dropit agents                                  # 这台机器上有哪些 agent
+dropit handlers add --preset understand        # 先显示会运行什么、问你一次，然后就启用了
+dropit watch ~/dropit                          # 新内容旁边会多一个结果文件
+```
+
+结果是一个单独的文件，用原文件名加规则名命名，例如 `2026-10-04-44.自动识别并整理.md`：
+
+```markdown
+原文：2026-10-04-44.md
+
+这是一条待办。1. 周五下午 3 点给小王回电话，说发票的事。2. 周一前把签好的合同发给他。
+```
+
+- **三个预设：** `understand`（先说这是什么，再给要点和需要你做的事；收到的每条都处理）、`todos` 和 `summary`（文字和链接；只在你要的时候运行）。
+  改规则：`dropit handlers set <id> prompt=…`（或 `edit <id>`，用 `$EDITOR`），还有 `minChars=`、`kinds=`、`auto=false`、`timeoutSec=` 等。
+  工具不替你设任何限制：规则处理哪些内容，由你自己定。
+- **手动：** `dropit run summary notes.txt`，或 `pbpaste | dropit run summary -`。结果就落在那个文件旁边。
+- **先看清再信它：** `dropit handlers test <id>` 用示例内容显示确切的命令、工作目录、环境变量和完整输入。不加 `--run` 并确认，就什么都不运行。
+- **暂停或跳过：** `dropit handlers pause`，或 `dropit watch --no-handlers`。失败只在 stderr 输出一行，接收照常。
+  已经有结果的内容不会再处理一遍。
+
+**agent 被允许做什么**
+
+| 权限 | 含义 | 提供给 |
+|---|---|---|
+| 只读文字（默认） | 没有任何工具：读到什么就用文字回答 | Claude Code |
+| 读文件 | 在一个空文件夹里读这条内容文件的副本，别的都不行 | Claude Code |
+| 联网（一个网站） | 打开链接指向的网站，或你用 `webDomain` 指定的那个（链接跳转到别处不做检查） | Claude Code |
+
+目前只验证过 Claude Code（2.1.301）。Codex、Gemini、Ollama 可以当作**自定义命令**来用
+（`dropit handlers add --preset summary --agent custom -- <命令> [参数…]`），但 dropit 没有验证过它们的权限能被限制到什么程度，所以这些的限制要你自己来设。
+
+**请记住**
+
+- **收到的内容是不可信输入。** 持有你账号「只投递」密钥的人，也能把文字送到 agent 面前。所以默认不给任何工具，
+  内容也只会走 agent 的标准输入，从不放进命令行。
+- **第一次启用时会告诉你：** 所有符合规则的内容，都会交给你选的 agent；dropit 不经手、不存。
+- 规则存在 `~/.config/dropit/agents.json`，和存放密钥的文件分开。这个文件读不了的时候，dropit 从不删除或覆盖它，只会告诉你，然后不去动它。
+
+### 把每条内容交给你自己的命令
+
+```bash
+dropit watch ~/dropit --exec ./on-receive.sh --some-flag
+```
+
+`--exec` 后面的所有参数都是命令和它的参数，不经过 shell。每条新内容在文件写好之后只交一次，以**一行 JSON 走标准输入**；不重试，也不拖住下一条：
+
+```json
+{"v":1,"seq":44,"kind":"url","source":"chrome-extension","created":"2026-10-04T07:30:00.000Z","batch":null,
+ "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
+```
+
+`files` 里是收到的文件的绝对路径。**每个字段都是不可信输入**：绝不要把它拼进 shell 命令行。
+
 ## 在 Mac 上随手就投
 
 终端是引擎，下面这几样把它放到一个按键的距离。
@@ -187,11 +319,12 @@ curl -fsSL https://dropit.smart-kits.xyz/install.sh | sh    # 装进 ~/.local/bi
 ```bash
 dropit pair K7M2QX     # 用一台已经在用的设备上的配对码（网页收件箱的「设备」页；Obsidian 的「设置 → dropit」）
 dropit pair            # 只在你的第一台设备上用：创建账号
-dropit me              # free · 2/3 台设备 · 1.2/30 MB · 单个文件最大 5 MB · 实时推送体验期：还剩 3 天
+dropit me              # free · 2/3 台设备 · 1.2/30 MB · 单个文件最大 10 MB · 实时推送体验期：还剩 3 天
 ```
 
 > 已经加入过的机器上直接运行 `dropit pair`，会停下来说明，不会把你切到一个空的新账号。
 > 要加入另一个账号，带上它的配对码；确实要在这里另建一个账号，用 `dropit pair --new`。
+> 如果这个网络今天已经建了很多账号，创建时可能要多等几秒（显示「正在准备账号…」），不会再把你打发去浏览器。
 
 ## 在这里管理账号
 
@@ -213,7 +346,7 @@ dropit me              # free · 2/3 台设备 · 1.2/30 MB · 单个文件最�
 | `token 无效` · `设备已被移除` | 这台机器被从账号里移除了 | 拿一个新配对码，`dropit pair <配对码>` |
 | `配对码无效` · `配对码已过期` | 输错了、用过了，或者超过了 5 分钟 | 重新生成一个 |
 | `设备数已达上限` | 套餐的设备名额用完了 | `dropit devices`，再 `dropit revoke <id>` 一台不用的 |
-| `超过了单条上限 5 MB` | 文件超过了套餐的单个文件上限 | 投小一点的文件，或者投它的链接 |
+| `超过了单条上限 10 MB` | 文件超过了套餐的单个文件上限 | 投小一点的文件，或者投它的链接 |
 | `网络不可用（试过 N 个地址）` | 没网，或者代理拦住了 | 检查网络或代理 |
 | `Node.js < 22，没有全局 WebSocket` | 实时推送需要 Node.js 22+ | 升级 Node.js，或者定时运行 `watch` |
 
@@ -224,6 +357,12 @@ dropit me              # free · 2/3 台设备 · 1.2/30 MB · 单个文件最�
 - 终端加入后是一台完整权限的设备：能投、能收、能添加设备。
 - 输出默认英文，`LANG` 是中文时显示简体中文；用 `DROPIT_LANG=en` 或 `DROPIT_LANG=zh` 强制指定。
 - 问题和建议：[提一个 issue](https://github.com/smart-kits/dropit-client/issues)（是公开的 —— 别贴 token，`dk_…`）。
+
+
+## 其他设备
+
+你的每台设备都有对应的 dropit 客户端，用配对码加入同一个账号。哪些能发、哪些能收、怎么搭配：
+[所有客户端](../README.zh-CN.md#你的每台设备上)。或者在任何设备上打开 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz)，它会推荐一个。
 
 ## 许可证
 

@@ -1,0 +1,113 @@
+{
+  "_comment": "Reference vectors for the account-creation proof of work. Made by a reference implementation (see docs/design/pow-protocol.md); every client and the service check themselves against it.",
+  "hash": {
+    "preimage": "id|salt|dkh|nonce (utf-8); dkh = lowercase hex SHA-256(utf-8 device_key), or \"-\" when there is none",
+    "cases": [
+      {
+        "name": "8 bits, with device_key",
+        "id": "AAAAAAAAAAAAAAAAAAAAAA",
+        "salt": "BBBBBBBBBBBBBBBBBBBBBB",
+        "device_key": "extension-0123456789abcdef0123456789abcdef",
+        "dkh": "35e1fa2a75139456f2e9b3ebd2be47a8a9822d0cd18cf739b570124ae83f9adf",
+        "bits": 8,
+        "nonce": "27",
+        "digest_hex": "0039eddba02d3bf8194b89197bc1a8c5ff953a16c3d39b3a13c093ca597d5090",
+        "leading_zero_bits": 10,
+        "valid": true
+      },
+      {
+        "name": "12 bits, with device_key",
+        "id": "q1w2e3r4t5y6u7i8o9p0aQ",
+        "salt": "zXcVbNmLkJhGfDsAqWeRtY",
+        "device_key": "cli-fedcba9876543210fedcba9876543210",
+        "dkh": "2c63a5e7a3bbe993a61b1c39055457fb1f534b741a3365095cd4d8dd57bc1712",
+        "bits": 12,
+        "nonce": "7688",
+        "digest_hex": "0005987678492985234d6ab264f4d39876e4619da2e5871b7946b50f8d270b52",
+        "leading_zero_bits": 13,
+        "valid": true
+      },
+      {
+        "name": "16 bits, no device_key",
+        "id": "0123456789abcdefghijkl",
+        "salt": "mnopqrstuvwxyz0123456A",
+        "device_key": null,
+        "dkh": "-",
+        "bits": 16,
+        "nonce": "72628",
+        "digest_hex": "0000ecf3c92fb893f7a4318dc49ba5b967a3c8007940b1b0b725417200eab634",
+        "leading_zero_bits": 16,
+        "valid": true
+      },
+      {
+        "name": "insufficient bits",
+        "id": "AAAAAAAAAAAAAAAAAAAAAA",
+        "salt": "BBBBBBBBBBBBBBBBBBBBBB",
+        "device_key": "extension-0123456789abcdef0123456789abcdef",
+        "bits": 20,
+        "nonce": "3",
+        "dkh": "35e1fa2a75139456f2e9b3ebd2be47a8a9822d0cd18cf739b570124ae83f9adf",
+        "digest_hex": "15abbf18329336faa2740f8339dbc029bd9f7373c80fdf4e9f28df1e6b5b9453",
+        "leading_zero_bits": 3,
+        "valid": false
+      }
+    ]
+  },
+  "leadingZeroBits": [
+    {
+      "digest_hex": "00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 8
+    },
+    {
+      "digest_hex": "0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 16
+    },
+    {
+      "digest_hex": "01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 7
+    },
+    {
+      "digest_hex": "80ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 0
+    },
+    {
+      "digest_hex": "0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 4
+    },
+    {
+      "digest_hex": "00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 8
+    },
+    {
+      "digest_hex": "0001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 15
+    },
+    {
+      "digest_hex": "000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 24
+    },
+    {
+      "digest_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 0
+    },
+    {
+      "digest_hex": "00007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": 17
+    }
+  ],
+  "signature": {
+    "secret": "pow-test-secret",
+    "challenge": {
+      "v": 1,
+      "id": "AAAAAAAAAAAAAAAAAAAAAA",
+      "iat": 1760000000000,
+      "exp": 1760000300000,
+      "purpose": "accounts.create",
+      "bits": 18,
+      "salt": "BBBBBBBBBBBBBBBBBBBBBB",
+      "used": 3
+    },
+    "canonical": "1|AAAAAAAAAAAAAAAAAAAAAA|1760000000000|1760000300000|accounts.create|18|BBBBBBBBBBBBBBBBBBBBBB|3",
+    "sig_b64url": "t5VtnCWtdNcQJmnhW5ulemMUP_sEh1ivXEg2hCesFFM"
+  }
+}
