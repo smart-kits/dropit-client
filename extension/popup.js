@@ -1,4 +1,4 @@
-import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase, PRIVACY_URL } from './api.js';
+import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase, PRIVACY_URL, INSTALL_URL } from './api.js';
 import { deviceKey } from './device.js';
 import { withPow } from './pow.js';
 import { t, lang } from './i18n.js';
@@ -377,7 +377,7 @@ function pairFailed(message) {
   $('pair').hidden = false;
   $('add-device').hidden = false;               // trying again is one click
   $('pair-title').textContent = t.pairTitle;
-  $('pair-body').hidden = $('pair-replace').hidden = $('pair-hint').hidden = true;
+  $('pair-body').hidden = $('pair-replace').hidden = $('pair-hint').hidden = $('pair-install').hidden = true;
   const box = $('pair-returned');
   box.hidden = false;
   box.querySelector('span').textContent = message;
@@ -427,6 +427,11 @@ function drawPair(p) {
   QR.draw($('pair-qr'), p.link, { scale: 4 });
   $('pair-code').textContent = p.code;          // exactly what to type: no dash to skip over
   $('pair-hint').textContent = t.pairHint;
+  // Where the new device gets dropit, as a link that opens here (the QR code takes a phone there by itself)
+  const [before, after] = t.pairInstall;
+  const link = Object.assign(document.createElement('a'), { href: INSTALL_URL, textContent: 'dropit.smart-kits.xyz', target: '_blank', rel: 'noopener' });
+  $('pair-install').replaceChildren(before, link, after);
+  $('pair-install').hidden = false;
   $('pair-hint').hidden = $('pair-left').hidden = false;
   $('pair-expired').hidden = true;
   $('pair-replace').hidden = !p.pick;
@@ -475,7 +480,7 @@ async function pairExpired() {
   pairStop();
   await pairForget();
   $('pair').classList.add('expired');
-  $('pair-hint').hidden = $('pair-left').hidden = $('pair-replace').hidden = true;
+  $('pair-hint').hidden = $('pair-left').hidden = $('pair-replace').hidden = $('pair-install').hidden = true;
   $('pair-expired').hidden = false;
   $('pair-expired').querySelector('span').textContent = t.pairExpired;
 }
