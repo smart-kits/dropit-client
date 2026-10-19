@@ -99,7 +99,7 @@ iPhone 和 iPad 上最主要的投递入口：**分享面板**和**轻点背面*
 
 ## 已知限制
 
-- 单个文件最大 100 MB（免费版 5 MB）。长视频很容易超过。
+- 单个文件最大 100 MB（免费版 10 MB）。长视频很容易超过。
 - PDF 和 JSON 文件拿不到原来的文件名，会按发送时间命名（如 `dropit 09-30 15.08.pdf`）。照片和其他文件保留原名。
 - 真机验证过的：iOS 26.6.1 上的配对和发文字；iOS 27 上分享照片（单张和多张）、视频、PDF、Excel、JSON。上面「自己动手搭」的步骤只覆盖文字和链接，还没有在真机上完整走过。
 - 遇到问题或有建议：[提一个 issue](https://github.com/smart-kits/dropit-client/issues/new?title=%5BiOS%20Shortcut%5D%20)。issue 是公开的，不要贴 token。
@@ -107,3 +107,8 @@ iPhone 和 iPad 上最主要的投递入口：**分享面板**和**轻点背面*
 ## 许可
 
 [MIT](../LICENSE)
+
+## 其他设备
+
+你的每台设备都有对应的 dropit 客户端，用配对码加入同一个账号。哪些能发、哪些能收、怎么搭配：
+[所有客户端](../README.zh-CN.md#你的每台设备上)。或者在任何设备上打开 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz)，它会推荐一个。

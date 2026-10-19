@@ -101,10 +101,16 @@ For apps that don't offer a share sheet, make a copy that reads the **Clipboard*
 
 ## Limitations
 
-- A single file can be up to 100 MB (5 MB on the free plan). Long videos pass that easily.
+- A single file can be up to 100 MB (10 MB on the free plan). Long videos pass that easily.
 - PDFs and JSON files don't come with their names, so they're named after when they were sent (`dropit 09-30 15.08.pdf`). Photos and other files keep theirs.
 - Verified on devices: pairing and sending text on iOS 26.6.1; sharing photos (one and several), a video, a PDF, Excel and JSON on iOS 27. The build-it-yourself steps above cover text and links only, and haven't been walked through on a device.
 - Something wrong, or an idea? [Open an issue](https://github.com/smart-kits/dropit-client/issues/new?title=%5BiOS%20Shortcut%5D%20). Issues are public: never paste a token.
+
+
+## The other devices
+
+dropit has a client for each of your devices, and they all join the same account with a pairing code. Which ones send, which receive, and how to
+combine them: [all the clients](../README.md#on-every-device-you-own). Or open [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) on any device: it recommends one.
 
 ## License
 
