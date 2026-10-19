@@ -199,13 +199,28 @@ const clock = (seconds, now) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+/** A link the service gave, only if it is one to open: https, or http on this machine (a local service while developing). Anything else — javascript:, data:, file:, an app's own scheme — is dropped */
+export const safeLink = (u) => {
+  try {
+    const x = new URL(String(u));
+    return x.protocol === 'https:' || (x.protocol === 'http:' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(x.hostname)) ? x.href : null;
+  } catch { return null; }
+};
+
 /** The sentence for an error answer from the service. Numbers come from the answer, never from here. */
 export function errorText(code, data = {}, status, t, now = Date.now()) {
   if (code === 'PAYLOAD_TOO_LARGE' && data.field === 'size' && data.limit) return t.tooLarge(mb(data.limit));
-  if (code === 'RATE_LIMITED' && data.window === 'day') return t.rateDay(clock(data.retry_after ?? 0, now));
+  if (code === 'RATE_LIMITED' && data.window === 'day') {
+    // Today's uploads or downloads (their own daily limits) say so; today's sends have no field
+    const back = clock(data.retry_after ?? 0, now);
+    return data.field === 'uploads' ? t.rateDayUploads(back) : data.field === 'downloads' ? t.rateDayDownloads(back) : t.rateDay(back);
+  }
   if (code === 'RATE_LIMITED' && data.window === 'hour') return t.rateHour;
-  if (code === 'QUOTA_EXCEEDED' && data.field === 'items') return t.quotaItems;
-  if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return t.quotaBytes;
+  if (code === 'SIGNUP_LIMITED' && Number.isFinite(data.retry_after) && Number.isFinite(data.limit)) return t.signupLimitedAt(clock(data.retry_after, now), data.limit);
+  // When the service says when the oldest item expires, so does this: waiting has an end
+  const frees = Number.isFinite(data.frees_in) ? t.span(data.frees_in) : null;
+  if (code === 'QUOTA_EXCEEDED' && data.field === 'items') return frees ? t.quotaItemsIn(frees) : t.quotaItems;
+  if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return frees ? t.quotaBytesIn(frees) : t.quotaBytes;
   if (code === 'DEVICE_REVOKED' && data.reason === 'replaced') return t.revokedReplaced;
   return t.errors[code] ?? t.httpFailed(status);
 }

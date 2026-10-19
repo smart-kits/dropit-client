@@ -117,6 +117,7 @@ After updating from an older version Chrome sometimes leaves them blank — set 
    Type the 6 characters and press *Join*; case, spaces and `0`/`O` mix-ups don't matter.
    Your very first device? Use the small *Create a new account* link under the form instead — the popup then shows a code
    for [your next device](#add-a-device) straight away.
+   If many accounts were created on your network today, creating one may take a few extra seconds ("Preparing the account…") instead of sending you elsewhere.
 
 **Updating:** unzip the new version over the same folder, then press *Reload* on `chrome://extensions`.
 Same folder, same extension — you stay joined.
@@ -177,6 +178,12 @@ extension/
 No build step — edit, then *Reload* on `chrome://extensions`. Tests, from the repository root:
 `node test/extension.test.mjs` and `node test/i18n.test.mjs`.
 The interface follows the browser's language: English, or Simplified Chinese when the browser is set to Chinese.
+
+
+## The other devices
+
+dropit has a client for each of your devices, and they all join the same account with a pairing code. Which ones send, which receive, and how to
+combine them: [all the clients](../README.md#on-every-device-you-own). Or open [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz) on any device: it recommends one.
 
 ## License
 

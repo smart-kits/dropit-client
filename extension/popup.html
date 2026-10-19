@@ -25,7 +25,7 @@
   <!-- What joining sends, right where joining happens: the buttons say "Agree and …" -->
   <p class="note" id="consent"></p>
   <p class="first"><span data-i18n="firstTime"></span> <button class="link" id="create" data-i18n="create"></button></p>
-  <div class="returned" id="setup-returned" role="alert" hidden><b data-i18n="returned"></b><span></span></div>
+  <div class="notice" id="setup-returned" role="alert" hidden><b aria-hidden="true">!</b><span></span></div>
 </section>
 
 <section id="main" hidden>
@@ -39,7 +39,7 @@
     <div class="stamp-wrap">
       <button class="stamp" id="send" type="submit"><span class="face"><b id="stamp-word" data-i18n="stamp"></b><small data-i18n="stampHint"></small></span></button>
     </div>
-    <div class="returned" id="returned" role="alert" hidden><b data-i18n="returned"></b><span></span></div>
+    <div class="returned" id="returned" role="alert" hidden><b data-i18n="returned"></b><span></span><a class="up" id="returned-up" href="#" hidden></a></div>
   </form>
   <div class="tools">
     <button class="link" id="choose" type="button">
@@ -68,7 +68,7 @@
   </div>
   <p class="note" id="pair-hint"></p>
   <p class="note replace" id="pair-replace" hidden><label for="pair-pick"></label><select id="pair-pick"></select></p>
-  <div class="returned" id="pair-returned" role="alert" hidden><b data-i18n="returned"></b><span></span></div>
+  <div class="notice" id="pair-returned" role="alert" hidden><b aria-hidden="true">!</b><span></span></div>
 </section>
 
 <!-- The public repository: see the code, or say what went wrong -->

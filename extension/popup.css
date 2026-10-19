@@ -104,6 +104,11 @@ textarea[readonly] { opacity: .75; }
   font: 600 13px/1.3 var(--label); letter-spacing: .08em; text-transform: uppercase;
 }
 .returned span { overflow-wrap: anywhere; }
+/* Something that did not work, that is not a letter coming back (setup, pairing): a mark, not the Returned stamp */
+.notice { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 2px; color: var(--red); font-weight: 600; font-size: 13px; line-height: 1.45; }
+.notice b { flex: none; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 11px; line-height: 13px; text-align: center; }
+.notice span { overflow-wrap: anywhere; }
+.returned .up { display: block; margin-top: 4px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 /* The stamp is the send button */
 .stamp-wrap { grid-column: 2; grid-row: 1; align-self: start; filter: drop-shadow(0 2px 3px rgba(21, 23, 28, .18)); transition: filter .15s; }
@@ -187,7 +192,7 @@ header .add svg.i { width: 13px; height: 13px; }
   display: block; width: 100%; margin-top: 4px; padding: 5px 6px; font: inherit; font-size: 13px; color: var(--ink);
   background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
 }
-.pair .returned { margin: 4px 0 0; }
+.pair .returned, .pair .notice { margin: 4px 0 0; }
 
 /* The one-question window that asks for access to a site */
 .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 14px; }

@@ -105,6 +105,7 @@ Mac 上 <kbd>Alt</kbd> 就是 <kbd>⌥</kbd>。在 `chrome://extensions/shortcut
    Obsidian 的「设置 → dropit」、或者终端里 `dropit code`。
    输入这 6 位，点「加入」；大小写、空格、`0` 和 `O` 搞混都没关系。
    这是你的第一台设备？点表单下面的小字「创建新账号」—— 弹窗随即给出配对码，[把下一台设备加进来](#加一台设备)。
+   如果这个网络今天已经建了很多账号，创建时可能要多等几秒（显示「正在准备账号…」），不会再让你去别处建。
 
 **更新：** 把新版本解压到同一个文件夹覆盖，再在 `chrome://extensions` 点「重新加载」。
 文件夹不变，扩展就还是同一个 —— 不用重新加入。
@@ -161,6 +162,12 @@ extension/
 没有构建步骤 —— 改完在 `chrome://extensions` 点「重新加载」。测试（在仓库根目录）：
 `node test/extension.test.mjs` 和 `node test/i18n.test.mjs`。
 界面跟随浏览器语言：默认英文，浏览器设为中文时显示简体中文。
+
+
+## 其他设备
+
+你的每台设备都有对应的 dropit 客户端，用配对码加入同一个账号。哪些能发、哪些能收、怎么搭配：
+[所有客户端](../README.zh-CN.md#你的每台设备上)。或者在任何设备上打开 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz)，它会推荐一个。
 
 ## 许可证
 

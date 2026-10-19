@@ -1,7 +1,8 @@
 import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase, PRIVACY_URL } from './api.js';
 import { deviceKey } from './device.js';
+import { withPow } from './pow.js';
 import { t, lang } from './i18n.js';
-import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX } from './payload.js';
+import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink } from './payload.js';
 import { readPage, readSelection } from './page.js';
 import { scopeFromProbe, canAddDevices, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
 import { QR } from './qr.js';
@@ -64,7 +65,16 @@ const guardSetup = (fn) => async () => {
 // A new account has only this browser in it, and items sent here need somewhere to arrive:
 // adding another device is the one next step, so its code is already showing
 $('create').onclick = guardSetup(async () => {
-  await adopt(await api('POST', '/v1/accounts', { device_name: t.deviceName(navigator.platform), ...await sameBrowser() }, { auth: false }), 'full');
+  const button = $('create'), label = button.textContent;
+  // On a busy network the service asks for a little work first: show that something is happening
+  const preparing = () => { button.disabled = true; button.textContent = t.preparing; };
+  try {
+    const body = { device_name: t.deviceName(navigator.platform), ...await sameBrowser() };
+    await adopt(await withPow((b) => api('POST', '/v1/accounts', b, { auth: false }), body, { onSolving: preparing }), 'full');
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
   await showPairCode(null, true).catch((err) => pairFailed(err.message));
 });
 $('code').onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.isComposing) $('claim').click(); };
@@ -94,10 +104,18 @@ $('unpair').onclick = async () => {
 
 const compose = $('compose');
 
-function returned(message) {
+function returned(message, err = null) {
   const box = $('returned');
   box.hidden = !message;
   box.querySelector('span').textContent = message ?? '';
+  // A limit the paid plan lifts: the service gives a link (to free accounts only) and says which limit it was
+  const up = $('returned-up');
+  const url = safeLink(err?.data?.upgrade_url);
+  up.hidden = !url;
+  if (url) {
+    up.textContent = t.upgradeFor(err.data.why);
+    up.onclick = (ev) => { ev.preventDefault(); chrome.tabs.create({ url }); };
+  }
 }
 
 /** The line under the box: what Enter will send, how sending is going, or what was just sent */
@@ -218,7 +236,7 @@ $('send-form').onsubmit = async (ev) => {
     if (authLost(err)) return render(err.message);
     drawFiles();
     explain();
-    returned(err.done ? t.partlySent(err.done, err.total, err.message) : err.message);
+    returned(err.done ? t.partlySent(err.done, err.total, err.message) : err.message, err);
   }
 };
 

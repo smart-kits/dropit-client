@@ -1,6 +1,6 @@
 import { store, sendText, sendFile, me, authLost } from './api.js';
 import { t } from './i18n.js';
-import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb, isPdf } from './payload.js';
+import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb, isPdf, safeLink } from './payload.js';
 import { readPage, readSelection, fetchStart, fetchChunk, fetchDrop, showToast } from './page.js';
 
 const NAVY = '#1f4e9e';   // arrived
@@ -45,7 +45,11 @@ async function run(fn, tab) {
     console.warn('dropit:', err);
     if (authLost(err)) return notify(t.revokedTitle, t.revoked);
     flash(false, err.message);
-    if (!(await inPage(tab, showToast, [t.toastFailed(err.message), true]))) notify(t.failedTitle, err.message);
+    // A limit the paid plan lifts: the service gave a link (free accounts only) and said which limit it was
+    const link0 = safeLink(err.data?.upgrade_url);
+    const up = link0 ? { url: link0, why: err.data.why } : null;
+    const link = up ? { text: t.upgradeFor(up.why), url: up.url } : null;
+    if (!(await inPage(tab, showToast, [t.toastFailed(err.message), true, link]))) notify(t.failedTitle, err.message, up);
   }
 }
 
@@ -233,9 +237,20 @@ async function openSetup() {
   return null;
 }
 
-function notify(title, message) {
-  chrome.notifications.create({ type: 'basic', iconUrl: 'icon.png', title, message });
+function notify(title, message, up = null) {
+  // A limit the paid plan lifts: the notification says so, and a click opens the way past it (the link waits in session storage under the notification's id)
+  const id = up?.url ? `up-${Date.now()}` : undefined;
+  if (id) chrome.storage.session.set({ [`notice:${id}`]: up.url }).catch(() => {});
+  chrome.notifications.create(id, { type: 'basic', iconUrl: 'icon.png', title, message: up?.url ? `${message} — ${t.upgradeFor(up.why)}` : message });
 }
+chrome.notifications.onClicked.addListener(async (id) => {
+  const key = `notice:${id}`;
+  const url = (await chrome.storage.session.get(key).catch(() => ({})))[key];
+  if (!url) return;
+  chrome.tabs.create({ url });
+  chrome.storage.session.remove(key).catch(() => {});
+  chrome.notifications.clear(id);
+});
 
 /** ✓ in navy or ✗ in red for 2.5 s, then back to the resting state */
 function flash(ok, title) {

@@ -89,8 +89,9 @@ export function fetchDrop(id) {
  * and invisible when the icon isn't pinned. A shadow root keeps the page's styles out of it.
  * @param {string} text
  * @param {boolean} failed red, stays longer
+ * @param {{text: string, url: string}|null} link a way on from the message (the way past a limit the paid plan lifts): clickable, stays longer still
  */
-export function showToast(text, failed) {
+export function showToast(text, failed, link = null) {
   const ID = 'dropit-toast-host';
   document.getElementById(ID)?.remove();
   const host = document.createElement('div');
@@ -110,8 +111,17 @@ export function showToast(text, failed) {
   const box = document.createElement('div');
   box.setAttribute('role', failed ? 'alert' : 'status');
   box.textContent = text;
+  if (link?.url) {
+    const a = document.createElement('a');
+    a.textContent = link.text;
+    a.href = link.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    Object.assign(a.style, { display: 'block', marginTop: '4px', color: 'inherit', font: 'inherit', fontWeight: '600', textDecoration: 'underline' });
+    box.append(a);
+  }
   Object.assign(box.style, {
-    maxWidth: '480px', transform: 'translateY(-8px)', opacity: '0', transition: 'opacity .2s, transform .3s',
+    maxWidth: '480px', pointerEvents: link?.url ? 'auto' : 'none', transform: 'translateY(-8px)', opacity: '0', transition: 'opacity .2s, transform .3s',
     padding: '10px 16px', borderRadius: '6px', font: `${failed ? 600 : 400} 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`,
     background: failed ? paper : ink, color: failed ? red : paper, border: failed ? `2px solid ${red}` : '0',
     boxShadow: '0 1px 2px rgba(21, 23, 28, .06), 0 4px 14px rgba(21, 23, 28, .12)', overflowWrap: 'anywhere',
@@ -125,6 +135,6 @@ export function showToast(text, failed) {
   setTimeout(() => {
     box.style.opacity = '0';
     setTimeout(() => host.remove(), still ? 0 : 300);
-  }, failed ? 5000 : 1800);
+  }, link?.url ? 9000 : failed ? 5000 : 1800);
   return true;
 }
