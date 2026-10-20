@@ -3,6 +3,8 @@
 > **Optional, and only for people who want it.** The default AI processing needs none of this. It is for when you share a video
 > link (Douyin, TikTok, Bilibili, YouTube…) and want the agent to work from what is *said* in it, not just the title.
 > Nothing here is part of dropit: it is a way to set up your own tools, and dropit has not checked it beyond the tests listed below.
+>
+> The permission settings in step 3 are **Claude Code's**. If you chose another agent, give it the same permission in its own settings: the script itself works with any agent that can run a command.
 
 ## Why the default cannot do it
 
