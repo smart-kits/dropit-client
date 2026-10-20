@@ -30,6 +30,8 @@
    # Prints what is said in a video as text: the site's own subtitles when there are any, otherwise a local transcript.
    # Needs: uvx (uv), ffmpeg, whisper-cli (brew install whisper-cpp) and one whisper.cpp model file.
    set -euo pipefail
+   # An app started from the Dock or the Start menu does not have your shell's PATH: add the usual places
+   export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
    fail() { echo "video-text: $*" >&2; exit 1; }
 
