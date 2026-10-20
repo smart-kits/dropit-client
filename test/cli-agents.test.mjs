@@ -237,6 +237,15 @@ const sumRule = () => ({ ...C.newRule('claude', null, ['sum'], false), id: 'summ
   ok('mode: auto is allowed for a custom rule too', await set('fake', 'mode=auto') === null);
   is('parts: the kinds follow, and so does a prompt nobody edited', [await set('summary', 'prompt=' + C.composePrompt(['sum'], 'en')), await set('summary', 'parts=ocr,audio'), get('summary').kinds, get('summary').prompt],
     [null, null, ['image', 'video', 'file'], C.composePrompt(['ocr', 'audio'], 'en')]);
+  // The reminder about transcription is said when audio & video has just been ticked, and not otherwise
+  {
+    const said = async (...args) => { const m = makeIo(); await C.handlersCmd(['set', ...args], m.io); return m.log.out.join('\n'); };
+    await set('summary', 'parts=sum');
+    ok('audio ticked now: says what Claude cannot read, and where the guide is', (await said('summary', 'parts=sum,audio')).includes(en.ag.audioNote) && (await said('summary', 'parts=sum')).includes('Updated'));
+    await set('summary', 'parts=sum,audio');
+    ok('audio already ticked: said nothing more', !(await said('summary', 'parts=sum,audio,link')).includes(en.ag.audioNote));
+    ok('audio not ticked: said nothing', !(await said('summary', 'parts=sum,link')).includes(en.ag.audioNote));
+  }
   is('parts: a prompt the person edited stays as it is', [await set('summary', 'prompt=My own words'), await set('summary', 'parts=link'), get('summary').kinds, get('summary').prompt], [null, null, ['url'], 'My own words']);
   ok('parts: an unknown part, or none, refused', await set('summary', 'parts=ocr,nope') === en.ag.setParts(C.PART_IDS.join(', ')) && await set('summary', 'parts=') !== null);
   is('keepSource', [await set('summary', 'keepSource=true'), get('summary').keepSource, await set('summary', 'keepSource=false'), get('summary').keepSource], [null, true, null, false]);

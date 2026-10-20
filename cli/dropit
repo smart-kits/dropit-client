@@ -131,10 +131,11 @@ const T = {
       permFiles: "reads this item's files in an empty working folder, nothing else",
       permWeb: 'can open one website (the one a link points to, or the one you named)',
       permCustom: 'your own command: dropit does not limit what it can do',
-      permOpen: "no limits: dropit adds none. Claude Code runs with your own settings (skills, MCP servers, hooks, allow and deny rules) and your whole environment",
-      openWarn: 'No limits on the agent: anyone holding a send-only key for your account can now steer an agent that has everything your own Claude Code setup allows. To limit it, add rules to your Claude Code settings or change the command (see the README, "No limits on the agent"). Back to the safe default: dropit handlers set <id> mode=auto',
+      permOpen: "no limits: dropit adds none. The agent runs with whatever its own settings allow, and gets your whole environment",
+      openWarn: 'No limits on the agent: anyone holding a send-only key for your account can now steer an agent that has everything its own setup allows. To limit it, add rules in the agent\'s own settings or change the command (see the README, "No limits on the agent"). Back to the safe default: dropit handlers set <id> mode=auto',
       testEnvOpen: 'Environment: all of yours (names only, values are not shown):',
       guideLine: 'Guide, to have the agent read videos or use your own tools: https://github.com/smart-kits/dropit-client/blob/main/docs/ai-videos.md',
+      audioNote: 'The agent may not be able to read audio or video files, or to hear what is said in a linked video (it depends on the agent you chose). We suggest a transcription tool of your own to handle them.',
       permAuto: 'decided by what arrives: a text gets no tool, a link can open its one site, a file can read its own copy',
       agentLine: (id, label, where) => `${id}  ${label}  ${where}`,
       notFound: 'not found. Install it following its own instructions',
@@ -390,10 +391,11 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
       permFiles: '读这条内容的文件：在一个空的工作文件夹里，只能读，别的都不行',
       permWeb: '可以打开一个网站（链接指向的那个，或你指定的那个）',
       permCustom: '你自己的命令：dropit 不限制它能做什么',
-      permOpen: '不限制：dropit 不加任何限制。Claude Code 按你自己的设置运行（技能、MCP 服务、hooks、允许和拒绝规则），并带着你的全部环境变量',
-      openWarn: '不限制 agent：持有你账号「只投递」密钥的人，现在可以通过内容间接指挥一个拥有你自己 Claude Code 全部权限的 agent。要加限制，在 Claude Code 的设置里加规则，或改命令（见 README「不限制 agent」一节）。回到安全的默认：dropit handlers set <id> mode=auto',
+      permOpen: '不限制：dropit 不加任何限制。agent 按它自己的设置能做什么就做什么，并带着你的全部环境变量',
+      openWarn: '不限制 agent：持有你账号「只投递」密钥的人，现在可以通过内容间接指挥一个拥有它自己全部权限的 agent。要加限制，在 agent 自己的设置里加规则，或改命令（见 README「不限制 agent」一节）。回到安全的默认：dropit handlers set <id> mode=auto',
       testEnvOpen: '环境变量：你的全部（只显示名字，不显示值）：',
       guideLine: '指南，想让 agent 读视频、用你自己的工具：https://github.com/smart-kits/dropit-client/blob/main/docs/ai-videos.zh-CN.md',
+      audioNote: 'agent 可能无法读取音频和视频文件，也可能听不到链接里的视频说了什么（取决于你选的 agent）。建议自己装转写工具来处理。',
       permAuto: '按收到的内容决定：文字没有工具，链接只能打开它指向的那一个网站，文件只能读它自己的副本',
       agentLine: (id, label, where) => `${id}  ${label}  ${where}`,
       notFound: '没找到。请按该 agent 自己的安装说明安装',
@@ -2217,9 +2219,11 @@ async function handlersSet(args, io) {
   const h = data.handlers.find((x) => x.id === id);
   if (!h) throw new Error(t.ag.unknownRule(shown(id)));
   const field = joined.slice(0, eq).trim();
+  const hadAudio = (h.parts || []).includes('audio');
   applySetting(data, h, field, joined.slice(eq + 1));
   writeAgents(data, io.agentsFile);
   io.out(t.ag.changed(h.id));
+  if (field === 'parts' && !hadAudio && (h.parts || []).includes('audio')) io.out(`${t.ag.audioNote}\n${t.ag.guideLine}`);       // only when the person has just ticked it
   if (field === 'mode' && h.mode === 'web') io.out(t.ag.setWebNote);
   if (field === 'mode') io.out(t.ag.consentPerm(permissionText(h)));
   if (field === 'mode' && h.mode === 'open') io.out(`\n${t.ag.openWarn}\n${t.ag.guideLine}`);
