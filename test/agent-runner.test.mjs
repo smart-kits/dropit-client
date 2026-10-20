@@ -68,7 +68,8 @@ is('open mode: only a rule that names it gets it', ['text', 'url', 'image'].map(
 is('open mode: a rule that names it keeps it', R.modeFor({ mode: 'open' }, { kind: 'text' }), 'open');
 {
   const full = R.agentEnv('/opt/x/claude', { PATH: '/nvm/bin', HOME: '/h', MY_KEY: 'k', GONE: undefined }, true);
-  is('open env: the whole environment, the agent\'s folder first on PATH', [full.MY_KEY, full.HOME, full.PATH, 'GONE' in full], ['k', '/h', '/opt/x:/nvm/bin:/usr/bin:/bin', false]);
+  is('open env: the whole environment, the agent\'s folder first on PATH, the usual tool places after the person\'s own', [full.MY_KEY, full.HOME, full.PATH, 'GONE' in full], ['k', '/h', '/opt/x:/nvm/bin:/opt/homebrew/bin:/usr/local/bin:/h/.local/bin:/usr/bin:/bin', false]);
+  is('open env from a Dock-started app: Homebrew is found', R.agentEnv('/h/.local/bin/claude', { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: '/h' }, true).PATH.split(':').includes('/opt/homebrew/bin'), true);
   is('safe env is still only PATH, USER and HOME', Object.keys(R.agentEnv('/opt/x/claude', { PATH: '/nvm/bin', HOME: '/h', MY_KEY: 'k' })).sort(), ['HOME', 'PATH']);
 }
 ok('think mode has no tool at all', R.RUN_AGENTS.claude.modes.think().join('|').includes('--tools||'));
