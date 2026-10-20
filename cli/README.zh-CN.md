@@ -197,6 +197,31 @@ dropit 按收到的内容分别决定：
 - **第一次启用时会告诉你：** 所有符合规则的内容，都会交给你选的 agent；dropit 不经手、不存。
 - 规则存在 `~/.config/dropit/agents.json`，和存放密钥的文件分开。这个文件读不了的时候，dropit 从不删除或覆盖它，只会告诉你，然后不去动它。
 
+### 不限制 agent
+
+默认情况下，Claude Code 只拿到每条内容所需要的东西。如果你想要一个能做更多事的 agent（打开要登录的页面、用密钥读不公开的链接、调用技能或 MCP 服务、处理视频），把规则改成**不限制**：
+
+```bash
+dropit handlers set auto mode=open
+```
+
+这时 dropit 什么都不加、什么都不拿走：它启动的是 `claude -p --no-session-persistence`。Claude Code 按**你自己的设置**运行（技能、MCP 服务、hooks、指令、允许和拒绝规则），并带着**你的全部环境变量**，所以你导出的密钥它看得见。内容的文件照旧复制进工作文件夹。`dropit handlers set auto mode=auto` 可以改回去。
+
+- **这是对安全影响最大的设置。** 收到的内容仍然不可信，持有你账号「只投递」密钥的人，可以把内容送到 agent 面前。不限制之后，这些内容能间接指挥一个拥有你自己全部权限的 agent，而且没有人在场确认。不再用的设备请移除，Claude Code 设置里的权限也请按这件事需要的程度收紧。
+- **权限归你。** 运行是无人值守的，没有谁能被询问：需要批准的操作，除非你的 Claude Code 设置已经允许，否则会被拒绝。要让它做某件事，去那里允许。
+- **要加限制：** 在 Claude Code 设置里写允许和拒绝规则，或者自己写命令，把能用的东西点名，例如
+  `dropit handlers add -- claude -p --permission-mode dontAsk --allowedTools WebFetch --disallowedTools Bash`
+  （见 `claude --help`：`--allowedTools`、`--disallowedTools`、`--permission-mode`、`--add-dir`）。你自己的命令只拿到 `PATH`、`HOME`、`USER`，它要用的密钥请放进你的脚本或钥匙串。
+- **技能、工具、MCP 服务：** 在 Claude Code 里自己配置；不限制时它们会被加载，你的提示词里可以点名让它用（`dropit handlers edit auto`）。`dropit handlers test auto` 会显示命令，以及它会拿到的环境变量的名字（不显示值）。
+
+**读视频里说了什么**（抖音、TikTok、B 站……）有一份分步的[指南](../docs/ai-videos.zh-CN.md)：要装的工具、一个小脚本、要放行什么，以及测过什么、没测什么。
+
+有人会这样搭。下面都是你自己的搭法，不是 dropit 的功能，dropit 也没有验证过：
+
+- *视频、音频：* 把你自己的脚本（比如下载器加语音转文字工具）当作命令：`dropit handlers add -- ./my-video.sh`。
+- *要登录的页面：* 一个驱动浏览器、带自己保存的登录状态的 MCP 服务，在提示词里让它去用。
+- *不公开的链接：* 密钥放在你的脚本或钥匙串里，由命令带上。
+
 ### 把每条内容交给你自己的命令
 
 ```bash
