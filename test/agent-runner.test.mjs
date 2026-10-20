@@ -57,12 +57,20 @@ is('sanitize: an answer that is too long is cut', R.sanitizeAnswer('x'.repeat(30
 
 // ── Only what was checked on a real machine is on offer ──────────────────
 is('the agents looked for are the five, in this order', Object.keys(R.RUN_AGENTS), ['claude', 'codex', 'grok', 'gemini', 'pi']);
-ok('claude has the three modes', Object.keys(R.RUN_AGENTS.claude.modes).join() === 'think,files,web');
+ok('claude has the three checked modes and open', Object.keys(R.RUN_AGENTS.claude.modes).join() === 'think,files,web,open');
 for (const id of ['codex', 'grok', 'gemini', 'pi']) ok(`${id} offers no mode until it has been checked`, Object.keys(R.RUN_AGENTS[id].modes).length === 0 && R.RUN_AGENTS[id].verified === null);
 ok('every claude mode names safe mode, so the person\'s own instructions stay out',
   ['think', 'files', 'web'].every((m) => R.RUN_AGENTS.claude.modes[m]('example.com').includes('--safe-mode')));
 ok('the modes with a tool name the permission mode out loud',
   ['files', 'web'].every((m) => R.RUN_AGENTS.claude.modes[m]('example.com').join(' ').includes('--permission-mode dontAsk')));
+ok('open mode adds nothing: no safe mode, no tool list, no permission mode', R.RUN_AGENTS.claude.modes.open().join(' ') === '-p --no-session-persistence');
+is('open mode: only a rule that names it gets it', ['text', 'url', 'image'].map((kind) => R.modeFor({ mode: 'auto' }, { kind })), ['think', 'web', 'files']);
+is('open mode: a rule that names it keeps it', R.modeFor({ mode: 'open' }, { kind: 'text' }), 'open');
+{
+  const full = R.agentEnv('/opt/x/claude', { PATH: '/nvm/bin', HOME: '/h', MY_KEY: 'k', GONE: undefined }, true);
+  is('open env: the whole environment, the agent\'s folder first on PATH', [full.MY_KEY, full.HOME, full.PATH, 'GONE' in full], ['k', '/h', '/opt/x:/nvm/bin:/usr/bin:/bin', false]);
+  is('safe env is still only PATH, USER and HOME', Object.keys(R.agentEnv('/opt/x/claude', { PATH: '/nvm/bin', HOME: '/h', MY_KEY: 'k' })).sort(), ['HOME', 'PATH']);
+}
 ok('think mode has no tool at all', R.RUN_AGENTS.claude.modes.think().join('|').includes('--tools||'));
 
 // ── The one rule: what is ticked makes the prompt and says which kinds it is for ──

@@ -26,6 +26,7 @@ const RUN_KINDS = ['text', 'url', 'image', 'video', 'file'];
  * Claude Code: checked on 2.1.301 with the person's own settings left on (their default permission mode there
  * lets a read tool read anywhere, which is why files and web name `--permission-mode dontAsk` out loud), and
  * with `--safe-mode`, which keeps the person's own instructions, memory, hooks and plugins out of the run.
+ * `open` is the exception: it adds no flag of its own, so it was not checked for what it blocks — nothing is meant to be blocked.
  * Codex CLI, Gemini CLI, Ollama: found when installed, but no mode is offered until it has been checked.
  */
 const RUN_AGENTS = {
@@ -41,6 +42,9 @@ const RUN_AGENTS = {
       // One site: the one the link points to, or the one the person named. A link that redirects elsewhere is not checked
       web: (domain) => ['-p', '--safe-mode', '--permission-mode', 'dontAsk', '--tools', 'WebFetch',
         '--allowedTools', `WebFetch(domain:${domain})`, '--strict-mcp-config', '--no-session-persistence'],
+      // Nothing added and nothing taken away: the person's own Claude Code settings decide what it may use (their skills, MCP
+      // servers, hooks, instructions, allow and deny rules), and it starts with their whole environment. Only ever chosen by the person
+      open: () => ['-p', '--no-session-persistence'],
     },
   },
   // The rest are found, and offered as a starting point for the person's own command: the arguments in `suggest` come
@@ -59,18 +63,26 @@ function suggestArgv(id, binPath) {
 
 /**
  * What an item needs from an agent, decided here and not by the rule: a text gets no tool, a link gets the one site it
- * points to, a file gets only its own copy. A rule can still name a mode of its own ('think' | 'files' | 'web').
+ * points to, a file gets only its own copy. A rule can still name a mode of its own ('think' | 'files' | 'web' | 'open');
+ * 'open' is never picked here: it hands the agent everything the person's own setup allows, so only the person asks for it.
  */
 function modeFor(handler, item) {
   const m = handler && handler.mode;
-  if (m === 'think' || m === 'files' || m === 'web') return m;
+  if (m === 'think' || m === 'files' || m === 'web' || m === 'open') return m;
   const kind = RUN_KINDS.includes(item.kind) ? item.kind : 'file';
   return kind === 'url' ? 'web' : kind === 'text' ? 'think' : 'files';
 }
 
 /** The environment an agent is started with: where it lives, and who is asking (its login lives in the keychain) */
-function agentEnv(binPath, base) {
+function agentEnv(binPath, base, full = false) {
   const dir = binPath.includes('/') ? binPath.slice(0, binPath.lastIndexOf('/')) : '';
+  if (full) {
+    // Open mode: everything the person's own session has (their PATH, their keys), plus the agent's own folder first
+    const env = {};
+    for (const [k, v] of Object.entries(base || {})) if (typeof v === 'string') env[k] = v;
+    env.PATH = [dir, env.PATH, '/usr/bin', '/bin'].filter(Boolean).join(':');
+    return env;
+  }
   const env = { PATH: `${dir ? dir + ':' : ''}/usr/bin:/bin` };
   const user = base.USER || base.LOGNAME;
   if (user) env.USER = user;
@@ -127,7 +139,8 @@ function planRun(handler, item) {
     if (!domain || !/^[a-z0-9.-]+$/i.test(domain)) return { run: false, why: 'skipped:no-domain' };
     return { run: true, argv: [...build(domain), ...modelArgs(agent, handler)], bin: agent.bin, agent: handler.agent, mode, domain };
   }
-  if (mode === 'files' && !(item.files && item.files.length)) return { run: false, why: 'skipped:no-files' };
+  const needsFiles = mode === 'files' || (mode === 'open' && kind !== 'text' && kind !== 'url');
+  if (needsFiles && !(item.files && item.files.length)) return { run: false, why: 'skipped:no-files' };
   return { run: true, argv: [...build(), ...modelArgs(agent, handler)], bin: agent.bin, agent: handler.agent, mode };
 }
 
@@ -194,7 +207,7 @@ function sanitizeAnswer(text, max = RUN_DEFAULTS.maxAnswerChars) {
 const PROMPT_PARTS = {
   ocr: { kinds: ['image', 'file'], en: '- Image or PDF: first copy out the text in it exactly, then say in one sentence what it is; for a receipt, ticket, business card or ID, list the key facts (who, amount, date, contact); list anything to do and any time mentioned. For a long PDF give only the title, the main points and the key facts, not all of it.', zh: '- 图片或 PDF：先把里面的文字原样抄出来，再用一句话说明这是什么；是收据、票据、名片、证件这类，列出关键信息（商家或姓名、金额、日期、联系方式）；里面有要做的事或提到的时间，另列出来。很长的 PDF 只写标题、要点和关键信息，不整篇转录。' },
   audio: { kinds: ['video', 'file'], en: '- Audio or video: transcribe it, keeping the words as spoken and dropping only obvious filler, with "[inaudible]" where you cannot hear; then give up to 3 points, and list anything to do with the time mentioned; for a video without speech, describe it in one sentence.', zh: '- 音频或视频：转写成文字，保持原话，只去掉明显的口头赘词，听不清的写「[听不清]」；然后用 3 点以内概括，并列出需要去做的事和提到的时间；没有人声的视频，用一句话说画面。' },
-  link: { kinds: ['url'], en: '- Link: open the page and read it; say in one sentence what it is about, then give 3 to 5 key points and its conclusion or what is worth noting; list anything it asks you to do; if you cannot open it, say so instead of guessing from the address.', zh: '- 链接：打开页面读正文，用一句话说它讲什么，再列 3 到 5 个要点，写出它的结论或值得注意之处；页面里有需要去做的事也列出；打不开就直接说打不开，不要根据网址猜。' },
+  link: { kinds: ['url'], en: '- Link: open the page and read it; say in one sentence what it is about, then give 3 to 5 key points and its conclusion or what is worth noting; list anything it asks you to do. For a post on x.com or twitter.com, if you can reach it, read api.fxtwitter.com/<user>/status/<id> instead (JSON, no login); for bilibili, api.bilibili.com/x/web-interface/view?bvid=<BV id> gives only the title, uploader and length, not what is said. If the page is empty (it needs a login or scripts, as Douyin, WeChat Channels and Xiaohongshu do) or you cannot open it, say so, and give only the title and author the share text itself shows; never guess from the address.', zh: '- 链接：打开页面读正文，用一句话说它讲什么，再列 3 到 5 个要点，写出它的结论或值得注意之处；页面里有需要去做的事也列出。x.com 或 twitter.com 的推文，如果能联网，改读 api.fxtwitter.com/<用户名>/status/<编号>（返回 JSON，不用登录）；bilibili 的 api.bilibili.com/x/web-interface/view?bvid=<BV 号> 只能得到标题、作者和时长，读不到视频里说了什么。页面是空的（要登录或靠脚本渲染，比如抖音、视频号、小红书）或打不开时，直说读不到，只转述分享文字里本身有的标题和作者，不要根据网址猜。' },
   sum: { kinds: ['text'], en: '- Text: say what it is about in one sentence; list what needs doing, one sentence each, with any time mentioned; list dates, amounts and contact details exactly as written; if it is an idea or a question, add one sentence on the most important point; leave out whatever is not there.', zh: '- 文字：用一句话概括；把需要去做的事逐条列出，每条一句话，带上提到的时间；日期、金额、联系方式照原样列出；是想法或问题的，再用一句话点出最关键的一点；里面没有的就不写。' },
 };
 const PROMPT_ORDER = ['ocr', 'audio', 'link', 'sum'];
@@ -279,7 +292,7 @@ async function runHandler(deps, handler, item, files = [], binPath = null) {
   try {
     dir = await fsx.promises.mkdtemp(pathx.join(osx.tmpdir(), 'dropit-run-'));
     const names = [];
-    if (plan.mode === 'files') {
+    if (plan.mode === 'files' || plan.mode === 'open') {
       for (const f of files) {
         if (f.data.length > maxFile) return { ok: false, why: 'skipped:file-too-big' };
         let name = safeFileName(f.name);
@@ -295,7 +308,7 @@ async function runHandler(deps, handler, item, files = [], binPath = null) {
       const finish = (r) => { if (done) return; done = true; clearTimeout(timer); resolve(r); };
       let child;
       try {
-        child = spawn(bin, plan.argv, { cwd: dir, env: agentEnv(bin, env), shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+        child = spawn(bin, plan.argv, { cwd: dir, env: agentEnv(bin, env, plan.mode === 'open'), shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
       } catch (e) { return finish({ ok: false, why: 'agent-missing', detail: String(e.message || e) }); }
       timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone already */ } finish({ ok: false, why: 'timeout' }); }, timeoutMs);
       child.stdout.on('data', (d) => { if (out.length < RUN_DEFAULTS.maxAnswerChars * 4) out += d; });
