@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 The Chinese label face holds only the characters the app's label strings use. Run this after changing any
-Chinese string whose name starts with label_ (androidApp/src/main/res/values-zh/strings.xml).
+Chinese string whose name starts with label_ (any file in androidApp/src/main/res/values-zh/) or is listed in EXTRA_NAMES.
 
     pip install fonttools
     python3 tools/label_font.py SmileySans-Oblique.ttf     # write res/font/dropit_label_zh.ttf
@@ -17,17 +17,20 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-STRINGS = ROOT / "androidApp/src/main/res/values-zh/strings.xml"
+STRINGS_DIR = ROOT / "androidApp/src/main/res/values-zh"
+# Page and group titles that are set in the label face but are not named label_*
+EXTRA_NAMES = {"set_group_send", "set_repull", "set_default_to", "update_page_title", "plan_head"}
 OUT = ROOT / "androidApp/src/main/res/font/dropit_label_zh.ttf"
 FAMILY = "dropit Label ZH"
 
 
 def label_chars():
     text = []
-    for el in ET.parse(STRINGS).getroot():
-        if not el.get("name", "").startswith("label_"):
-            continue
-        text.append("".join(el.itertext()))
+    for f in sorted(STRINGS_DIR.glob("*.xml")):
+        for el in ET.parse(f).getroot():
+            name = el.get("name", "")
+            if name.startswith("label_") or name in EXTRA_NAMES:
+                text.append("".join(el.itertext()))
     # Chinese and full-width characters; Latin, digits and ASCII punctuation come from the Latin face
     return sorted({c for c in "".join(text) if re.match(r"[　-鿿＀-￯]", c)})
 
