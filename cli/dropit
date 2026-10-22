@@ -35,7 +35,7 @@ const PREFETCH_BYTES = 64 * 1024 * 1024;     // watch: most that the window hold
 const BATCH_QUIET_MS = 90_000;               // watch: a batch still short of its count is handed to the rule this long after its last item arrived…
 const BATCH_MAX_MS = 300_000;                // …and at the latest this long after its first
 const BATCH_KEEP_MS = 24 * 3_600_000;        // watch: a handled batch is remembered this long, so a member that comes late is not run on its own
-const VERSION = '1.1.0';                     // released as cli-<VERSION> on GitHub; bump when this file changes
+const VERSION = '1.2.0';                     // released as cli-<VERSION> on GitHub; bump when this file changes
 
 // ── Language ────────────────────────────────────────────────────────────
 // English by default; Simplified Chinese when the environment asks for it.

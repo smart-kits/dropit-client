@@ -28,8 +28,8 @@ android {
         applicationId = "xyz.smart_kits.dropit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         buildConfigField("String", "ENDPOINTS", "\"https://dropit.smart-kits.xyz\"")
         for (name in listOf("APP_ID", "API_KEY", "PROJECT_ID", "SENDER_ID")) buildConfigField("String", "FIREBASE_$name", "\"${firebase(name)}\"")
     }
