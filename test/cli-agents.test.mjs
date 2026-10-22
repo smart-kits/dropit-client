@@ -563,6 +563,231 @@ const sumRule = () => ({ ...C.newRule('claude', null, ['sum'], false), id: 'summ
   is('an item that was not written (a download that failed) is not handed on', st3.queue.pending, 0);
 }
 
+// ── Items sent together: the rule gets them once, when they are all here ─────
+{
+  const { mock } = await import('node:test');
+  const dir = scratch();
+  const logs = { out: [], err: [] };
+  const ctx = () => ({ deps: makeIo().io.deps, detect: async () => AGENTS, log: (s) => logs.out.push(s), err: (s) => logs.err.push(s), agentsFile: FILE });
+  const stamp = '2026-10-17';
+  const created = Date.parse('2026-10-17T08:00:00Z');
+  const grp = (i, n, id = 'batch1') => ({ group: { id, i, n } });
+  const textOf = (seq, i, n, raw = `part ${seq}`, id) => ({ seq, kind: 'text', source: 'cli', created_at: created, raw, meta: grp(i, n, id) });
+  const fileOf = (seq, i, n, name, kind = 'image', id) => ({ seq, kind, source: 'cli', created_at: created, raw: '', url: 'https://x.test/f', meta: { filename: name, mime: kind === 'image' ? 'image/png' : 'video/mp4', ...grp(i, n, id) } });
+  /** What `watch` does with an item: written to the folder, then handed on */
+  const arrive = async (state, item) => {
+    let written;
+    if (item.url) {
+      const file = path.join(dir, `${stamp}-${item.seq}-${item.meta.filename}`);
+      fs.writeFileSync(file, Buffer.from('pixels'));
+      written = { file, fresh: true };
+    } else written = await C.writeItem(dir, item);
+    C.afterWrite(state, dir, item, written);
+    return written;
+  };
+  const watching = (over = {}) => ({ exec: null, noHandlers: false, recent: null, queue: C.newQueue(), ctx: ctx(), batches: new Map(), ...over });
+  const resultFile = (lo, hi, name = 'Auto') => path.join(dir, `${stamp}-${lo}–${hi}.${name}.md`);
+  const say = () => logs.out.join('\n');
+  const asRule = (extra = {}) => custom({ id: 'a', name: 'Auto', mode: 'files', prompt: 'MODE:stdin', kinds: ['text', 'url', 'image', 'file'], ...extra });
+
+  // groupOf: only marks that are in order count
+  is('a batch mark: id, place, and how many', C.groupOf({ meta: grp(2, 3) }), { id: 'batch1', i: 2, n: 3 });
+  is('no mark, one together, too many, no id, a count that is not a number → not a batch', [C.groupOf({ meta: {} }), C.groupOf({ meta: grp(1, 1) }), C.groupOf({ meta: grp(1, 17) }), C.groupOf({ meta: { group: { i: 1, n: 3 } } }), C.groupOf({ meta: { group: { id: 'x', i: 1, n: '3' } } }), C.groupOf({})], [null, null, null, null, null, null]);
+
+  // all there: one run, one file
+  put([asRule()]);
+  {
+    const st = watching();
+    spawned.length = 0;
+    await arrive(st, textOf(301, 1, 3, 'what is on these?'));
+    ok('the first of three: nothing runs, and it says it is waiting for the rest', st.queue.pending === 0 && spawned.length === 0 && say().includes(en.ag.batchWaiting(1, 3)), say());
+    await arrive(st, fileOf(302, 2, 3, 'a.png'));
+    is('the second: still nothing, and the notice is not repeated', [spawned.length, say().split(en.ag.batchWaiting(1, 3)).length - 1], [0, 1]);
+    await arrive(st, fileOf(303, 3, 3, 'b.png'));
+    await st.queue.tail;
+    is('the third: one run of the agent, not three', spawned.length, 1);
+    const file = resultFile(301, 303);
+    ok('…one file named for the first and last, beside the others', fs.existsSync(file) && !fs.existsSync(path.join(dir, `${stamp}-302-a.Auto.md`)) && !fs.existsSync(path.join(dir, `${stamp}-301.Auto.md`)), fs.readdirSync(dir).join());
+    const doc = fs.readFileSync(file, 'utf8');
+    is('…what arrived as it came (the text as it is, the files as links), then ---', doc.split('\n\n---\n\n')[0], `what is on these?\n\n[${stamp}-302-a.png](<${stamp}-302-a.png>)\n\n[${stamp}-303-b.png](<${stamp}-303-b.png>)`);
+    const given = doc.split('\n\n---\n\n')[1];
+    ok('…and the answer is to all of it at once: three items, both files, the text, nothing missing', given.includes('items="3"') && given.includes(`file ./${stamp}-302-a.png`) && given.includes(`file ./${stamp}-303-b.png`) && given.includes('what is on these?') && !given.includes('could not be fetched'), given);
+    ok('…it is the batch\'s kind, and the rule\'s prompt has no content in it', given.includes('kind="batch"') && given.startsWith('MODE:stdin\n'));
+    is('…the text member\'s own file is as it arrived (a batch is not turned into an answer in place)', fs.readFileSync(path.join(dir, `${stamp}-301.md`), 'utf8').endsWith('what is on these?\n'), true);
+    ok('…it says where the answer is', say().includes(en.ag.watchResult(path.basename(file))), say());
+    ok('…the timer is gone', st.batches.get('batch1').timer === null && st.batches.get('batch1').state === 'done');
+  }
+
+  // sent order, not arrival order
+  logs.out.length = 0;
+  {
+    const st = watching();
+    await arrive(st, textOf(311, 3, 3, 'third', 'order1'));
+    await arrive(st, textOf(312, 1, 3, 'first', 'order1'));
+    await arrive(st, textOf(313, 2, 3, 'second', 'order1'));
+    await st.queue.tail;
+    is('items are put in the order they were sent, by their place in the batch', fs.readFileSync(resultFile(311, 313), 'utf8').split('\n\n---\n\n')[0], 'first\n\nsecond\n\nthird');
+  }
+
+  // the same item twice is one
+  {
+    const st = watching();
+    spawned.length = 0;
+    const it = textOf(321, 1, 2, 'x', 'dup1');
+    const w = await arrive(st, it);
+    C.afterWrite(st, dir, it, { ...w, fresh: false });
+    is('the same item delivered twice counts once: the batch is not complete', [spawned.length, st.batches.get('dup1').members.size], [0, 1]);
+    clearTimeout(st.batches.get('dup1').timer);
+  }
+
+  // waiting: quiet window, and a ceiling
+  {
+    const T0 = Date.now();                           // near the real clock: the record of a batch is dropped a day after its last item
+    mock.timers.enable({ apis: ['setTimeout', 'Date'], now: T0 });
+    const st = watching();
+    spawned.length = 0;
+    try {
+      await arrive(st, textOf(331, 1, 4, 'one', 'slow1'));
+      mock.timers.tick(60_000);
+      await arrive(st, textOf(332, 2, 4, 'two', 'slow1'));
+      mock.timers.tick(60_000);
+      ok('two minutes after the first but one after the last: still waiting (the clock starts again with each item)', st.batches.get('slow1').state === 'wait');
+      mock.timers.tick(C.BATCH_QUIET_MS - 60_000 + 1_000);
+    } finally { mock.timers.reset(); }
+    await st.queue.tail;
+    ok('90 s after the last: it goes with what is here, and says so', spawned.length === 1 && say().includes(en.ag.batchTimedOut(2, 4)), say());
+    const doc = fs.readFileSync(resultFile(331, 332), 'utf8');
+    ok('…one file, both items', doc.startsWith('one\n\ntwo\n\n---\n\n') && doc.includes('items="2"'), doc);
+    const late = textOf(333, 3, 4, 'three', 'slow1');
+    await arrive(st, late);
+    await st.queue.tail;
+    ok('one that comes after: not run on its own, and told so; the result stays as it was', spawned.length === 1 && say().includes(en.ag.batchLate(333)) && fs.readFileSync(resultFile(331, 332), 'utf8') === doc);
+  }
+  {
+    // items arriving every 80 s never hit the quiet window: the ceiling (5 minutes after the first) ends the wait
+    const T0 = Date.now();
+    mock.timers.enable({ apis: ['setTimeout', 'Date'], now: T0 });
+    const st = watching();
+    spawned.length = 0;
+    try {
+      for (let k = 0; k < 4; k++) {
+        await arrive(st, textOf(341 + k, k + 1, 8, `item ${k}`, 'cap1'));
+        if (k < 3) mock.timers.tick(80_000);
+      }
+      ok('fourth item at 240 s: not over yet', st.batches.get('cap1').state === 'wait');
+      mock.timers.tick(C.BATCH_MAX_MS - 240_000 - 1);
+      ok('…one millisecond before the ceiling: still waiting', st.batches.get('cap1').state === 'wait');
+      mock.timers.tick(1);
+      ok('…at 5 minutes after the first: it goes', st.batches.get('cap1').state !== 'wait');
+    } finally { mock.timers.reset(); }
+    await st.queue.tail;
+    is('…with the four that came', spawned.length, 1);
+  }
+
+  // a download that failed still counts as arrived
+  {
+    const st = watching();
+    spawned.length = 0;
+    const text = textOf(351, 1, 2, 'look', 'miss1');
+    const written = await C.writeItem(dir, text);
+    C.handOn(st, dir, [{ item: text, written }, { item: fileOf(352, 2, 2, 'gone.png', 'image', 'miss1'), written: null }]);
+    await st.queue.tail;
+    ok('the batch is complete without waiting for it, and the agent is told one file did not come', spawned.length === 1 && fs.readFileSync(resultFile(351, 352), 'utf8').includes('1 file could not be fetched'), fs.readdirSync(dir).join());
+  }
+
+  // only what the rule is ticked for is handed over; what arrived is still all in the file
+  {
+    put([asRule({ kinds: ['text', 'image'], prompt: 'MODE:env' })]);
+    const st = watching();
+    await arrive(st, textOf(361, 1, 3, 'hi', 'tick1'));
+    await arrive(st, fileOf(362, 2, 3, 'a.png', 'image', 'tick1'));
+    await arrive(st, fileOf(363, 3, 3, 'v.mp4', 'video', 'tick1'));
+    await st.queue.tail;
+    const doc = fs.readFileSync(resultFile(361, 363), 'utf8');
+    const seen = JSON.parse(doc.split('\n\n---\n\n')[1]);
+    is('a kind the rule is not ticked for is not given to the agent: only the picture is in its folder', seen.cwd, [`${stamp}-362-a.png`]);
+    ok('…but the file says everything that arrived', doc.includes('363-v.mp4') && doc.includes('362-a.png'), doc);
+    put([asRule()]);
+  }
+
+  // a batch with one item that ever came is that item, on its own, as before
+  {
+    const st = watching();
+    spawned.length = 0;
+    const T0 = Date.now();
+    mock.timers.enable({ apis: ['setTimeout', 'Date'], now: T0 });
+    try {
+      await arrive(st, textOf(371, 2, 3, 'only one came', 'solo1'));
+      mock.timers.tick(C.BATCH_QUIET_MS + 1);
+    } finally { mock.timers.reset(); }
+    await st.queue.tail;
+    ok('only one of three ever came: it is handled as a single item (its file becomes the answer), not as a batch of one', spawned.length === 1 && !fs.existsSync(resultFile(371, 371)) && fs.readFileSync(path.join(dir, `${stamp}-371.md`), 'utf8').includes('> only one came'), fs.readdirSync(dir).join());
+  }
+
+  // again after a restart: the file is there, nothing runs
+  {
+    put([asRule()]);
+    spawned.length = 0;
+    const before = fs.readFileSync(resultFile(301, 303), 'utf8');
+    const st = watching();                           // a new watch: it remembers nothing
+    const items = [textOf(301, 1, 3, 'what is on these?'), fileOf(302, 2, 3, 'a.png'), fileOf(303, 3, 3, 'b.png')];
+    const entries = items.map((item) => ({ item, written: { file: item.url ? path.join(dir, `${stamp}-${item.seq}-${item.meta.filename}`) : path.join(dir, `${stamp}-${item.seq}.md`), fresh: false } }));
+    C.handOn(st, dir, entries);
+    await st.queue.tail;
+    ok('pulled again by a new watch: the result is already there, so the agent is not started and the file is not touched', spawned.length === 0 && fs.readFileSync(resultFile(301, 303), 'utf8') === before, `${spawned.length}`);
+  }
+
+  // not for a batch to wait when nothing would run
+  {
+    const quiet = [['--no-handlers', () => watching({ noHandlers: true })], ['the rule is paused', () => { put([asRule()], { paused: true }); return watching(); }], ['no rule', () => { put([]); return watching(); }]];
+    for (const [why, make] of quiet) {
+      logs.out.length = 0;
+      const st = make();
+      await arrive(st, textOf(381, 1, 3, 'x', 'none1'));
+      ok(`${why}: a batch is not waited for, and nothing is said about one`, st.batches.size === 0 && !say().includes('batch'), say());
+    }
+    put([asRule()]);
+  }
+
+  // switched off while it waited
+  {
+    const st = watching();
+    spawned.length = 0;
+    const [a, b] = [textOf(391, 1, 2, 'x', 'off1'), textOf(392, 2, 2, 'y', 'off1')];
+    const [wa, wb] = [await C.writeItem(dir, a), await C.writeItem(dir, b)];
+    C.batchJoin(st, a, wa, C.groupOf(a));
+    put([asRule()], { paused: true });
+    C.batchJoin(st, b, wb, C.groupOf(b));            // all here: queued, and the rule is paused by the time it would run
+    await st.queue.tail;
+    ok('paused before the run began: nothing runs, no file, and the batch is closed', spawned.length === 0 && !fs.existsSync(resultFile(391, 392)) && st.batches.get('off1').state === 'done');
+    put([asRule()]);
+  }
+
+  // a backlog: a batch counts as one
+  {
+    const kc = (o) => custom({ keepSource: true, ...o });
+    put([asRule({ keepSource: true })]);
+    const entries = async (list) => { const out = []; for (const item of list) out.push({ item, written: item.url ? { file: path.join(dir, `x-${item.seq}`), fresh: true } : await C.writeItem(dir, item) }); return out; };
+    const single = (seq) => ({ seq, kind: 'text', source: 'cli', created_at: created, raw: `single ${seq}`, meta: {} });
+    const said = [];
+    const realLog = console.log;
+    console.log = (...a) => { const l = a.join(' '); if (/older item/.test(l)) said.push(l); };
+    let st = watching({ recent: 2 });
+    spawned.length = 0;
+    C.handOn(st, dir, await entries([textOf(401, 1, 3, 'b one', 'bk1'), textOf(402, 2, 3, 'b two', 'bk1'), textOf(403, 3, 3, 'b three', 'bk1'), single(404), single(405), single(406)]));
+    await st.queue.tail;
+    is('four things arrived, the newest two are handed over: the batch is left out whole, not in part', [st.batches.size, fs.existsSync(resultFile(401, 403)), fs.existsSync(path.join(dir, `${stamp}-405.Auto.md`)), fs.existsSync(path.join(dir, `${stamp}-406.Auto.md`))], [0, false, true, true]);
+    ok('…and it says two were left out', said.length === 1 && /2 older items/.test(said[0]), JSON.stringify(said));
+    st = watching({ recent: 2 });
+    spawned.length = 0;
+    C.handOn(st, dir, await entries([single(410), textOf(411, 1, 3, 'c one', 'bk2'), textOf(412, 2, 3, 'c two', 'bk2'), textOf(413, 3, 3, 'c three', 'bk2'), single(414)]));
+    await st.queue.tail;
+    console.log = realLog;
+    is('the batch among the newest two is run once, with all three', [fs.existsSync(resultFile(411, 413)), fs.readFileSync(resultFile(411, 413), 'utf8').split('\n\n---\n\n')[0], fs.existsSync(path.join(dir, `${stamp}-410.Auto.md`)), fs.existsSync(path.join(dir, `${stamp}-414.Auto.md`))], [true, 'c one\n\nc two\n\nc three', false, true]);
+    put([asRule()]);
+  }
+}
+
 // ── watch --exec ──────────────────────────────────────────────────────────
 {
   const pulled = {

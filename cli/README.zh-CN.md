@@ -15,9 +15,9 @@
 
 | 你想… | 运行 | 你会看到 |
 |---|---|---|
-| 把刚复制的东西发到手机 | `pbpaste \| dropit send` | `✓ #41` |
-| 把一个文件发到手机 | `dropit send -f ~/Desktop/report.pdf` | `✓ #42 report.pdf 820 KB` |
-| 给自己记一句 | `dropit send "下午三点给银行打电话"` | `✓ #43` |
+| 把刚复制的东西发到手机 | `pbpaste \| dropit send` | `✓ 已投递 #41  → 全部 · 14:19` |
+| 把一个文件发到手机 | `dropit send -f ~/Desktop/report.pdf` | `✓ 已投递 #42  → 全部 · 14:19` |
+| 给自己记一句 | `dropit send "下午三点给银行打电话"` | `✓ 已投递 #43  → 全部 · 14:19` |
 | 长任务跑完时知道一声 | `make release && dropit send "发版打包好了 ✅"` | 跑完那一刻，这句话就到了 |
 | 把命令输出放到能看的地方 | `git log -5 --oneline \| dropit send` | 这五行，作为一条 |
 | 别处投的东西都变成这里的文件 | `dropit watch ~/dropit` | `↓ 2026-10-04-44.md`、`↓ 2026-10-04-45-IMG_2041.jpeg` …… |
@@ -35,7 +35,15 @@ dropit send -f photo.jpg          # 一个文件：图片、视频、PDF，什�
 ```
 
 - **一次投好几个文件：** `dropit send -f *.png` —— 最多 10 个，作为一批投出、一起到。
-  超过 10 个就一个都不发；有文件找不到，也会在发之前就报出来。
+  超过 10 个就一个都不发；有文件找不到，也会在发之前就报出来。每个文件一行，最后一行说明投给了谁。
+- **一批里有失败就停在那：** 已经发出的保持已发，没发出去的文件会列出来，还有只把它们重发给同样设备的命令（`dropit send -f b.jpg d.jpg --to '我的 Pixel'`）。退出码 `1`。
+- **只投给部分设备：** `dropit send --to "我的 Pixel" "三点见"`，或 `dropit send -f a.jpg b.jpg --to "我的 Pixel,家里的 Linux"`。
+  设备名或编号（`dropit devices` 两样都显示），用逗号隔开；`--to all` 是所有设备。名字里的大小写和空格不影响匹配。
+  两台设备重名时什么都不会发：报错里列出它们的编号，用其中一个。`--to` 只管这一次，回执里也会这么写（`→ 我的 Pixel · 只这一次，默认不变`）。
+  只能投递、不能接收的 token 读不了设备列表，所以设备名用不了（`--to all` 可以）。
+- **这台电脑的默认：** `dropit target` 显示它；`dropit target "我的 Pixel" "家里的 Linux"` 设置它（`dropit target all` 或 `dropit target clear` 回到所有设备）。
+  它只存在这台电脑的配置文件里，别处没有，所以重新配对或重装之后又回到「全部」。默认「全部」时投递不带设备列表，之后加入的设备也会收到；选了其中几台时会写明是哪几台，之后加入的设备不会自动收到。
+  默认里的设备被移除后会自动去掉，并提示一次。
 - **大文件边读边传**，不会先整个读进内存。单个文件多大由你的套餐决定。
 - **手滑投了两次？** 一分钟内紧挨着投两次同样的东西，只存一份，提示 `已投过了（#41）`。
 - **写脚本可以放心依赖它：** 成功退出码是 `0`；任何失败都把原因打到 stderr，退出码 `1`。
@@ -85,7 +93,8 @@ created: 2026-10-04T07:30:00.000Z
 |---|---|
 | `实时推送已连接` | 实时 —— 几秒内就到 |
 | `实时推送已连接 · 体验还剩 3 天` | 新账号有一段实时推送体验期 |
-| `……10 天的实时推送体验已结束……` | 补齐后退出；再运行一次（或者定时运行）就会补齐 |
+| `……实时推送体验已结束……` | 补齐后退出；再运行一次（或者定时运行）就会补齐。这一行还会说你用它做了什么（用了几天、投了多少条、几台设备在收） |
+| `实时推送体验还剩 3 天……` / `……不到 1 天就结束了……` | 体验快结束时，`watch` 启动时打印一次：你已经享受了什么、之后有什么变化 |
 | `……今天的实时名额满了……` | 原地等着，UTC 零点过后自己重连 |
 | `实时推送暂停：这个账号已经有 12 条实时连接……` | 这个账号同时在接收的机器太多了（另一个 `watch`，或多台机器上的 Obsidian）。大约 15 分钟后自己再试，连上时补齐 |
 | `watch 已停止：设备已被移除……` | 这台机器已从账号里移除。再试也没用，所以 `watch` 停下（launchd / systemd 也不会把它拉起来）。用 `dropit pair <配对码>` 重新配对，再启动 `watch` |
@@ -171,6 +180,7 @@ created: 2026-10-04T07:30:00.000Z
 - **一条规则，四类内容。** `--only ocr,audio,link,sum` 选它处理什么：`ocr` 图片和 PDF（把文字抽出来）、`audio` 语音和视频（转写）、`link` 链接（读正文）、`sum` 文字（整理并总结）。默认四类都要。
   勾选会写好提示词；要改，用 `dropit handlers edit auto`（用 `$EDITOR`）或 `set auto prompt=…`。你自己写过的提示词，改选类型时不会被重写。工具不替你设任何限制：`minChars=`、`kinds=`、`timeoutSec=` 等都由你自己定。
 - **每条内容调用一次，由 agent 自己判断。** 它会被告知收到了什么、每一类该怎么处理。dropit 只给它这一类需要的东西（见下）。
+- **一起投来的，一起处理。** 作为一批投来的内容（最多 16 个：手机上一段话加几张图，或 `dropit send -f`）只交给规则**一次**，等它们到齐。没到齐的话，最后一个到了 90 秒后、最迟 5 分钟后，就用已到的去处理。结果是旁边的一个文件，`2026-10-04-44–47.自动处理.md`：先是收到的全部（按投出的顺序，文字照原样、文件是链接），再是答复。收到的文字和文件不会被改动或替换。只有规则勾选的类型才会交给 agent。已处理完的那一批后面才到的内容不会单独运行；`watch` 重启后不会接着等没等完的那一批。`--exec` 不受影响：它还是每条各收到一次。
 - **你自己的命令。** `dropit handlers add -- my-script --flag` 运行你自己的程序，内容走它的标准输入。
   也可以用 `--agent codex`、`grok`、`gemini` 或 `pi` 选一个：它会从它自己的帮助里建议的参数开始，当作你自己的命令，要改参数用 `set auto argv='["…"]'`。
 - **手动：** `dropit run auto notes.txt`，或 `pbpaste | dropit run auto -`。结果就落在那个文件旁边；你指定的文件从不被改动。
@@ -235,7 +245,7 @@ dropit watch ~/dropit --exec ./on-receive.sh --some-flag
  "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
 ```
 
-`files` 里是收到的文件的绝对路径。**每个字段都是不可信输入**：绝不要把它拼进 shell 命令行。
+`files` 里是收到的文件的绝对路径。一起投来的几样各是一行，`batch` 是 `{"id":…,"index":…,"count":…}`：想把它们合起来，就收集 `id` 相同的行，收够 `count` 行。**每个字段都是不可信输入**：绝不要把它拼进 shell 命令行。
 
 ## 用你的 AI agent 处理收到的内容
 
@@ -294,7 +304,7 @@ dropit watch ~/dropit --exec ./on-receive.sh --some-flag
  "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
 ```
 
-`files` 里是收到的文件的绝对路径。**每个字段都是不可信输入**：绝不要把它拼进 shell 命令行。
+`files` 里是收到的文件的绝对路径。一起投来的几样各是一行，`batch` 是 `{"id":…,"index":…,"count":…}`：想把它们合起来，就收集 `id` 相同的行，收够 `count` 行。**每个字段都是不可信输入**：绝不要把它拼进 shell 命令行。
 
 ## 在 Mac 上随手就投
 
@@ -302,7 +312,7 @@ dropit watch ~/dropit --exec ./on-receive.sh --some-flag
 
 | | 得到什么 | 怎么设置 |
 |---|---|---|
-| **Raycast** | 「Send to dropit」投剪贴板里的文字；「Send File to dropit」按路径投一个文件。结果（`✓ #46`）直接显示在 Raycast 里 | Raycast → *Extensions → Script Commands → Add Directory* → 选 `cli/raycast/` |
+| **Raycast** | 「Send to dropit」投剪贴板里的文字；「Send File to dropit」按路径投一个文件。结果（`✓ 已投递 #46  → 全部 · 14:19`）直接显示在 Raycast 里 | Raycast → *Extensions → Script Commands → Add Directory* → 选 `cli/raycast/` |
 | **在任何 App 里右键选中的文字** | 「服务 → Send to dropit」 | 见下文 |
 | **Alfred** | 一个投剪贴板的快捷键 | 见下文 |
 
@@ -356,8 +366,9 @@ dropit me              # free · 2/3 台设备 · 1.2/30 MB · 单个文件最�
 | 命令 | 作用 |
 |---|---|
 | `dropit code` | 给新设备生成 6 位配对码，5 分钟内有效 —— 在那台设备上输入，或在另一个终端里 `dropit pair <配对码>` |
-| `dropit me` | 套餐、用了几台设备、用了多少空间、单个文件最大多少、实时推送开没开 |
-| `dropit devices` | 账号里的每一台设备，带它的 ID |
+| `dropit me` | 套餐、用了几台设备、用了多少空间、单个文件最大多少、实时推送开没开；下面一行是已用多少天、已投多少条；付费一年快到期或刚到期时再多一行 |
+| `dropit devices` | 账号里的每一台设备：最近什么时候在线、哪台是这台、哪台只能投递，以及它的 ID |
+| `dropit target` | 这台电脑上，投递默认发给哪些设备；`dropit target <设备名…\|all>` 设置它（见「投递」） |
 | `dropit revoke <device_id>` | 立刻移除一台设备并释放名额 —— 丢了的笔记本、换下来的旧手机 |
 | `dropit version` | 当前安装的版本 —— 每个版本在 GitHub 上都有对应的 Release（`cli-<版本号>`） |
 

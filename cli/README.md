@@ -15,9 +15,9 @@ macOS and Linux. A single Node.js file, no dependencies.
 
 | You want… | Run | You see |
 |---|---|---|
-| What you just copied, on your phone | `pbpaste \| dropit send` | `✓ #41` |
-| A file on your phone | `dropit send -f ~/Desktop/report.pdf` | `✓ #42 report.pdf 820 KB` |
-| A quick note to yourself | `dropit send "call the bank at 3"` | `✓ #43` |
+| What you just copied, on your phone | `pbpaste \| dropit send` | `✓ Sent #41  → All · 14:19` |
+| A file on your phone | `dropit send -f ~/Desktop/report.pdf` | `✓ Sent #42  → All · 14:19` |
+| A quick note to yourself | `dropit send "call the bank at 3"` | `✓ Sent #43  → All · 14:19` |
 | To hear when a long job is done | `make release && dropit send "release built ✅"` | the note arrives when it finishes |
 | A command's output somewhere you can read it | `git log -5 --oneline \| dropit send` | the five lines, as one item |
 | Everything you send from elsewhere, as files here | `dropit watch ~/dropit` | `↓ 2026-10-04-44.md`, `↓ 2026-10-04-45-IMG_2041.jpeg` … |
@@ -35,7 +35,17 @@ dropit send -f photo.jpg           # a file: image, video, PDF, anything
 ```
 
 - **Several files at once:** `dropit send -f *.png` — up to 10, sent as one batch that arrives together.
-  More than 10 and nothing is sent; a missing file is caught before anything goes.
+  More than 10 and nothing is sent; a missing file is caught before anything goes. One line per file, then one that says where it went.
+- **A failed batch stops there:** what already went stays sent, the files that did not go are listed, and so is the command that
+  sends just those again to the same devices (`dropit send -f b.jpg d.jpg --to 'My Pixel'`). The exit code is `1`.
+- **To some devices only:** `dropit send --to "My Pixel" "see you at 3"`, or `dropit send -f a.jpg b.jpg --to "My Pixel,Home Linux"`.
+  Names or ids (`dropit devices` shows both), separated by commas; `--to all` is every device. Case and spaces in a name don't matter.
+  If two devices share a name, nothing is sent: the error lists their ids, and you use one of those. `--to` is for this send only, and
+  the receipt says so (`→ My Pixel · this once; default unchanged`). A token that can only send, not receive, can't read the device list, so names don't work for it (`--to all` does).
+- **A default for this computer:** `dropit target` shows it; `dropit target "My Pixel" "Home Linux"` sets it (`dropit target all` or
+  `dropit target clear` goes back to every device). It is kept in this computer's config file, nowhere else, so pairing again or
+  reinstalling starts from "all" again. With "all" a send carries no list, and devices that join later receive too; with a chosen
+  few it names them, and devices that join later do not. A device that has since been removed leaves the default, and you are told once.
 - **Big files stream** from disk; they aren't read into memory first. Your plan sets the size limit per file.
 - **Sent twice by accident?** The same thing twice in a row within a minute is kept once — you see `Already sent (#41)`.
 - **Scripts can rely on it:** success exits `0`; any failure prints the reason to stderr and exits `1`.
@@ -90,7 +100,8 @@ Point it at an Obsidian or Logseq folder and every item becomes a note there.
 |---|---|
 | `Real-time push connected` | Live — items appear within seconds |
 | `Real-time push connected · trial: 3 days left` | New accounts get real-time for a while |
-| `…The 10-day real-time trial has ended…` | It caught up and exits; run it again (or on a schedule) to catch up |
+| `…The real-time trial has ended…` | It caught up and exits; run it again (or on a schedule) to catch up. The line also says what you used it for (how many days, items sent, devices receiving) |
+| `Real-time push has 3 days left…` / `…ends in less than a day…` | Printed once when `watch` starts, as the trial nears its end: what you've had so far, and what changes after it |
 | `…Today's real-time spots are full…` | It waits and reconnects by itself a little after midnight UTC |
 | `Real-time push is paused: this account already has 12 live connections…` | Too many machines are receiving at once on this account (another `watch`, Obsidian on several machines). It tries again by itself in about 15 minutes and catches up then |
 | `watch stopped: This device was removed…` | This machine was removed from your account. Trying again can't fix that, so `watch` stops (and a launch agent or service won't restart it). Pair again with `dropit pair <code>`, then start `watch` again |
@@ -185,6 +196,12 @@ The original text is the quote, so nothing is lost; if the agent fails, the file
   is not rewritten when you change the parts. Nothing is limited for you: `minChars=`, `kinds=`, `timeoutSec=` and more are yours.
 - **One call per item, and the agent decides.** It is told what arrived and what to do with each kind. dropit gives it only what that
   kind needs (see below).
+- **Sent together, handled together.** Items sent as one batch (up to 16: a note and some pictures from your phone, or `dropit send -f`)
+  go to the rule **once**, when all have arrived. If some don't, it goes 90 seconds after the last one came, and after 5 minutes at the
+  latest, with what is there. The result is one file beside the others, `2026-10-04-44–47.Auto.md`: everything that arrived in the order it was
+  sent (texts as they came, files as links), then the answer. The files and the text are not changed or replaced. Only the kinds the
+  rule is set for are handed to the agent. A later item of a handled batch is not run on its own, and a `watch` that is restarted
+  does not wait for what it had not finished. `--exec` is not affected: it still gets each item.
 - **Your own command.** `dropit handlers add -- my-script --flag` runs your program instead; the content goes to its standard input.
   Pick an agent with `--agent codex`, `grok`, `gemini` or `pi`: it is started from the arguments its own help suggests, as a command
   of your own, and you can change them with `set auto argv='["…"]'`.
@@ -271,7 +288,7 @@ handed over once, as **one line of JSON on standard input**; it is not retried a
  "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
 ```
 
-`files` holds the absolute path of a received file. **Treat every field as untrusted input**: never paste it into a shell command line.
+`files` holds the absolute path of a received file. Items sent together each come as their own line, with `batch` set to `{"id":…,"index":…,"count":…}`: to put them together, collect the lines with the same `id` until you have `count` of them. **Treat every field as untrusted input**: never paste it into a shell command line.
 
 ## Process what arrives with an AI agent
 
@@ -336,7 +353,7 @@ handed over once, as **one line of JSON on standard input**; it is not retried a
  "text":"https://example.com/airmail","meta":{"title":"How Airmail Worked"},"note":null,"files":[]}
 ```
 
-`files` holds the absolute path of a received file. **Treat every field as untrusted input**: never paste it into a shell command line.
+`files` holds the absolute path of a received file. Items sent together each come as their own line, with `batch` set to `{"id":…,"index":…,"count":…}`: to put them together, collect the lines with the same `id` until you have `count` of them. **Treat every field as untrusted input**: never paste it into a shell command line.
 
 ## From anywhere on your Mac
 
@@ -344,7 +361,7 @@ The terminal is the engine; these put it one keystroke away.
 
 | | What you get | Set up |
 |---|---|---|
-| **Raycast** | *Send to dropit* sends the clipboard's text; *Send File to dropit* sends a file by path. The result (`✓ #46`) shows right in Raycast | Raycast → *Extensions → Script Commands → Add Directory* → choose `cli/raycast/` |
+| **Raycast** | *Send to dropit* sends the clipboard's text; *Send File to dropit* sends a file by path. The result (`✓ Sent #46  → All · 14:19`) shows right in Raycast | Raycast → *Extensions → Script Commands → Add Directory* → choose `cli/raycast/` |
 | **Right-click selected text in any app** | *Services → Send to dropit* | Below |
 | **Alfred** | A hotkey that sends the clipboard | Below |
 
@@ -398,8 +415,9 @@ dropit me              # free · 2/3 devices · 1.2/30 MB · files up to 10 MB �
 | Command | Does |
 |---|---|
 | `dropit code` | A 6-character code for a new device, valid 5 minutes — type it there, or `dropit pair <code>` on another terminal |
-| `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time is on |
-| `dropit devices` | Every device on your account, with its ID |
+| `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time is on; under it, how long you've been using dropit and how many items you've sent, and a line when a paid year is about to end or has just ended |
+| `dropit devices` | Every device on your account: when it was last seen, which one this is, which can only send, and its ID |
+| `dropit target` | Which devices a send goes to by default on this computer; `dropit target <names…\|all>` sets it (see Sending) |
 | `dropit revoke <device_id>` | Removes a device at once and frees its slot — a lost laptop, an old phone |
 | `dropit version` | The version installed — each one is a release on GitHub (`cli-<version>`) |
 

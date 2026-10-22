@@ -69,7 +69,7 @@ dropit pair K7M2QX     # joining: use the code the user gave you
 
 ```bash
 dropit me                          # prints plan · devices · storage — proves the token works
-dropit send "dropit is set up ✅"   # prints ✓ #<seq>
+dropit send "dropit is set up ✅"   # prints ✓ Sent #<seq>  → All · <time>
 ```
 
 If the user wants to receive on this machine too:
