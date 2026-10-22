@@ -1,5 +1,5 @@
 {
-  "_comment": "Reference vectors for the account-creation proof of work. Made by a reference implementation (see docs/design/pow-protocol.md); every client and the service check themselves against it.",
+  "_comment": "Reference vectors for the account-creation proof of work. Made by a reference implementation; every client and the service check themselves against it.",
   "hash": {
     "preimage": "id|salt|dkh|nonce (utf-8); dkh = lowercase hex SHA-256(utf-8 device_key), or \"-\" when there is none",
     "cases": [
