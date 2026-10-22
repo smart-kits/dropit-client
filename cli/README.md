@@ -408,7 +408,7 @@ Then join your account:
 ```bash
 dropit pair K7M2QX     # with a code from a device you already use (web inbox: Devices; Obsidian: Settings → dropit)
 dropit pair            # only on your very first device: creates the account
-dropit me              # free · 2/3 devices · 1.2/30 MB · files up to 10 MB · real-time trial: 3 days left
+dropit me              # free · 2/2 devices · 1.2/30 MB · files up to 10 MB · real-time trial: 3 days left
 ```
 
 > On a machine that's already joined, plain `dropit pair` stops and says so — it won't switch you to a new, empty account.

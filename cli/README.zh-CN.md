@@ -355,7 +355,7 @@ curl -fsSL https://dropit.smart-kits.xyz/install.sh | sh    # 装进 ~/.local/bi
 ```bash
 dropit pair K7M2QX     # 用一台已经在用的设备上的配对码（网页收件箱的「设备」页；Obsidian 的「设置 → dropit」）
 dropit pair            # 只在你的第一台设备上用：创建账号
-dropit me              # free · 2/3 台设备 · 1.2/30 MB · 单个文件最大 10 MB · 实时推送体验期：还剩 3 天
+dropit me              # free · 2/2 台设备 · 1.2/30 MB · 单个文件最大 10 MB · 实时推送体验期：还剩 3 天
 ```
 
 > 已经加入过的机器上直接运行 `dropit pair`，会停下来说明，不会把你切到一个空的新账号。

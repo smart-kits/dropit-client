@@ -29,8 +29,10 @@ class PlansTest {
         assertEquals(20, Plans.defaultFree.perDay)
         assertEquals(14, Plans.defaultFree.realtimeTrialDays)
         assertEquals(1, Plans.defaultFree.days)
+        assertEquals(2, Plans.defaultFree.devices)
         assertEquals(300, Plans.defaultPaid.perDay)
         assertEquals(10, Plans.defaultPaid.days)
+        assertEquals(10, Plans.defaultPaid.devices)
         assertNull(Plans.defaultPaid.realtimeTrialDays)
         // an answer that does not say them leaves the starting ones in place
         val c = assertNotNull(catalog("""{"payments":{"open":true},"plans":[],"limits":{"free":{"days":1}}}"""))

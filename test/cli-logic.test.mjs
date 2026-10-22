@@ -99,20 +99,20 @@ is('unknown code → HTTP status', errorText('SOMETHING_NEW', {}, 500, en), en.h
 
 // ── dropit me ────────────────────────────────────────────────────────────
 const DAY = 86_400_000;
-const base = { plan: 'free', devices_used: 1, devices_limit: 3, bytes_used: 0, bytes_limit: 31457280, item_bytes_limit: 5242880 };
+const base = { plan: 'free', devices_used: 1, devices_limit: 2, bytes_used: 0, bytes_limit: 31457280, item_bytes_limit: 5242880 };
 is('trial with days left', meLine({ ...base, ws_available: true, realtime_until: now + 2.5 * DAY }, en, now),
-  'free · 1/3 devices · 0.0/30 MB · files up to 5 MB · real-time trial: 3 days left');
+  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time trial: 3 days left');
 is('trial under a day', meLine({ ...base, ws_available: true, realtime_until: now + 3_600_000 }, en, now),
-  'free · 1/3 devices · 0.0/30 MB · files up to 5 MB · real-time trial: less than a day left');
+  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time trial: less than a day left');
 is('trial over', meLine({ ...base, ws_available: false, realtime_until: now - DAY }, en, now),
-  'free · 1/3 devices · 0.0/30 MB · files up to 5 MB · real-time trial ended');
+  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time trial ended');
 is('null → always on', meLine({ ...base, plan: 'pro', devices_limit: null, ws_available: true, realtime_until: null }, en, now),
   'pro · 1/∞ devices · 0.0/30 MB · files up to 5 MB · real-time available');
 is('older service: no realtime_until, no item limit → ws_available', meLine(
-  { plan: 'free', devices_used: 2, devices_limit: 3, bytes_used: 1258291, bytes_limit: 31457280, ws_available: false }, en, now),
-  'free · 2/3 devices · 1.2/30 MB · real-time unavailable');
+  { plan: 'free', devices_used: 2, devices_limit: 2, bytes_used: 1258291, bytes_limit: 31457280, ws_available: false }, en, now),
+  'free · 2/2 devices · 1.2/30 MB · real-time unavailable');
 is('zh trial', meLine({ ...base, ws_available: true, realtime_until: now + 3 * DAY }, zh, now),
-  'free · 1/3 台设备 · 0.0/30 MB · 单个文件最大 5 MB · 实时推送体验期：还剩 3 天');
+  'free · 1/2 台设备 · 0.0/30 MB · 单个文件最大 5 MB · 实时推送体验期：还剩 3 天');
 
 // ── Upgrade moments: numbers from the service, lines once, nothing made up ──
 {

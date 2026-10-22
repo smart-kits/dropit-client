@@ -460,7 +460,7 @@ class MomentsTest {
 
     @Test fun `the account's new fields are read, and a missing one is not a number`() {
         val full = Me.from(Json.parseToJsonElement(
-            """{"plan":"free","devices_used":2,"devices_limit":3,"created_at":1700000000000,"trial_days":14,"items_total":42,"items_today":7,
+            """{"plan":"free","devices_used":2,"devices_limit":2,"created_at":1700000000000,"trial_days":14,"items_total":42,"items_today":7,
                 "items_per_day":20,"kept_days":1,"paid_grace_until":null,"renews":false,"can_manage":true,"realtime_until":1701000000000}""",
         ).jsonObject)
         assertEquals(1700000000000L, full.createdAt)
@@ -474,7 +474,7 @@ class MomentsTest {
         assertTrue(full.canManage)
         val grace = Me.from(Json.parseToJsonElement("""{"plan":"free","paid_grace_until":1702000000000}""").jsonObject)
         assertEquals(1702000000000L, grace.paidGraceUntil)
-        val old = Me.from(Json.parseToJsonElement("""{"plan":"free","devices_used":1,"devices_limit":3}""").jsonObject)
+        val old = Me.from(Json.parseToJsonElement("""{"plan":"free","devices_used":1,"devices_limit":2}""").jsonObject)
         assertNull(old.createdAt); assertNull(old.trialDays); assertNull(old.itemsTotal); assertNull(old.itemsToday)
         assertNull(old.itemsPerDay); assertNull(old.keptDays); assertNull(old.paidGraceUntil); assertNull(old.renews)
         assertFalse(old.canManage)
