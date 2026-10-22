@@ -129,3 +129,22 @@ object Plans {
         return "$sign${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
     }
 }
+
+/**
+ * What the join screen adds under "all places are taken" when a new device is turned away. The way out that costs nothing (remove one
+ * on a device already on the account) is always there; the way out that costs money is there only as a link the service gave: [upgradeUrl]
+ * is the service's own address for paying on behalf of the account being joined (this phone has no sign-in yet, so the app's own
+ * checkout cannot be used), and it is a secure address or nothing.
+ */
+data class DeviceFullHelp(val upgradeUrl: String?)
+
+/**
+ * Null for any other failure. [offering]: this build sells and the service has not said nothing can be bought. When the service left
+ * no link out (nothing to buy, or the account is already Paid) or it is not a secure address, there is no [DeviceFullHelp.upgradeUrl]
+ * and only the removing half is shown.
+ */
+fun deviceFullHelp(e: Throwable?, offering: Boolean): DeviceFullHelp? {
+    if (e !is ApiError || e.code != "DEVICE_LIMIT_REACHED") return null
+    val url = e.data["upgrade_url"]?.jsonPrimitive?.contentOrNull?.trim()
+    return DeviceFullHelp(if (offering && canOpenLink(url, httpsOnly = true)) url else null)
+}

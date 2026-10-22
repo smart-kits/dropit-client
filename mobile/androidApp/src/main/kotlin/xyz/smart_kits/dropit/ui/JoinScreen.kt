@@ -64,9 +64,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.ApiError
+import xyz.smart_kits.dropit.shared.DeviceFullHelp
+import xyz.smart_kits.dropit.shared.deviceFullHelp
 import xyz.smart_kits.dropit.shared.OfflineError
 import xyz.smart_kits.dropit.shared.PRIVACY_URL
 import xyz.smart_kits.dropit.ui.kit.Cta
@@ -91,6 +94,25 @@ internal fun errorText(e: Throwable): String {
         is OfflineError -> ctx.app.strings.render(e.sentence)
         else -> e.message ?: e.toString()
     }
+}
+
+/**
+ * Under the "all places are taken" sentence: remove one on a device already on the account, or (with a link from the service) pay.
+ * This phone has no sign-in yet, so the link is the one the service sent along with the refusal, not the app's own checkout.
+ */
+@Composable
+private fun DeviceFullHint(help: DeviceFullHelp) {
+    val ctx = LocalContext.current
+    val c = ink
+    val url = help.upgradeUrl
+    Txt(
+        if (url != null) stringResource(R.string.mo_w4_join_up, ctx.app.plans.paid.devices) else stringResource(R.string.mo_w4_join),
+        sans(13.sp, lineHeight = 19.sp), c.dim, Modifier.padding(top = 6.dp),
+    )
+    if (url != null) Txt(
+        upgradeWord("devices"), sans(13.sp, FontWeight.Bold).copy(textDecoration = TextDecoration.Underline), c.navy,
+        Modifier.clickable(role = Role.Button) { ctx.openLink(url, httpsOnly = true) }.heightIn(min = 48.dp).padding(vertical = 14.dp),
+    )
 }
 
 /** The mark and the wordmark, at the top of the two main screens */
@@ -203,6 +225,8 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
                 Cta(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, Modifier.padding(top = 12.dp), enabled = typed.length == 6, loading = busy && errorAt == "join")
                 if (busy && slow && !preparing && errorAt == "join") Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(top = 8.dp))
                 if (errorAt == "join") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 10.dp)) }
+                // Turned away because every place is taken: what to do about it, and (only when the service gave one) the way to pay
+                if (errorAt == "join") deviceFullHelp(error, BuildConfig.PAYMENTS && ctx.app.plans.offering)?.let { help -> DeviceFullHint(help) }
             }
         }
         Spacer(Modifier.height(14.dp))

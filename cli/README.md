@@ -419,9 +419,9 @@ dropit me              # free · 2/2 devices · 1.2/30 MB · files up to 10 MB �
 
 | Command | Does |
 |---|---|
-| `dropit code` | A 6-character code for a new device, valid 5 minutes — type it there, or `dropit pair <code>` on another terminal |
+| `dropit code` | A 6-character code for a new device, valid 5 minutes — type it there, or `dropit pair <code>` on another terminal. When every device slot is in use it picks the device idle longest for the new one to replace and says which; `--replace <name or id>` picks another (a name shared by two devices needs the id; this machine can't be replaced). With no other device to replace it makes no code and tells you to `dropit revoke <id>` one first |
 | `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time is on; under it, how long you've been using dropit and how many items you've sent, and a line when a paid year is about to end or has just ended |
-| `dropit devices` | Every device on your account: when it was last seen, which one this is, which can only send, and its ID |
+| `dropit devices` | Every device on your account: when it was last seen, which one this is, which can only send, and its ID; under them `used / limit`, with “All device slots are in use” when full |
 | `dropit target` | Which devices a send goes to by default on this computer; `dropit target <names…\|all>` sets it (see Sending) |
 | `dropit revoke <device_id>` | Removes a device at once and frees its slot — a lost laptop, an old phone |
 | `dropit version` | The version installed — each one is a release on GitHub (`cli-<version>`) |

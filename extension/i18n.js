@@ -42,6 +42,9 @@ const EN = {
     downloads: 'Keep downloading with Paid', kept: 'Keep items longer with Paid',
   }[why] || 'See Paid'),
   batchTooLarge: (max) => `At most ${max} files at once`,
+  // Under the "device limit" error on the join screen: the free way out first, then the paid one (only when the service gave a link)
+  deviceFullRemove: 'On a device you already use, remove one you no longer need, then enter the code again.',
+  deviceFullOr: (n) => n ? `Or upgrade to Paid (${n} devices).` : 'Or upgrade to Paid.',
 
   menuParent: 'dropit',
   menuSelection: 'Send selected text',
@@ -222,6 +225,8 @@ const ZH = {
     downloads: '升级接着下载', kept: '升级后内容留得更久',
   }[why] || '看看付费版'),
   batchTooLarge: (max) => `一次最多 ${max} 个文件`,
+  deviceFullRemove: '请在已有设备上先移除一台不用的，再重新输入配对码。',
+  deviceFullOr: (n) => n ? `或升级到付费版（${n} 台）。` : '或升级到付费版。',
 
   menuParent: 'dropit',
   menuSelection: '投选中的文字',

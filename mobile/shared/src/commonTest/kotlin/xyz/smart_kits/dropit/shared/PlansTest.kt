@@ -122,3 +122,42 @@ class PlansTest {
         assertEquals(3_600_000L, Plans.FRESH_MS)
     }
 }
+
+// A new device turned away at joining: the removing half is always said, the paying half only with a secure link from the service
+class DeviceFullHelpTest {
+    private fun refusal(body: String, code: String = "DEVICE_LIMIT_REACHED") =
+        ApiError(403, code, Json.parseToJsonElement(body).jsonObject)
+
+    @Test
+    fun aSecureLinkFromTheServiceIsOffered() {
+        val h = assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":"https://example.com/pay?u=1","why":"devices"}"""), offering = true))
+        assertEquals("https://example.com/pay?u=1", h.upgradeUrl)
+    }
+
+    @Test
+    fun aLinkThatIsNotSecureIsLeftOut() {
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":"http://example.com/pay"}"""), true)).upgradeUrl)
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":"javascript:alert(1)"}"""), true)).upgradeUrl)
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":"intent://x#Intent;end"}"""), true)).upgradeUrl)
+    }
+
+    @Test
+    fun noLinkInTheAnswerMeansPaymentsAreClosedOrTheAccountIsPaid() {
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2}"""), true)).upgradeUrl)
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":10}"""), true)).upgradeUrl)
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":""}"""), true)).upgradeUrl)
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":5}"""), true)).upgradeUrl)
+    }
+
+    @Test
+    fun aBuildOrServiceNotSellingShowsNoLinkEvenWithOne() {
+        assertNull(assertNotNull(deviceFullHelp(refusal("""{"limit":2,"upgrade_url":"https://example.com/pay"}"""), offering = false)).upgradeUrl)
+    }
+
+    @Test
+    fun otherFailuresGetNoHelp() {
+        assertNull(deviceFullHelp(refusal("""{"upgrade_url":"https://example.com/pay"}""", "PAIRING_CODE_INVALID"), true))
+        assertNull(deviceFullHelp(IllegalStateException("x"), true))
+        assertNull(deviceFullHelp(null, true))
+    }
+}

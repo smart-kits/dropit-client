@@ -80,6 +80,8 @@ phone, Obsidian or another computer:
   open it again and the same code is still there.
 - **All device slots in use?** It says which device the new one takes the place of — the one idle longest, unless you
   pick another — so joining is still one step on the other device.
+- **Joining and the slots are full?** The new browser says the device limit was reached and what to do: remove one on a
+  device you already use, or (free accounts, when Paid is offered) a link to upgrade.
 
 A browser that joined with a code doesn't show this: its key can only send (see below). Make codes on a device with a
 full key instead — the web inbox, Obsidian, `dropit code`, or the browser that created the account.

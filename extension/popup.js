@@ -2,7 +2,7 @@ import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase,
 import { deviceKey } from './device.js';
 import { withPow } from './pow.js';
 import { t, lang } from './i18n.js';
-import { fitMeta, pageMeta, intentOf, groupsFor, leftOver, resumeGroups, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, upgradeLink, squash, clip } from './payload.js';
+import { deviceFullHelp, fitMeta, pageMeta, intentOf, groupsFor, leftOver, resumeGroups, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, upgradeLink, squash, clip } from './payload.js';
 import { icon } from './icons.js';
 import { recentList, pruneRecent, RECENT_KEY } from './recent.js';
 import { readPage, readSelection } from './page.js';
@@ -40,10 +40,32 @@ const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, 
 
 // ── First run ───────────────────────────────────────────────────────────
 
-function setupFailed(message) {
+function setupFailed(message, err) {
   const box = $('setup-returned');
   box.hidden = !message;
   box.querySelector('span').textContent = message ?? '';
+  helpDeviceFull(message && err?.code === 'DEVICE_LIMIT_REACHED' ? err : null);
+}
+
+/** Joining refused because every slot is taken: say how to free one, and (free accounts, payments open) offer Paid with a link */
+function helpDeviceFull(err) {
+  const box = $('setup-help'), up = $('setup-up');
+  box.hidden = !err;
+  up.hidden = true;
+  if (!err) return;
+  const show = (paidDevices) => {
+    if ($('setup-help').hidden) return;               // cleared meanwhile
+    const h = deviceFullHelp(err.data, paidDevices, t);
+    box.querySelector('span').textContent = h.text;
+    up.hidden = !h.url;
+    if (h.url) {
+      up.textContent = h.link;
+      up.onclick = (ev) => { ev.preventDefault(); chrome.tabs.create({ url: h.url }); };
+    }
+  };
+  show(null);
+  // The paid plan's device count is public; a failed read leaves the sentence without a number
+  if (upgradeLink(err.data)) api('GET', '/v1/plans', undefined, { auth: false }).then((p) => show(p?.limits?.paid?.devices)).catch(() => {});
 }
 
 /**
@@ -67,7 +89,7 @@ async function sameBrowser() {
 
 const guardSetup = (fn) => async () => {
   setupFailed(null);
-  try { await fn(); } catch (err) { setupFailed(err.message); }
+  try { await fn(); } catch (err) { setupFailed(err.message, err); }
 };
 
 // A new account has only this browser in it, and items sent here need somewhere to arrive:

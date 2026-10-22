@@ -889,6 +889,50 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     ok('joining an account: the new token is kept, and the default devices of the earlier account are not', cfg.token === 'dk_B' && cfg.device_id === 'd_new' && cfg.targets === undefined, JSON.stringify(cfg));
   }
 
+  // ── dropit code when every slot is in use ──
+  {
+    const FULL = { devices_used: 6, devices_limit: 6 };
+    const pl = (word, me = FULL, devs = DEVICES) => cli.slotPlan(me, devs, 'd_me', word, en, NOW);
+    ok('code: room left → nothing is picked', pl(undefined, { devices_used: 5, devices_limit: 6 }).pick === null && pl(undefined, null).pick === null);
+    is('code: full → the one idle longest (a send-only one counts, this machine never)', pl(undefined).pick.device_id, 'd_lin');
+    is('code: --replace by name, by id, and a send-only device', [pl('my pixel').pick.device_id, pl('d_o1').pick.device_id, pl('iPhone Shortcut').pick.device_id], ['d_pix', 'd_o1', 'd_ios']);
+    ok('code: --replace this machine (name or id) is refused', pl('My Mac').error?.includes(en.thisMachine('My Mac')) && pl('d_me').error?.includes(en.thisMachine('My Mac')), JSON.stringify([pl('My Mac'), pl('d_me')]));
+    ok('code: --replace a shared name asks for an id and lists them', pl('Office web').error?.includes(en.ambiguous('Office web', 2)) && pl('Office web').error.includes('d_o1') && pl('Office web').error.includes('d_o2'));
+    ok('code: --replace an unknown name says so', pl('Nope').error?.includes(en.noDevice('Nope')));
+    ok('code: a removed device is not offered', pl(undefined, FULL, [...DEVICES, { device_id: 'd_x', name: 'Gone', scope: 'full', last_seen_at: 1, revoked_at: 5 }]).pick.device_id === 'd_lin');
+    ok('code: full with only this machine → no pick', (() => { const r = pl(undefined, { devices_used: 1, devices_limit: 1 }, [DEVICES[0]]); return r.full && r.pick === null; })());
+    const fl = ['--replace', 'My Pixel', 'x']; const fl2 = ['--replace=Home Linux'];
+    is('code: --replace <v> and --replace=<v> are taken out of the arguments', [cli.flagValue(fl, '--replace', 'm'), fl, cli.flagValue(fl2, '--replace', 'm'), fl2], ['My Pixel', ['x'], 'Home Linux', []]);
+    ok('code: --replace with no value is an error', (() => { try { cli.flagValue(['--replace'], '--replace', 'm'); return false; } catch (e) { return e.message === 'm'; } })());
+    ok('code: the words exist in both languages and name the way out', [en, zh].every((x) => x.codeFull(2, 'X').includes('--replace') && x.codeFullNone('d_1').includes('dropit revoke d_1') && x.devFull && x.needReplace.includes('--replace') && x.codeUpgrade('U').includes('U')));
+
+    const full = (extra = {}) => (r) => (r.path === '/v1/me' ? answer(200, { devices_used: 6, devices_limit: 6, ...extra }) : r.path === '/v1/pair' ? answer(200, { code: 'ABC234', expires_at: NOW + 300_000 }) : null);
+    writeConfig(base);
+    route = full({ upgrade_url: 'https://dropit.test/upgrade?why=devices' });
+    let r = await run(() => cli.newCode([]));
+    is('dropit code, full: the pick goes in `replace`', [paths(r).includes('POST /v1/pair'), r.reqs.find((x) => x.path === '/v1/pair').body], [true, { replace: 'd_lin' }]);
+    ok('…says who is replaced, how to change it, and the upgrade link tagged src=cli', r.out.join('\n').includes(en.codeFull(6, 'Home Linux')) && r.out.join('\n').includes('https://dropit.test/upgrade?why=devices&src=cli'), r.out.join('|'));
+    r = await run(() => cli.newCode(['--replace', 'My Pixel']));
+    is('dropit code --replace <name>: that device is the one', r.reqs.find((x) => x.path === '/v1/pair').body, { replace: 'd_pix' });
+    r = await run(() => cli.newCode(['--replace', 'Nope']));
+    ok('dropit code --replace <unknown>: no code is made', r.thrown?.includes(en.noDevice('Nope')) && !paths(r).includes('POST /v1/pair'), JSON.stringify(r));
+    route = full();
+    r = await run(() => cli.newCode([]));
+    ok('…a paid account or payments off (no upgrade_url): no link', !r.out.join('\n').includes('upgrade') && r.out.join('\n').includes(en.codeFull(6, 'Home Linux')), r.out.join('|'));
+    route = (q) => (q.path === '/v1/devices' ? answer(200, { devices: [DEVICES[0]] }) : full()(q));
+    r = await run(() => cli.newCode([]));
+    ok('dropit code, full with nothing to replace: no code, and it says what to do', r.thrown && !paths(r).includes('POST /v1/pair'), JSON.stringify(r));
+    route = (q) => (q.path === '/v1/pair' ? answer(200, { code: 'ABC234', expires_at: NOW + 300_000 }) : null);
+    r = await run(() => cli.newCode([]));
+    is('dropit code, room left: a plain POST /v1/pair, nothing replaced', [r.reqs.find((x) => x.path === '/v1/pair')?.body], [null]);
+    route = (q) => (q.path === '/v1/me' ? answer(200, { devices_used: 6, devices_limit: 6 }) : null);
+    r = await run(() => cli.devices());
+    ok('dropit devices: when full, the count line says so', r.out.at(-1).includes(en.devFull), r.out.join('|'));
+    route = () => null;
+    r = await run(() => cli.devices());
+    ok('dropit devices: when there is room, it does not', !r.out.at(-1).includes(en.devFull), r.out.join('|'));
+  }
+
   ok('the help names --to and dropit target, in both languages', [en.usage, zh.usage].every((u) => u.includes('--to <') && u.includes('dropit target')));
   is('shellQuote: plain words stay bare, others in single quotes', [shellQuote('a.jpg'), shellQuote('my pic.jpg'), shellQuote("it's.jpg")], ['a.jpg', "'my pic.jpg'", `'it'\\''s.jpg'`]);
   globalThis.fetch = realFetch;

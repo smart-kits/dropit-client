@@ -84,6 +84,9 @@
     <string name="mo_n3_up">设备 %1$d / %2$d。移除一台不用的设备，或升级到付费版（%3$d 台）。</string>
     <string name="mo_n3">设备 %1$d / %2$d。移除一台不用的设备，才能再加。</string>
 
+    <string name="mo_w4_join_up">在已有设备上先移除一台，或升级到付费版（%1$d 台）。</string>
+    <string name="mo_w4_join">在已有设备上先移除一台，再重试。</string>
+
     <plurals name="mo_w6">
         <item quantity="other">免费版的内容保留 %1$d 天。设备超过 %1$d 天没打开，那期间的内容就收不到了；付费版保留 %2$d 天。</item>
     </plurals>

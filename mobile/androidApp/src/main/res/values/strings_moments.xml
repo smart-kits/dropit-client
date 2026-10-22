@@ -104,6 +104,10 @@
     <string name="mo_n3_up">Devices %1$d / %2$d. Remove one you don’t use, or go Paid (%3$d devices).</string>
     <string name="mo_n3">Devices %1$d / %2$d. Remove one you don’t use to add another.</string>
 
+    <!-- Joining, turned away because every place is taken: what to do (the link underneath is up_devices) -->
+    <string name="mo_w4_join_up">Remove one on a device that is already on the account, or go Paid (%1$d devices).</string>
+    <string name="mo_w4_join">Remove one on a device that is already on the account, then try again.</string>
+
     <!-- A file that expired: said once -->
     <plurals name="mo_w6">
         <item quantity="one">Free keeps items %1$d day. A device that stays closed longer than that misses what was sent; Paid keeps them %2$d days.</item>

@@ -6,7 +6,7 @@
  */
 import {
   META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, leftOver, resumeGroups, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, endpointList, isPdf, seqRange,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, leftOver, resumeGroups, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, deviceFullHelp, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 import * as P from '../extension/pow.js';
@@ -151,6 +151,16 @@ for (const [lang, t] of Object.entries(STRINGS)) {
   if (lang === 'en') for (const [u, want] of [["https://dropit.example/upgrade?u=1", "https://dropit.example/upgrade?u=1"], ["http://127.0.0.1:8799/upgrade", "http://127.0.0.1:8799/upgrade"], ["http://localhost:8780/x", "http://localhost:8780/x"], ["javascript:alert(1)", null], ["data:text/html,<b>x</b>", null], ["file:///etc/passwd", null], ["obsidian://open?vault=x", null], ["http://evil.example/up", null], ["//evil.example/x", null], ["", null], [null, null]]) eq(`E13 a link from the service: ${String(u).slice(0, 40)}`, safeLink(u), want);
   eq(`E12 ${lang} storage full`, errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, t), t.quotaBytes);
   ok(`E14 ${lang} device limit says how a free account gets a slot back`, t.errors.DEVICE_LIMIT_REACHED !== t.errors.DEVICE_REVOKED && (lang === 'en' ? /remove one/i : /移除一台/).test(errorText('DEVICE_LIMIT_REACHED', { limit: 3 }, 403, t)));
+  {
+    const up = 'https://dropit.example/upgrade?why=devices';
+    const withLink = deviceFullHelp({ limit: 2, upgrade_url: up, why: 'devices' }, 10, t);
+    eq(`E16 ${lang} device-full help: link is the tagged upgrade link`, withLink.url, `${up}&src=ext`);
+    ok(`E16 ${lang} device-full help: says how to free a slot and names the paid count`, withLink.text.includes(t.deviceFullRemove) && withLink.text.includes('10') && !!withLink.link);
+    ok(`E16 ${lang} device-full help: no count known, no number written`, !/\d/.test(deviceFullHelp({ upgrade_url: up }, null, t).text));
+    const bare = deviceFullHelp({ limit: 10 }, 10, t);
+    ok(`E16 ${lang} device-full help: no link and no price for a paid account or payments off`, bare.url === null && bare.link === null && bare.text === t.deviceFullRemove && !/\d/.test(bare.text));
+    eq(`E16 ${lang} device-full help: an unsafe link is dropped`, deviceFullHelp({ upgrade_url: 'javascript:alert(1)' }, 10, t).url, null);
+  }
   ok(`E14 ${lang} no sentence carries a hard-coded plan number`, ['rateHour', 'quotaItems', 'quotaBytes'].every((k) => !/\d/.test(t[k])) && !/\d/.test(t.rateDay('00:00').replace('00:00', '')));
   ok(`E12 ${lang} unknown code`, errorText('NOPE', {}, 500, t).includes('500'));
 }

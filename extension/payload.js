@@ -235,6 +235,18 @@ export const upgradeLink = (data) => {
   return `${base}${base.includes('?') ? '&' : '?'}src=ext${h < 0 ? '' : url.slice(h)}`;
 };
 
+/**
+ * What to say under "device limit reached" on the join screen: how a slot comes back (always), and the paid way
+ * (only when the service gave an upgrade link, so never for a paid account or while payments are off).
+ * `paidDevices`: the paid plan's device count when known; no number is written without it.
+ * @returns {{ text: string, url: string|null, link: string|null }}
+ */
+export function deviceFullHelp(data, paidDevices, t) {
+  const url = upgradeLink(data);
+  const n = Number.isInteger(paidDevices) && paidDevices > 0 ? paidDevices : null;
+  return { text: url ? `${t.deviceFullRemove} ${t.deviceFullOr(n)}` : t.deviceFullRemove, url, link: url ? t.upgradeFor('devices') : null };
+}
+
 /** The sentence for an error answer from the service. Numbers come from the answer, never from here. */
 export function errorText(code, data = {}, status, t, now = Date.now()) {
   if (code === 'PAYLOAD_TOO_LARGE' && data.field === 'size' && data.limit) return t.tooLarge(mb(data.limit));

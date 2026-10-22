@@ -134,6 +134,12 @@ const T = {
     devThis: 'this',
     devSendOnly: 'send-only',
     devCount: (used, limit) => `${used} / ${limit}`,
+    devFull: 'All device slots are in use',
+    needReplace: '--replace needs a device name or id: dropit code --replace "My Mac"',
+    codeFull: (limit, name) => `All ${limit} device slots are in use — the new device will replace “${name}” when it joins (to replace another one: dropit code --replace <name or id>)`,
+    codeFullNone: (id) => `All device slots are in use. Remove one first: dropit revoke ${id}`,
+    codeFullNoOthers: 'All device slots are in use, and there is no other device to replace. Remove one from another device first',
+    codeUpgrade: (url) => `Or upgrade: ${url}`,
     ago: (sec) => (sec < 60 ? 'now' : sec < 3600 ? `${Math.floor(sec / 60)} min ago` : sec < 86400 ? `${Math.floor(sec / 3600)} h ago` : `${Math.floor(sec / 86400)} d ago`),
     folder: (dir) => `Receiving into ${dir}`,
     noWebSocket: 'Node.js < 22 has no global WebSocket — caught up, but real-time push is unavailable.',
@@ -337,6 +343,7 @@ Items sent together (up to 16) are handed to the rule once, when all have arrive
   dropit pair [code]        No code: create an account. With a code: join an existing one
   dropit pair --new         Start a separate new account on a machine that's already joined
   dropit code               Generate a pairing code for a new device
+      --replace <device>    …when every slot is in use: the device the new one takes the place of (default: idle longest)
   dropit send <text|link>   Or pipe it in: pbpaste | dropit send
   dropit send -f <file…>    Send files — images, PDFs, videos and more; up to 10 go as one batch
       --to <devices>        …to these devices this once: names or ids, separated by commas, or "all"
@@ -454,6 +461,12 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     devThis: '这台',
     devSendOnly: '只能投递',
     devCount: (used, limit) => `${used} / ${limit} 台`,
+    devFull: '名额已满',
+    needReplace: '--replace 后面要跟设备名或编号：dropit code --replace "我的 Mac"',
+    codeFull: (limit, name) => `${limit} 台设备的名额已满，新设备加入时将替换「${name}」（要换一台：dropit code --replace <名字或编号>）`,
+    codeFullNone: (id) => `名额已满，先移除一台：dropit revoke ${id}`,
+    codeFullNoOthers: '名额已满，而且没有别的设备可替换。先在另一台设备上移除一台',
+    codeUpgrade: (url) => `或升级：${url}`,
     ago: (sec) => (sec < 60 ? '刚刚' : sec < 3600 ? `${Math.floor(sec / 60)} 分钟前` : sec < 86400 ? `${Math.floor(sec / 3600)} 小时前` : sec < 172800 ? '昨天' : `${Math.floor(sec / 86400)} 天前`),
     folder: (dir) => `落地目录 ${dir}`,
     noWebSocket: 'Node.js < 22，没有全局 WebSocket —— 已补齐，实时推送不可用。',
@@ -653,6 +666,7 @@ parts：ocr = 图片 / PDF 抽文字 · audio = 语音和视频 · link = 链接
   dropit pair [配对码]      不带配对码：创建账号；带配对码：加入已有账号
   dropit pair --new         已加入账号的机器上，另建一个新账号
   dropit code               生成配对码，给新设备用
+      --replace <设备>       …名额已满时：新设备替换哪一台（默认：闲置最久的）
   dropit send <文本|链接>    也可以从管道读：pbpaste | dropit send
   dropit send -f <文件…>     投文件 —— 图片、PDF、视频等；最多 10 个，作为一批
       --to <设备>            …这一次只投给这些设备：设备名或编号，用逗号隔开，或 all
@@ -876,9 +890,64 @@ function machineId() {
 }
 
 /** Issue a pairing code for another device */
-async function newCode() {
-  const { code, expires_at } = await api(needToken(), 'POST', '/v1/pair');
-  console.log(`${code}\n${t.codeValid(new Date(expires_at).toLocaleTimeString())}\n\n${t.codeInstall(`${DEFAULT_ENDPOINTS[0]}/#install`)}`);
+async function newCode(args = []) {
+  const cfg = needToken();
+  const word = flagValue(args, '--replace', t.needReplace);
+  // Every slot in use: the new device takes the place of one, chosen now so that joining stays one step there
+  const [me, list] = await Promise.all([api(cfg, 'GET', '/v1/me').catch(() => null), fetchDevices(cfg).catch(() => null)]);
+  const plan = me && list ? slotPlan(me, list, cfg.device_id, word) : { full: false, pick: null, others: [] };
+  const up = plan.full ? upgradeLink({ upgrade_url: me.upgrade_url }) : null;
+  if (plan.error) throw new Error(plan.error);
+  if (plan.full && !plan.pick) throw new Error([plan.others.length ? t.codeFullNone(shown(plan.others[0].device_id)) : t.codeFullNoOthers, ...(up ? [t.codeUpgrade(up)] : [])].join('\n'));
+  const { code, expires_at } = await api(cfg, 'POST', '/v1/pair', plan.pick ? { replace: plan.pick.device_id } : undefined);
+  console.log(`${code}\n${t.codeValid(new Date(expires_at).toLocaleTimeString())}`);
+  if (plan.pick) console.log(`\n${t.codeFull(me.devices_limit, shown(plan.pick.name ?? plan.pick.device_id))}${up ? `\n${t.codeUpgrade(up)}` : ''}`);
+  console.log(`\n${t.codeInstall(`${DEFAULT_ENDPOINTS[0]}/#install`)}`);
+}
+
+/** `--flag <value>` / `--flag=<value>` out of args (removed) → the value, or null when absent */
+function flagValue(args, flag, missing) {
+  let value = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === flag) {
+      value = args[i + 1];
+      if (value == null || value.startsWith('--')) throw new Error(missing);
+      args.splice(i, 2);
+    } else if (a.startsWith(`${flag}=`)) {
+      value = a.slice(flag.length + 1);
+      if (!value) throw new Error(missing);
+      args.splice(i, 1);
+    } else continue;
+    i--;
+  }
+  return value;
+}
+
+/**
+ * Every slot in use: which device the new one takes the place of. `word` (a name or id the person typed) picks it;
+ * without one it is the device idle longest. This machine is never replaced, a removed device is not offered, and a
+ * send-only device can be (it holds a slot too). → { full, others, pick } | { error }; pick is null when there is room
+ * or nothing else to replace.
+ */
+function slotPlan(me, devices, selfId, word, tt = t, now = Date.now()) {
+  const others = devices.filter((d) => d.device_id !== selfId && !d.revoked_at)
+    .sort((a, b) => (a.last_seen_at ?? 0) - (b.last_seen_at ?? 0));
+  const full = Number.isFinite(me?.devices_limit) && Number.isFinite(me?.devices_used) && me.devices_used >= me.devices_limit;
+  if (!full) return { full, others, pick: null };
+  if (word == null) return { full, others, pick: others[0] ?? null };
+  const w = word.trim();
+  const self = devices.find((d) => d.device_id === selfId);
+  const byId = devices.find((d) => d.device_id === w);
+  const exact = others.filter((d) => String(d.name ?? '').trim() === w);
+  const found = byId ? [byId] : exact.length ? exact : others.filter((d) => nameKey(d.name) === nameKey(w));
+  if (found.length === 1 && found[0].device_id !== selfId) return { full, others, pick: found[0] };
+  if (found.length === 1 || (self && !found.length && nameKey(self.name) === nameKey(w))) return { error: bad(tt.thisMachine(nameOf(self ?? found[0]))) };
+  if (found.length > 1) {
+    const lines = found.map((d) => `  ${blue(shown(d.device_id))}  ${nameOf(d)}${agoOf(d, now, tt) ? `  ${dim(agoOf(d, now, tt))}` : ''}`);
+    return { error: [bad(tt.ambiguous(shown(w), found.length)), ...lines].join('\n') };
+  }
+  return { error: [bad(tt.noDevice(shown(w))), ...(untypable(devices) ? [`  ${dim(tt.nameByNumber)}`] : [])].join('\n') };
 }
 
 // ── Colors and columns: color only on a terminal, and never when asked to go without ──
@@ -1844,7 +1913,10 @@ async function devices() {
   const cfg = needToken();
   const [list, me] = await Promise.all([fetchDevices(cfg), api(cfg, 'GET', '/v1/me').catch(() => null)]);
   for (const line of deviceLines(list, cfg.device_id)) console.log(line);
-  if (me && me.devices_used != null) console.log(`  ${dim(t.devCount(me.devices_used, me.devices_limit ?? '∞'))}`);
+  if (me && me.devices_used != null) {
+    const full = Number.isFinite(me.devices_limit) && me.devices_used >= me.devices_limit;
+    console.log(`  ${dim(t.devCount(me.devices_used, me.devices_limit ?? '∞'))}${full ? `  ${dim(`· ${t.devFull}`)}` : ''}`);
+  }
 }
 
 /**
@@ -3259,7 +3331,7 @@ if (require.main === module) {
     execPayload, fireExec, afterWrite, handOn, prefetch, sendFile, sendFiles,
     // who a send goes to, and how a send reads back
     groupOf, rulesOn, batchJoin, batchItem, batchSource, runBatch, finishBatches, waitingBatches, stopRealtime, forgetDevices, batchFlags, withSrc,
-    toFlag, wordsOf, resolveWords, targetLabel, targetFor, savedTargets, settleDefault, setDefault, receiptLine, targetCmd, deviceLines, send,
+    toFlag, flagValue, slotPlan, newCode, wordsOf, resolveWords, targetLabel, targetFor, savedTargets, settleDefault, setDefault, receiptLine, targetCmd, deviceLines, send,
     receivers, shellQuote, pair, devices, cols, padCols, sizeText, colorOn, BATCH_QUIET_MS, BATCH_MAX_MS, RECENT_DEFAULT, newQueue, agentsCmd, handlersCmd, runCmd, kindOfFile, planOf, commandLine, writeItem,
     RUN_AGENTS, RUN_KINDS, RUN_DEFAULTS, planRun, composeInput, sanitizeAnswer, safeFileName, detectAgents, composePrompt, kindsFor, resultDocument,
   };
