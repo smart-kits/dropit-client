@@ -37,9 +37,11 @@ dropit send -f photo.jpg           # a file: image, video, PDF, anything
 - **Several files at once:** `dropit send -f *.png` — up to 10, sent as one batch that arrives together.
   More than 10 and nothing is sent; a missing file is caught before anything goes. One line per file, then one that says where it went.
 - **A failed batch stops there:** what already went stays sent, the files that did not go are listed, and so is the command that
-  sends just those again to the same devices (`dropit send -f b.jpg d.jpg --to 'My Pixel'`). The exit code is `1`.
+  sends just those again to the same devices, into the same batch, each in the place it had (`dropit send -f b.jpg d.jpg --to 'My Pixel' --batch <id> --of 5 --at 2,4`);
+  the receiving end still shows them as one batch. The exit code is `1`.
 - **To some devices only:** `dropit send --to "My Pixel" "see you at 3"`, or `dropit send -f a.jpg b.jpg --to "My Pixel,Home Linux"`.
   Names or ids (`dropit devices` shows both), separated by commas; `--to all` is every device. Case and spaces in a name don't matter.
+  A device whose name has a comma in it, or is called "all", can only be given by its id.
   If two devices share a name, nothing is sent: the error lists their ids, and you use one of those. `--to` is for this send only, and
   the receipt says so (`→ My Pixel · this once; default unchanged`). A token that can only send, not receive, can't read the device list, so names don't work for it (`--to all` does).
 - **A default for this computer:** `dropit target` shows it; `dropit target "My Pixel" "Home Linux"` sets it (`dropit target all` or
@@ -200,8 +202,11 @@ The original text is the quote, so nothing is lost; if the agent fails, the file
   go to the rule **once**, when all have arrived. If some don't, it goes 90 seconds after the last one came, and after 5 minutes at the
   latest, with what is there. The result is one file beside the others, `2026-10-04-44–47.Auto.md`: everything that arrived in the order it was
   sent (texts as they came, files as links), then the answer. The files and the text are not changed or replaced. Only the kinds the
-  rule is set for are handed to the agent. A later item of a handled batch is not run on its own, and a `watch` that is restarted
-  does not wait for what it had not finished. `--exec` is not affected: it still gets each item.
+  rule is set for are handed to the agent. The longest text a rule takes (`maxChars`) is for the words: when the words of a batch are longer
+  and it has files, the words are left out (the agent is told) and the files are still handled; the shortest (`minChars`) is only asked of a
+  text on its own. A batch of words alone that a limit turns away is said, not skipped silently. A later item of a handled batch is not
+  run on its own, and a `watch` that is restarted does not wait for what it had not finished; a `watch` that ends by itself (it caught up and
+  has no real-time) first hands over the batches that were still waiting. `--exec` is not affected: it still gets each item.
 - **Your own command.** `dropit handlers add -- my-script --flag` runs your program instead; the content goes to its standard input.
   Pick an agent with `--agent codex`, `grok`, `gemini` or `pi`: it is started from the arguments its own help suggests, as a command
   of your own, and you can change them with `set auto argv='["…"]'`.

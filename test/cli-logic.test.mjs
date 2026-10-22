@@ -271,6 +271,18 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     ok('…and it does ask again after the hour', count('/v1/ws/ticket') >= 2, String(count('/v1/ws/ticket')));
   });
 
+  // Reading the account at the start never holds up receiving for long: a slow answer is waited for 3 seconds at most
+  await scenario('account read hangs', { handler: (r) => (r.path === '/v1/me' ? new Promise(() => {}) : null), ws: (w) => opens(w) }, async () => {
+    await advance(2000);
+    ok('the account has not answered after 2 s: real-time is not asked for yet (it waits, but only for 3 s)', count('/v1/ws/ticket') === 0, String(count('/v1/ws/ticket')));
+    await advance(3000);
+    ok('after 3 s it connects anyway, without it', count('/v1/ws/ticket') === 1 && FakeWS.all.length === 1 && logs.some((l) => l === T.en.wsConnected), logs.join(' | '));
+  });
+  await scenario('account read answers at once', { handler: (r) => r.path === '/v1/me' && answer(200, { plan: 'paid', paid_until: T0 + 100 * 86_400_000, renews: true, realtime_until: null }), ws: (w) => opens(w) }, async () => {
+    await advance(1000);
+    ok('a quick answer is not waited out: connected within a second', count('/v1/ws/ticket') === 1 && FakeWS.all.length === 1, String(count('/v1/ws/ticket')));
+  });
+
   // The trial's end, said by the account: T1 / T2 when watch starts (once), T3 when the service turns real-time down
   {
     const ME = (extra = {}) => ({ plan: 'free', trial_days: 14, created_at: T0 - 12 * 86_400_000 - 1000, items_total: 41, devices_used: 2, upgrade_url: 'https://dropit.test/upgrade?u=1&why=account&buy=year', ...extra });
@@ -539,6 +551,36 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
   ok('no such device: named, and where to look', resolved(['Nope']).error?.includes(en.noDevice('Nope')) && resolved(['d_zzz']).error?.includes(en.noDevice('d_zzz')));
   is('a name shared with this machine means the other one', resolveWords(['Office web'], [{ device_id: 'd_me', name: 'Office web', scope: 'full' }, { device_id: 'd_x', name: 'Office web', scope: 'full' }], 'd_me', en, NOW), { ids: ['d_x'] });
   ok('an error starts with the cross', resolved(['Nope']).error.startsWith('✗ '));
+  ok('no device that cannot be typed: no hint about numbers', !resolved(['Nope']).error.includes(en.nameByNumber));
+  {
+    const odd = [{ device_id: 'd_me', name: 'Me', scope: 'full' }, { device_id: 'd_w', name: 'Work, Mac', scope: 'full' }, { device_id: 'd_a', name: 'All', scope: 'full' }];
+    const typed = resolveWords(wordsOf('Work, Mac'), odd, 'd_me', en, NOW);
+    ok('a name with a comma splits into two words that match nothing: the error says to use the id', typed.error?.includes(en.noDevice('Work')) && typed.error.includes(en.nameByNumber), typed.error);
+    ok('…in Chinese too', resolveWords(wordsOf('Work, Mac'), odd, 'd_me', zh, NOW).error?.includes(zh.nameByNumber));
+    is('…and the id of that device works', resolveWords(['d_w'], odd, 'd_me', en, NOW), { ids: ['d_w'] });
+    ok('a device called all cannot be named beside others: the error says to use the id', resolveWords(['All', 'Work'], odd, 'd_me', en, NOW).error?.includes(en.nameByNumber));
+    is('…and its id works', resolveWords(['d_a'], odd, 'd_me', en, NOW), { ids: ['d_a'] });
+  }
+  // --batch --of --at: files into a batch that was begun
+  {
+    const { batchFlags } = cli;
+    const args = ['-f', 'b.jpg', 'd.jpg', '--batch', 'bGRPabc123', '--of', '5', '--at', '2,4'];
+    is('batch flags are taken out of the arguments and read', [batchFlags(args), args], [{ id: 'bGRPabc123', n: 5, at: [2, 4] }, ['-f', 'b.jpg', 'd.jpg']]);
+    is('none given: none', batchFlags(['-f', 'a.jpg']), null);
+    for (const bad of [['--batch', 'bGRPabc123'], ['--batch', 'bGRPabc123', '--of', '5'], ['--of', '5', '--at', '1'], ['--batch', 'x', '--of', '5', '--at', '1'],
+      ['--batch', 'bGRPabc123', '--of', '1', '--at', '1'], ['--batch', 'bGRPabc123', '--of', '17', '--at', '1'], ['--batch', 'bGRPabc123', '--of', '5', '--at', '6'],
+      ['--batch', 'bGRPabc123', '--of', '5', '--at', '2,2'], ['--batch', 'bGRPabc123', '--of', '5', '--at', '0'], ['--batch', 'bGRPabc123', '--of', '5', '--at', 'a'], ['--batch']]) {
+      let msg = null;
+      try { batchFlags([...bad]); } catch (e) { msg = e.message; }
+      ok(`batch flags that do not make a batch are refused: ${bad.join(' ')}`, msg === en.batchFlagsBad, String(msg));
+    }
+  }
+  // the link of a limit: src goes before a fragment
+  {
+    const up = (u) => withUpgrade('x', { upgrade_url: u, why: 'per_day' }, en).split(': ').pop();
+    is('src= goes before a #fragment, with ? or & as the link needs', [up('https://dropit.example/upgrade#plans'), up('https://dropit.example/upgrade?a=1#plans'), up('https://dropit.example/upgrade?a=1')],
+      ['https://dropit.example/upgrade?src=cli#plans', 'https://dropit.example/upgrade?a=1&src=cli#plans', 'https://dropit.example/upgrade?a=1&src=cli']);
+  }
 
   // who it went to, in a few words
   const label = (names, tt = en) => targetLabel(names, tt);
@@ -604,6 +646,7 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     const realLog = console.log, realErr = console.error, realExit = process.exit;
     let exit = null, thrown = null;
     reqs = [];
+    cli.forgetDevices();                            // each run is its own process: the list of devices is asked for again
     console.log = (...a) => out.push(a.join(' '));
     console.error = (...a) => err.push(a.join(' '));
     process.exit = (code) => { exit = code; throw Object.assign(new Error('exit'), { exitCode: code }); };
@@ -674,6 +717,18 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     is('the list cannot be read: the send goes with the default as saved', [r.reqs.at(-1).body.to, r.thrown], [['d_pix'], null]);
   }
   {
+    // Sending again and again in one process to a chosen default: the list of devices is asked for once, not before every send
+    const twice = await run(async () => { await cli.send(['one']); await cli.send(['two']); });
+    is('two sends in a row to a chosen default ask for the list of devices once', [twice.reqs.filter((x) => x.path === '/v1/devices').length, twice.reqs.filter((x) => x.path === '/v1/ingest').map((x) => x.body.to)], [1, [['d_pix'], ['d_pix']]]);
+    const later = await run(async () => {
+      const real = Date.now;
+      await cli.send(['one']);
+      Date.now = () => real() + 31_000;
+      try { await cli.send(['two']); } finally { Date.now = real; }
+    });
+    is('…and after half a minute it is asked again', later.reqs.filter((x) => x.path === '/v1/devices').length, 2);
+  }
+  {
     route = (r) => (r.path === '/v1/ingest' ? answer(400, { error: 'TARGET_UNAVAILABLE', reason: 'gone', gone: ['d_pix'] }) : null);
     const fromDefault = await run(() => cli.send(['hello']));
     ok('the service says the default devices cannot receive: the reason, the default is back to all, and it says so', fromDefault.thrown === `${en.targetRefused.gone}\n${en.defaultReset}` && readConfig().targets === undefined, fromDefault.thrown);
@@ -728,21 +783,46 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     route = () => null;
     is('a failure stops the batch: lines in the given order, what ran stays sent, what did not start is listed', [r.out, r.err.slice(0, 3)],
       [['  ✓ a.jpg  2 KB', '  ✓ c.jpg  2 KB'], [`  ✗ b.jpg  ${en.errors.BLOB_UNAVAILABLE}`, '  – d.jpg  not sent', '  – e.jpg  not sent']]);
-    is('…then how many did not go, to whom, and the command that sends just those to the same devices', r.err[3],
-      `${en.notSent(3)}  → My Pixel\n${en.resendUnsent(['b.jpg', 'd.jpg', 'e.jpg'], "'My Pixel'")}`);
+    const gid = r.reqs.find((x) => x.path === '/v1/ingest/file').query.get('group');
+    is('…then how many did not go, to whom, and the command that sends just those to the same devices, in the same batch', r.err[3],
+      `${en.notSent(3)}  → My Pixel\n${en.resendUnsent(['b.jpg', 'd.jpg', 'e.jpg'], "'My Pixel'", { id: gid, n: 5, at: [2, 4, 5] })}`);
     ok('…the exit code is 1, and d and e were never asked', r.exit === 1 && !r.reqs.some((x) => ['d.jpg', 'e.jpg'].includes(x.query.get('name'))), JSON.stringify(r.exit));
-    ok('…and the line can be pasted as it is', r.err[3].endsWith("dropit send -f b.jpg d.jpg e.jpg --to 'My Pixel'"), r.err[3]);
+    ok('…and the line can be pasted as it is: the files keep the batch they were in, and the place each had (the count stays 5)', r.err[3].endsWith(`dropit send -f b.jpg d.jpg e.jpg --to 'My Pixel' --batch ${gid} --of 5 --at 2,4,5`), r.err[3]);
+    // the line, run: the three go into that batch at those places, as members of it (not as a new batch of three)
+    const again = await run(() => cli.send(['-f', 'b.jpg', 'd.jpg', 'e.jpg', '--to', 'My Pixel', '--batch', gid, '--of', '5', '--at', '2,4,5']));
+    const sent = again.reqs.filter((x) => x.path === '/v1/ingest/file');
+    ok('sent again with it: the same batch id, the places 2, 4 and 5 of 5, to the same device', sent.length === 3 && sent.every((x) => x.query.get('group') === gid && x.query.get('n') === '5' && x.query.get('to') === 'd_pix')
+      && sent.map((x) => x.query.get('i')).sort().join() === '2,4,5', JSON.stringify(sent.map((x) => [...x.query])));
+    const lone = await run(() => cli.send(['-f', 'e.jpg', '--batch', gid, '--of', '5', '--at', '5']));
+    const loneReq = lone.reqs.find((x) => x.path === '/v1/ingest/file');
+    ok('…even one file alone goes in as the 5th of its batch', loneReq.query.get('group') === gid && loneReq.query.get('i') === '5' && loneReq.query.get('n') === '5' && clockLine(lone.out[0]), JSON.stringify([...loneReq.query, lone.out]));
   }
   {
     route = (r) => (r.path === '/v1/ingest/file' && r.query.get('name') === 'my pic.jpg' ? answer(503, { error: 'BLOB_UNAVAILABLE' }) : null);
     const r = await run(() => cli.send(['-f', 'a.jpg', 'my pic.jpg']));
     route = () => null;
-    ok('a name with a space is quoted for the shell in the resend line; no --to when none was given', r.err.at(-1).endsWith("dropit send -f 'my pic.jpg'") && r.err.at(-1).includes(en.notSent(1)), r.err.at(-1));
+    const gid2 = r.reqs.find((x) => x.path === '/v1/ingest/file').query.get('group');
+    ok('a name with a space is quoted for the shell in the resend line; no --to when none was given; the batch is kept', r.err.at(-1).endsWith(`dropit send -f 'my pic.jpg' --batch ${gid2} --of 2 --at 2`) && r.err.at(-1).includes(en.notSent(1)), r.err.at(-1));
     writeConfig({ ...base, targets: [{ id: 'd_pix', name: 'My Pixel' }, { id: 'd_lin', name: 'Home Linux' }] });
     route = (r) => (r.path === '/v1/ingest/file' && r.query.get('name') === 'b.jpg' ? answer(503, { error: 'BLOB_UNAVAILABLE' }) : null);
     const d = await run(() => cli.send(['-f', 'a.jpg', 'b.jpg']));
     route = () => null;
-    ok('with a chosen default, the resend line names the same devices by id (the default may change before it is used)', d.err.at(-1).endsWith('dropit send -f b.jpg --to d_pix,d_lin') && d.err.at(-1).includes('→ 2 devices'), d.err.at(-1));
+    const gid3 = d.reqs.find((x) => x.path === '/v1/ingest/file').query.get('group');
+    ok('with a chosen default, the resend line names the same devices by id (the default may change before it is used)', d.err.at(-1).endsWith(`dropit send -f b.jpg --to d_pix,d_lin --batch ${gid3} --of 2 --at 2`) && d.err.at(-1).includes('→ 2 devices'), d.err.at(-1));
+    // a file name with control characters is not printed as they are, in the resend line either
+    const odd = 'x\u001b[2Jy.jpg';
+    fsx.writeFileSync(join(dir, odd), Buffer.alloc(2048, 1));
+    route = (r) => (r.path === '/v1/ingest/file' && r.query.get('name') === odd ? answer(503, { error: 'BLOB_UNAVAILABLE' }) : null);
+    const ctl = await run(() => cli.send(['-f', 'a.jpg', odd]));
+    route = () => null;
+    fsx.rmSync(join(dir, odd));
+    ok('a file name with an escape character is shown with it replaced, in every line (the resend line too)', !/\u001b/.test(ctl.err.join('\n')) && ctl.err.at(-1).includes('?[2Jy.jpg'), JSON.stringify(ctl.err));
+    const mism = await run(() => cli.send(['-f', 'a.jpg', 'b.jpg', '--batch', 'bGRPabc123', '--of', '5', '--at', '2']));
+    ok('places that do not match the files: refused before anything is sent', mism.exit === 1 && mism.err.some((l) => l.includes(en.batchPlaces(2, 1))) && !mism.reqs.some((x) => x.path === '/v1/ingest/file'), JSON.stringify([mism.exit, mism.err]));
+    const alone = await run(() => cli.send(['hello', '--batch', 'bGRPabc123', '--of', '5', '--at', '2']));
+    ok('--batch with no files: said, nothing sent', alone.exit === 1 && alone.err.some((l) => l.includes(en.batchNeedsFiles)) && !alone.reqs.some((x) => x.path.startsWith('/v1/ingest')), JSON.stringify([alone.exit, alone.err]));
+    const nofile = await run(() => cli.send(['-f', 'a.jpg', 'no\u001b[0mfile.jpg']));
+    ok('…and so is one that is not there', nofile.exit === 1 && !/\u001b/.test(nofile.err.join('\n')) && nofile.err.join('\n').includes('no?[0mfile.jpg'), JSON.stringify(nofile.err));
   }
   {
     writeConfig({ ...base, targets: [{ id: 'd_pix', name: 'My Pixel' }] });

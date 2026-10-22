@@ -724,6 +724,72 @@ const sumRule = () => ({ ...C.newRule('claude', null, ['sum'], false), id: 'summ
     ok('only one of three ever came: it is handled as a single item (its file becomes the answer), not as a batch of one', spawned.length === 1 && !fs.existsSync(resultFile(371, 371)) && fs.readFileSync(path.join(dir, `${stamp}-371.md`), 'utf8').includes('> only one came'), fs.readdirSync(dir).join());
   }
 
+  // leaving on its own (caught up, no real-time to wait for): a batch that still waits is handled, not dropped by the exit
+  {
+    put([asRule()]);
+    const st = watching();
+    spawned.length = 0;
+    await arrive(st, textOf(421, 1, 3, 'words that wait', 'exit1'));
+    await arrive(st, fileOf(422, 2, 3, 'a.png', 'image', 'exit1'));
+    ok('two of three came: it waits, and that is known', st.batches.get('exit1').state === 'wait' && spawned.length === 0 && C.waitingBatches(st) === true);
+    await C.finishBatches(st);
+    ok('finishing hands it over with what it has: one run, one file, nothing left in the queue or waiting', spawned.length === 1 && fs.existsSync(resultFile(421, 422)) && st.queue.pending === 0
+      && st.batches.get('exit1').state === 'done' && C.waitingBatches(st) === false, fs.readdirSync(dir).join());
+    ok('…and says it went early, with how many were there', say().includes(en.ag.batchTimedOut(2, 3)), say());
+    const answered = fs.readFileSync(resultFile(421, 422), 'utf8').split('\n\n---\n\n')[1];
+    ok('…the agent was given what had come', answered.includes('words that wait') && answered.includes('items="2"'), answered);
+    const none = watching();
+    await C.finishBatches(none);
+    ok('with nothing waiting it is done at once', C.waitingBatches(none) === false && none.queue.pending === 0);
+    // the exit that watch takes when the service turns real-time down: it waits for the batch too
+    const st2 = watching();
+    spawned.length = 0;
+    await arrive(st2, textOf(431, 1, 3, 'waiting at the exit', 'exit2'));
+    await arrive(st2, fileOf(432, 2, 3, 'b.png', 'image', 'exit2'));
+    const realExit = process.exit, realLog = console.log;
+    let exited = null;
+    process.exit = (code) => { exited = code; };
+    console.log = () => {};
+    let ret;
+    try {
+      ret = C.stopRealtime(st2, async () => {}, 'trial_over');
+      const early = exited;
+      for (let i = 0; i < 250 && exited === null; i++) await new Promise((r) => setTimeout(r, 20));
+      ok('real-time turned down with a batch waiting: not an exit at once; it is handled first, and then the exit', ret === 'plan' && early === null && exited === 0 && spawned.length === 1 && fs.existsSync(resultFile(431, 432)), JSON.stringify([ret, early, exited, spawned.length]));
+    } finally { process.exit = realExit; console.log = realLog; }
+  }
+
+  // the limits on words are for the words: they never get a batch's files skipped; a batch of words alone is told about
+  {
+    put([asRule({ maxChars: 20 })]);
+    const st = watching();
+    spawned.length = 0;
+    await arrive(st, textOf(441, 1, 2, 'LONGWORDS '.repeat(5), 'lim1'));
+    await arrive(st, fileOf(442, 2, 2, 'a.png', 'image', 'lim1'));
+    await st.queue.tail;
+    const doc = fs.readFileSync(resultFile(441, 442), 'utf8');
+    const given = doc.split('\n\n---\n\n').slice(1).join('\n\n---\n\n');
+    ok('words over the longest, with a picture: the batch runs, on the picture', spawned.length === 1 && given.includes(`file ./${stamp}-442-a.png`), given);
+    ok('…the agent is not given the long words and is told they were left out; the file keeps all that arrived', !given.includes('LONGWORDS') && given.includes('1 text was too long and left out') && doc.split('\n\n---\n\n')[0].includes('LONGWORDS'), doc);
+    put([asRule({ maxChars: 5 })]);
+    const st2 = watching();
+    spawned.length = 0;
+    logs.err.length = 0;
+    await arrive(st2, textOf(451, 1, 2, 'only words, too long', 'lim2'));
+    await arrive(st2, textOf(452, 2, 2, 'more words', 'lim2'));
+    await st2.queue.tail;
+    ok('a batch of words alone past the longest is not run, no file is made', spawned.length === 0 && !fs.existsSync(resultFile(451, 452)), fs.readdirSync(dir).join());
+    ok('…and it is not silent: one line says which rule turned it away and why', logs.err.filter((l) => l.includes(en.ag.whyLong) && l.includes('Auto')).length === 1, JSON.stringify(logs.err));
+    put([asRule({ minChars: 500 })]);
+    const st3 = watching();
+    spawned.length = 0;
+    await arrive(st3, textOf(461, 1, 2, 'short', 'lim3'));
+    await arrive(st3, fileOf(462, 2, 2, 'a.png', 'image', 'lim3'));
+    await st3.queue.tail;
+    ok('words under the shortest, with a picture: the batch runs (the shortest is for a text on its own)', spawned.length === 1 && fs.existsSync(resultFile(461, 462)), fs.readdirSync(dir).join());
+    put([asRule()]);
+  }
+
   // again after a restart: the file is there, nothing runs
   {
     put([asRule()]);
