@@ -48,7 +48,8 @@ class Buy(private val ctx: Context, private val scope: CoroutineScope) {
                 val url = withTimeoutOrNull(GIVE_UP_AFTER_MS) { ctx.app.client.send(Requests.checkout(plan, from, UpgradeFrom.why(why))).str("checkout_url") }
                     ?: throw OfflineError(AttemptTimeout())
                 // An address that did not open must not look like a button that does nothing
-                if (!ctx.openLink(url)) error = IllegalStateException(ctx.getString(R.string.no_browser)) else onOpened()
+                // The checkout is opened only when the address is a secure one, whatever the answer says
+                if (!ctx.openLink(url, httpsOnly = true)) error = IllegalStateException(ctx.getString(R.string.no_browser)) else onOpened()
             } catch (e: Throwable) {
                 error = e
             } finally {
@@ -65,7 +66,7 @@ class Buy(private val ctx: Context, private val scope: CoroutineScope) {
             try {
                 val url = withTimeoutOrNull(GIVE_UP_AFTER_MS) { ctx.app.client.send(Requests.billing()).str("url") }
                     ?: throw OfflineError(AttemptTimeout())
-                if (!ctx.openLink(url)) error = IllegalStateException(ctx.getString(R.string.no_browser))
+                if (!ctx.openLink(url, httpsOnly = true)) error = IllegalStateException(ctx.getString(R.string.no_browser))
             } catch (e: Throwable) {
                 error = e
             } finally {

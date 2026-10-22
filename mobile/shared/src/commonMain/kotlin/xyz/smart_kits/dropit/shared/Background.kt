@@ -163,3 +163,53 @@ fun latestAction(letters: List<Letter>): LatestAction {
         else -> LatestAction.None
     }
 }
+
+/**
+ * How long the service keeps things for this account, for telling each received file when it goes, from what is already known about
+ * the account ([paid]: null when it is not known). Null when it is not known: the file then has no end written on it, and the service
+ * has the last word when it is asked.
+ */
+fun keepMs(paid: Boolean?, freeDays: Int, paidDays: Int): Long? = paid?.let { (if (it) paidDays else freeDays) * DAY_MS }
+
+/** When today's downloads start again, relative to now, as the screens word it */
+enum class LimitWhen { UNKNOWN, TODAY, MORNING, TOMORROW }
+
+/**
+ * [untilMs] is when downloads start again (what was kept on the phone), [offsetMs] the phone's time zone's offset from UTC then. Unknown
+ * when there is no such time or it has passed; today when it is the same day as now; else tomorrow, morning or not.
+ */
+fun limitWhen(untilMs: Long?, nowMs: Long, offsetMs: Long): LimitWhen {
+    if (untilMs == null || untilMs <= nowMs) return LimitWhen.UNKNOWN
+    val day = DAY_MS
+    val sameDay = (untilMs + offsetMs).floorDiv(day) == (nowMs + offsetMs).floorDiv(day)
+    val hour = (untilMs + offsetMs).mod(day) / 3_600_000L
+    return when {
+        sameDay -> LimitWhen.TODAY
+        hour < 12 -> LimitWhen.MORNING
+        else -> LimitWhen.TOMORROW
+    }
+}
+
+/** What to do with the clipboard when something asks to send it in one step */
+enum class ClipStep { SEND, SENSITIVE, EMPTY }
+
+/**
+ * The clipboard, for the ways of sending it that need no look at it first (the tile, the floating button, the shortcut): content the
+ * app that put it there marked as sensitive (a password, a code) is not sent without the person's own hand, nor shown.
+ */
+fun clipStep(hasContent: Boolean, sensitive: Boolean): ClipStep = when {
+    !hasContent -> ClipStep.EMPTY
+    sensitive -> ClipStep.SENSITIVE
+    else -> ClipStep.SEND
+}
+
+/** What the service that holds the connection does when it is started */
+enum class ServiceNext { KEEP, STOP }
+
+/**
+ * [foreground]: the system let it become a foreground service (it refuses when the app may not start one right now, for instance when
+ * the system starts it again by itself after it was ended: that is not an error to crash on, only a reason not to run). It stops when
+ * that was refused, when receiving was switched off since it was asked for, or when no one has joined.
+ */
+fun liveServiceNext(foreground: Boolean, receiveOn: Boolean, signedIn: Boolean): ServiceNext =
+    if (foreground && receiveOn && signedIn) ServiceNext.KEEP else ServiceNext.STOP

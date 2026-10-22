@@ -69,6 +69,7 @@ sealed interface ReceiveStatus {
 fun ReceiveStatus.batteryLimited(unrestricted: Boolean): Boolean = this is ReceiveStatus.Connection && !unrestricted
 
 private const val TOKEN_WAIT_MS = 10_000L      // how long to wait for the push address
+private const val RETENTION_WAIT_MS = 2_000L      // how long a pull waits to learn how long the plan keeps things
 private const val OPEN_PULL_GAP_MS = 30_000L   // opening and coming back this close together is one pull
 
 /**
@@ -342,6 +343,9 @@ class Receiving(
     }
 
     private suspend fun pullOnce(why: String, announce: Boolean): Pulled {
+        // Asked before the lock is taken, and not waited for long: the pull that follows a push has about fifteen seconds, and what is
+        // known of the plan is only for writing when each file goes. Not known in time: unknown
+        val keptFor = withTimeoutOrNull(RETENTION_WAIT_MS) { runCatching { retention() }.getOrNull() }
         return pulling.withLock {
             val page = try {
                 pullAll(store.cursor, why, client::send)
@@ -352,7 +356,7 @@ class Receiving(
                 return@withLock Pulled(failed = true, retry = true)
             }
             // Nothing downloads by itself: a file is saved on a tap (Downloader), because each one counts against the day's downloads
-            val arrival = arrive(page.items, store.deviceId, letters.all.value, store.cursor, unmetered = false, retentionMs = runCatching { retention() }.getOrNull(), cellularMax = -1)
+            val arrival = arrive(page.items, store.deviceId, letters.all.value, store.cursor, unmetered = false, retentionMs = keptFor, cellularMax = -1)
             arrival.letters.forEach(letters::add)
             store.cursor = arrival.cursor
             // Text from another device goes on the clipboard when the person asked for that (only the newest of what came); its notice

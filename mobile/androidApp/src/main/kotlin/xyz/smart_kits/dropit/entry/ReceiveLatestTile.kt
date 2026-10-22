@@ -2,7 +2,6 @@ package xyz.smart_kits.dropit.entry
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent
-import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
@@ -16,7 +15,7 @@ import xyz.smart_kits.dropit.shared.LatestAction
 import xyz.smart_kits.dropit.shared.TileKind
 import xyz.smart_kits.dropit.shared.latestAction
 import xyz.smart_kits.dropit.ui.MainActivity
-import xyz.smart_kits.dropit.ui.sensitiveClip
+import xyz.smart_kits.dropit.ui.copy
 
 /**
  * Pull down → "Get latest": the newest text or link from another device goes on the clipboard. Files are not fetched by themselves
@@ -42,12 +41,8 @@ class ReceiveLatestTile : TileService() {
             // Not "latest" if it could not be asked: what the list already holds may be old
             if (pulled.failed) return@launch flash(R.string.tile_latest_offline)
             when (val action = latestAction(app.letters.all.value)) {
-                is LatestAction.Copy -> {
-                    getSystemService(ClipboardManager::class.java).setPrimaryClip(sensitiveClip(action.text))
-                    // What dropit itself put there is not offered back as "new on your clipboard"
-                    app.store.clipSeen = System.currentTimeMillis()
-                    flash(R.string.tile_latest_copied)
-                }
+                // A text too long for the clipboard is refused by the system: said on the tile, not a crash
+                is LatestAction.Copy -> flash(if (copy(action.text)) R.string.tile_latest_copied else R.string.copy_too_long)
                 LatestAction.OpenApp -> main.post { openApp() }
                 LatestAction.None -> flash(R.string.tile_latest_none)
             }

@@ -12,6 +12,7 @@ import xyz.smart_kits.dropit.work.Inbound
 class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (alreadyTaken(savedInstanceState)) return      // made again (turned, folded, resized): what was handed over is not taken in twice
         app.warm()      // the connection opens while what was shared is copied in
         val i = intent
         val streams = buildList<Uri> {

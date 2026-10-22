@@ -140,7 +140,7 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
                 val receivers = peers.receivers(peerState.peers)
                 PanelRow(
                     stringResource(R.string.set_default_to), icon = Icons.Devices,
-                    sub = targetText(Targets.of(defaultTo, receivers).names.takeIf { defaultTo.isNotEmpty() && receivers.isNotEmpty() }.orEmpty()),
+                    sub = targetText(defaultTo, Targets.of(defaultTo, receivers).names),
                     onClick = { go(Screen.DefaultTargets) },
                 ) { Go() }
                 PanelDivider()

@@ -24,6 +24,7 @@ import xyz.smart_kits.dropit.receive.Downloader
 import xyz.smart_kits.dropit.receive.Receiving
 import xyz.smart_kits.dropit.shared.DropitClient
 import xyz.smart_kits.dropit.shared.Strings
+import xyz.smart_kits.dropit.shared.keepMs
 import xyz.smart_kits.dropit.ui.Moments
 import xyz.smart_kits.dropit.ui.StoreMemory
 import xyz.smart_kits.dropit.update.Updater
@@ -89,9 +90,9 @@ class App : Application() {
 
     /** Send what was handed over before joining (see Intake) */
     fun sendWaiting() {
-        val ids = store.waiting
-        store.waiting = emptySet()
-        ids.forEach(Outbox(this)::enqueue)
+        val ids = store.takeWaiting()
+        // Off the main thread: handing a job to the system waits for it to have written it down
+        scope.launch { ids.forEach { Outbox(this@App).start(it) } }
     }
 
     override fun onCreate() {
@@ -111,7 +112,7 @@ class App : Application() {
                 socketTimeoutMillis = 60_000
             }
         }
-        client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','), trace = { android.util.Log.i("dropit-net", it) })
+        client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','), trace = { if (BuildConfig.DEBUG) android.util.Log.i("dropit-net", it) })
         account = Account(this, store, client)
         plans = PlansRepo(store, client)
         peers = Peers(store, client)
@@ -119,9 +120,10 @@ class App : Application() {
         arrivals = Arrivals(this)
         downloader = Downloader(this, client, letters)
         receiving = Receiving(this, store, client, letters, arrivals) {
-            // The service keeps things 1 day on the free plan and 10 on the paid one (the service's numbers when it has said them)
-            val days = if (account.me()?.paid == true) plans.paid.days else plans.free.days
-            days * 86_400_000L
+            // How long the service keeps things on this account's plan (its own numbers when it has said them). From what is already kept
+            // of the account line, however old: this is asked in the middle of a pull, and the answer is not worth a request there. Not
+            // known: the received files get no end written on them
+            keepMs(account.me(stale = true)?.paid, plans.free.days, plans.paid.days)
         }
         receiving.init()
         updater = Updater(this, store)

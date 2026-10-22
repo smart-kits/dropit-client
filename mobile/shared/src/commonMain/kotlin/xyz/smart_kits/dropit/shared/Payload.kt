@@ -57,6 +57,16 @@ internal fun isHttp(url: String?): Boolean {
     return host.isNotEmpty() && host.none { it == ' ' }
 }
 
+/**
+ * Whether [url] may be opened as a link: http or https only. What another device calls a link is only its own word for it: before
+ * anything is opened the address itself is looked at (`javascript:`, `intent:`, `content:` and the like are not links here).
+ * [httpsOnly]: for addresses the service hands back to be opened (a checkout), which are secure or nothing.
+ */
+fun canOpenLink(url: String?, httpsOnly: Boolean = false): Boolean {
+    if (!isHttp(url)) return false
+    return !httpsOnly || url!!.trim { it <= ' ' }.startsWith("https://", ignoreCase = true)
+}
+
 /** A lone http(s) address is a link; anything else is text */
 fun kindOf(text: String?): String {
     val t = text.orEmpty().jsTrim()

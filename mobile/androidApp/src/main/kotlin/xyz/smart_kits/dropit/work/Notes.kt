@@ -60,10 +60,10 @@ class Notes(private val context: Context) {
     fun progress(jobId: String, k: Int, n: Int, workId: UUID): Notification {
         val cancel = WorkManager.getInstance(context).createCancelPendingIntent(workId)
         val job = runCatching { Outbox(context).load(jobId) }.getOrNull()
-        val count = job?.files?.size ?: 0
+        val count = job?.files?.count { it.copied } ?: 0
         val what = when {
             count == 0 -> null
-            job!!.files.all { it.mime.orEmpty().startsWith("image/") } -> context.resources.getQuantityString(R.plurals.card_n_photos, count, count)
+            job!!.files.filter { it.copied }.all { it.mime.orEmpty().startsWith("image/") } -> context.resources.getQuantityString(R.plurals.card_n_photos, count, count)
             else -> context.resources.getQuantityString(R.plurals.card_n_files, count, count)
         }
         val to = if (job == null) null else "→ " + targetText(context, Targets(job.to, job.toNames))

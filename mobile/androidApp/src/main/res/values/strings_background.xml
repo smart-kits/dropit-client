@@ -16,10 +16,14 @@
     <string name="dl_saving">Saving %1$s…</string>
     <string name="dl_saved">Saved %1$s</string>
     <string name="dl_expired">No longer available</string>
-    <string name="dl_limit">Today’s downloads are used up</string>
     <string name="dl_offline">No network</string>
     <string name="dl_failed">Couldn’t save it</string>
     <string name="dl_unsupported">Saving needs Android 10 or newer</string>
 
     <string name="ball_label">Send clipboard</string>
+
+    <!-- Too long for the clipboard · the clipboard marked sensitive -->
+    <string name="copy_too_long">Too long to copy here — open dropit and copy it there</string>
+    <string name="clipboard_sensitive">The clipboard is marked sensitive, so dropit did not send it. Open dropit and send it yourself if you mean to</string>
+    <string name="clip_sensitive_hidden">Marked sensitive by the app it came from, so it is not shown or sent from here. Paste it below to send it</string>
 </resources>

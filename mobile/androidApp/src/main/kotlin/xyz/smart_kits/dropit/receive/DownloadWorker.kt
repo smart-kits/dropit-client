@@ -17,6 +17,7 @@ import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.FileState
 import xyz.smart_kits.dropit.shared.state
+import xyz.smart_kits.dropit.ui.limitMessage
 
 /**
  * The Download button on the notification of one received file: saves it without opening dropit. It is the same save as a tap in the
@@ -60,7 +61,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         when (val result = app.downloader.save(letter, file)) {
             is Downloader.Result.Saved -> app.arrivals.downloadResult(letter.id, words.getString(R.string.dl_saved, file.name), result.uri, file.mime)
             Downloader.Result.Expired -> app.arrivals.downloadResult(letter.id, words.getString(R.string.dl_expired))
-            is Downloader.Result.LimitToday -> app.arrivals.downloadResult(letter.id, words.getString(R.string.dl_limit))
+            // When they start again is what the phone kept when the limit was met (it is the same whether the app is open or not)
+            is Downloader.Result.LimitToday -> app.arrivals.downloadResult(letter.id, limitMessage(words, app.downloader.limitUntil(), System.currentTimeMillis()))
             Downloader.Result.Offline -> app.arrivals.downloadResult(letter.id, words.getString(R.string.dl_offline))
             Downloader.Result.Unsupported -> app.arrivals.downloadResult(letter.id, words.getString(R.string.dl_unsupported))
             Downloader.Result.Failed -> app.arrivals.downloadResult(letter.id, words.getString(R.string.dl_failed))

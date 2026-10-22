@@ -15,10 +15,14 @@
     <string name="dl_saving">正在保存 %1$s…</string>
     <string name="dl_saved">已保存 %1$s</string>
     <string name="dl_expired">已经过期，没有了</string>
-    <string name="dl_limit">今天的下载次数用完了</string>
     <string name="dl_offline">没有网络</string>
     <string name="dl_failed">没能保存</string>
     <string name="dl_unsupported">保存需要 Android 10 或更新</string>
 
     <string name="ball_label">发剪贴板</string>
+
+    <!-- 太长，剪贴板放不下 · 剪贴板内容被标成敏感 -->
+    <string name="copy_too_long">太长了，这里复制不了 —— 打开 dropit 里复制</string>
+    <string name="clipboard_sensitive">剪贴板里的内容被标成了敏感，dropit 没有发送。要发的话，请打开 dropit 自己发</string>
+    <string name="clip_sensitive_hidden">来源应用把它标成了敏感内容，所以这里不显示也不一键发送。要发请粘贴到下面的输入框</string>
 </resources>

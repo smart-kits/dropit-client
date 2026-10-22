@@ -53,7 +53,7 @@ fun Letter.primary(
     val words = text
     if (files.isEmpty()) return when {
         words == null -> LetterOffer(Act.NONE)
-        kind == "url" && !mine -> LetterOffer(Act.OPEN_LINK)
+        isLink && !mine -> LetterOffer(Act.OPEN_LINK)
         else -> LetterOffer(Act.COPY)
     }
     // What this phone sent keeps only a small picture of each file: words can be copied; files can only be sent again
@@ -107,7 +107,7 @@ fun Letter.menu(
         }
         if (words != null) {
             // Four blocks at most: a link this phone sent is not opened from its own sheet once it can be sent again
-            if (kind == "url" && !(mine && out.isNotEmpty())) out += LetterOffer(Act.OPEN_LINK)
+            if (isLink && !(mine && out.isNotEmpty())) out += LetterOffer(Act.OPEN_LINK)
             out += LetterOffer(Act.COPY)
             out += LetterOffer(Act.SHARE)
         }

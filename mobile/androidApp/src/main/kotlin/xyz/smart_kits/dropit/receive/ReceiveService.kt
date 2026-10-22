@@ -15,6 +15,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.shared.ServiceNext
+import xyz.smart_kits.dropit.shared.liveServiceNext
 import xyz.smart_kits.dropit.ui.MainActivity
 
 /**
@@ -26,9 +28,10 @@ class ReceiveService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        goForeground()
-        // Switched off, or signed out, since this was asked for: nothing to keep
-        if (!app.store.receiveOn || app.store.tokenNow() == null) {
+        // The system may refuse to make it a foreground service (started again by itself while the app may not start one): then it does not
+        // run, and does not crash; the app's next start or opening brings the connection back. Switched off, or signed out, since this was
+        // asked for: nothing to keep either
+        if (liveServiceNext(goForeground(), app.store.receiveOn, app.store.tokenNow() != null) == ServiceNext.STOP) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -41,7 +44,15 @@ class ReceiveService : Service() {
         super.onDestroy()
     }
 
-    private fun goForeground() {
+    /** False when the system would not have it as a foreground service (or the notice could not be made) */
+    private fun goForeground(): Boolean = try {
+        becomeForeground()
+        true
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun becomeForeground() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, getString(R.string.bg_channel), NotificationManager.IMPORTANCE_MIN).apply {
@@ -77,7 +88,9 @@ class ReceiveService : Service() {
 
         /** Start it, if the system lets this app start one right now (not from the background on newer Android: then it waits for the app to be opened) */
         fun start(context: Context) {
+            // Refused: only written down (after the phone starts, or the app is updated, this is not a moment the app may start one)
             runCatching { ContextCompat.startForegroundService(context, Intent(context, ReceiveService::class.java)) }
+                .onFailure { android.util.Log.w("dropit", "receiving service not started: ${it.javaClass.simpleName}") }
         }
 
         fun stop(context: Context) {
@@ -90,6 +103,8 @@ class ReceiveService : Service() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        context.app.receiving.resumeLive()
+        // Starting a foreground service from here can be refused (the app may not start one at this moment): nothing to do about it then
+        runCatching { context.app.receiving.resumeLive() }
+            .onFailure { android.util.Log.w("dropit", "receiving not resumed: ${it.javaClass.simpleName}") }
     }
 }

@@ -94,6 +94,7 @@ class Live(
     private data class Net(val up: Boolean, val id: Long, val kind: String)
     private val net = MutableStateFlow(Net(context.online(), 0, context.networkKind()))
     private var callback: ConnectivityManager.NetworkCallback? = null
+    private val watching = Registrations<ConnectivityManager.NetworkCallback>()
 
     /** The connection being held right now, so a change of network or a stop can close it */
     @Volatile private var socket: WebSocket? = null
@@ -109,14 +110,15 @@ class Live(
         if (running) return
         scope?.cancel()
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scope = it }
-        watchNetwork()
-        loop = s.launch { run() }
+        val watched = watchNetwork()
+        // However the loop ends (stopped, or ended for good because the key is no longer good or the trial is over), the watch on the
+        // network goes with it: a start after that one must not leave the first watch running beside its own
+        loop = s.launch { try { run() } finally { unwatch(watched) } }
     }
 
     /** Close it and stop: switched off, signed out, or push works after all */
     @Synchronized fun stop() {
-        callback?.let { runCatching { context.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
-        callback = null
+        unwatch(callback)
         socket?.cancel()
         scope?.cancel()
         scope = null
@@ -124,8 +126,17 @@ class Live(
         socket = null
     }
 
-    private fun watchNetwork() {
-        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
+    /** Stop watching the network with [cb] (the one asked for last, or one an earlier run left): it is taken off whether or not it is still the current one */
+    @Synchronized private fun unwatch(cb: ConnectivityManager.NetworkCallback?) {
+        if (cb == null) return
+        watching.release(cb) { runCatching { context.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
+        if (callback === cb) callback = null
+    }
+
+    /** Starts watching the network; the one watch that is registered, with any earlier one taken off first */
+    @Synchronized private fun watchNetwork(): ConnectivityManager.NetworkCallback? {
+        unwatch(callback)
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                 val kind = when {
@@ -151,7 +162,9 @@ class Live(
             }
         }
         callback = cb
+        watching.hold(cb)
         runCatching { cm.registerDefaultNetworkCallback(cb) }
+        return cb
     }
 
     private suspend fun maybeReprobe(before: Net, next: Net) {

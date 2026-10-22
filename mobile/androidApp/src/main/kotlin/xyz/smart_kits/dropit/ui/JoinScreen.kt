@@ -232,7 +232,7 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
         Txt(stringResource(R.string.consent), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(start = 6.dp, end = 6.dp, top = 14.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
         Txt(
             stringResource(R.string.privacy), sans(13.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
-            Modifier.clickable(role = Role.Button) { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }.heightIn(min = 48.dp).padding(vertical = 14.dp),
+            Modifier.clickable(role = Role.Button) { ctx.openLink(PRIVACY_URL) }.heightIn(min = 48.dp).padding(vertical = 14.dp),
         )
     }
 }

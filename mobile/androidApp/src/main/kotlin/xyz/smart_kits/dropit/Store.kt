@@ -9,6 +9,7 @@ import xyz.smart_kits.dropit.shared.IMAGE_ORIGINAL
 import xyz.smart_kits.dropit.shared.IMAGE_SHRINK
 import xyz.smart_kits.dropit.shared.TicketLedger
 import xyz.smart_kits.dropit.shared.TileKind
+import xyz.smart_kits.dropit.work.WaitingSet
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -55,9 +56,14 @@ class Store(context: Context) : ClientStore {
         set(v) = prefs.edit().putLong(CLIP_SEEN, v).apply()
 
     /** Drops handed over before this phone joined: held, and sent once it has */
-    var waiting: Set<String>
-        get() = prefs.getStringSet(WAITING, null).orEmpty()
-        set(v) = prefs.edit().putStringSet(WAITING, v).apply()
+    private val waitingSet = WaitingSet(
+        read = { prefs.getStringSet(WAITING, null).orEmpty().toSet() },
+        write = { prefs.edit().putStringSet(WAITING, it).apply() },
+    )
+    val waiting: Set<String> get() = prefs.getStringSet(WAITING, null).orEmpty()
+    fun addWaiting(id: String) = waitingSet.add(id)
+    /** All of them at once, leaving none: sent as soon as the phone has joined */
+    fun takeWaiting(): Set<String> = waitingSet.take()
 
     /** Background receiving: on unless the person turned it off. What it came to is [receiveState] */
     var receiveOn: Boolean

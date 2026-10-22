@@ -51,6 +51,7 @@ import xyz.smart_kits.dropit.shared.Targets
 import xyz.smart_kits.dropit.shared.rowStateOf
 import xyz.smart_kits.dropit.shared.seenOf
 import xyz.smart_kits.dropit.shared.shortTarget
+import xyz.smart_kits.dropit.shared.targetWordsOf
 import xyz.smart_kits.dropit.ui.kit.Check
 import xyz.smart_kits.dropit.ui.kit.Cta
 import xyz.smart_kits.dropit.ui.kit.Glyph
@@ -80,12 +81,15 @@ internal fun targetText(words: TargetWords): String = when (words) {
     is TargetWords.Count -> pluralStringResource(R.plurals.target_count, words.n, words.n)
 }
 
-/** The words for some device names (all of them when [names] is empty), in the phone's language */
+/**
+ * The words for devices by their ids and the names known for them, in the phone's language. Everyone only when there are no ids; when
+ * there are fewer names than ids (some were not known yet) it is how many, never "all" or one name for two devices.
+ */
 @Composable
-internal fun targetText(names: List<String>): String = targetText(shortTarget(names, stringResource(R.string.target_sep)))
+internal fun targetText(ids: List<String>, names: List<String>): String = targetText(targetWordsOf(ids, names, stringResource(R.string.target_sep)))
 
 /** The same for what a send was addressed to (outside a composable, for a line that is said once) */
-internal fun targetText(ctx: Context, t: Targets): String = when (val words = shortTarget(t.names, ctx.getString(R.string.target_sep))) {
+internal fun targetText(ctx: Context, t: Targets): String = when (val words = targetWordsOf(t.ids, t.names, ctx.getString(R.string.target_sep))) {
     TargetWords.All -> ctx.getString(R.string.target_all)
     is TargetWords.Names -> words.text
     is TargetWords.Count -> ctx.resources.getQuantityString(R.plurals.target_count, words.n, words.n)
@@ -94,9 +98,7 @@ internal fun targetText(ctx: Context, t: Targets): String = when (val words = sh
 /** Where a letter went, in words: the names kept with it, or only how many when the names are not known */
 @Composable
 internal fun wentTo(l: Letter): String {
-    if (l.toIds.isEmpty()) return stringResource(R.string.target_all)
-    if (l.toNames.size != l.toIds.size) return pluralStringResource(R.plurals.target_count, l.toIds.size, l.toIds.size)
-    return targetText(l.toNames)
+    return targetText(l.toIds, l.toNames)
 }
 
 internal fun seenText(ctx: Context, seen: Seen): String? = when (seen) {
@@ -137,7 +139,7 @@ internal fun TargetSheet(
     var pick by remember(mode, ids) { mutableStateOf(if (resend) Pick.forResending(receivers) else Pick.forSending(receivers, default)) }
     var refused by remember(mode, ids) { mutableStateOf(false) }
     val now = remember { System.currentTimeMillis() }
-    val defaultWords = targetText(Targets.of(default, receivers).names)
+    val defaultWords = targetText(default, Targets.of(default, receivers).names)
 
     fun close(then: () -> Unit = {}) { then(); scope.launch { state.hide() }.invokeOnCompletion { onDismiss() } }
 

@@ -159,6 +159,17 @@ fun shortTarget(names: List<String>, separator: String = "、"): TargetWords = w
     else -> TargetWords.Count(names.size)
 }
 
+/**
+ * What a send was addressed to, in words, from its ids and the names kept with them. Only when there is a name for every id are names
+ * said: with fewer names than ids (some of the devices were not known when it was held) it is the number that is said, never "everyone"
+ * and never one name for what went to two devices. No ids is everyone.
+ */
+fun targetWordsOf(ids: List<String>, names: List<String>, separator: String = "、"): TargetWords = when {
+    ids.isEmpty() -> TargetWords.All
+    names.size != ids.size -> TargetWords.Count(ids.size)
+    else -> shortTarget(names, separator)
+}
+
 /** How long ago a device was last on, in the steps the screens say */
 sealed interface Seen {
     data object Unknown : Seen

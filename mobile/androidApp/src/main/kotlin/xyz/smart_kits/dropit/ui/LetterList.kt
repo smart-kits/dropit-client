@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import xyz.smart_kits.dropit.shared.LimitWhen
+import xyz.smart_kits.dropit.shared.limitWhen
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -222,17 +224,18 @@ private data class Status(val tone: Tone, val text: String)
 
 /** Today's downloads are used up: when they start again, in this phone's time zone; without a time (not told yet, or already past), only that they do */
 @Composable
-private fun limitText(until: Long?, now: Long): String {
-    if (until == null || until <= now) return stringResource(R.string.file_limit)
-    val at = java.util.Calendar.getInstance().apply { timeInMillis = until }
-    val today = java.util.Calendar.getInstance().apply { timeInMillis = now }
-    val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(until))
-    val sameDay = at.get(java.util.Calendar.YEAR) == today.get(java.util.Calendar.YEAR) && at.get(java.util.Calendar.DAY_OF_YEAR) == today.get(java.util.Calendar.DAY_OF_YEAR)
-    return stringResource(when {
-        sameDay -> R.string.file_limit_today
-        at.get(java.util.Calendar.HOUR_OF_DAY) < 12 -> R.string.file_limit_morning
-        else -> R.string.file_limit_tomorrow
-    }, time)
+private fun limitText(until: Long?, now: Long): String = limitMessage(androidx.compose.ui.platform.LocalContext.current, until, now)
+
+/** The same outside a screen (the notification of a download that met the limit): [until] is read from what the phone kept, so it is true after the app was closed */
+internal fun limitMessage(ctx: Context, until: Long?, now: Long): String {
+    val time = until?.let { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(it)) }
+    val offset = java.util.TimeZone.getDefault().getOffset(until ?: now).toLong()
+    return when (limitWhen(until, now, offset)) {
+        LimitWhen.UNKNOWN -> ctx.getString(R.string.file_limit)
+        LimitWhen.TODAY -> ctx.getString(R.string.file_limit_today, time)
+        LimitWhen.MORNING -> ctx.getString(R.string.file_limit_morning, time)
+        LimitWhen.TOMORROW -> ctx.getString(R.string.file_limit_tomorrow, time)
+    }
 }
 
 /** The one line a row says about its files: saved, saving, why it failed, or gone. Null when there is nothing to say. */

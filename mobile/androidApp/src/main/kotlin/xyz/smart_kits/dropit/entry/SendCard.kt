@@ -61,6 +61,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.util.UUID
 import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.R
@@ -180,9 +181,9 @@ class SendCard(private val activity: ComponentActivity, private val jobId: Strin
         val letter = if (failed) activity.app.letters.all.value.firstOrNull { it.id == jobId } else null
         fun again() {
             Notes(activity).cancel(jobId)
-            val outbox = Outbox(activity)
-            if (toAll) outbox.load(jobId)?.let { outbox.save(it.copy(to = emptyList(), toNames = emptyList())) }
-            run = outbox.enqueue(jobId)
+            // Not on the main thread (the system is asked to take the job, a database write). Pressed again while a run is going: nothing
+            // new is made (null), and the card goes on showing the run that has it
+            activity.app.scope.launch { run = Outbox(activity).start(jobId, toAll) }
         }
         fun plans() {
             activity.startActivity(Intent(activity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(MainActivity.SHOW, MainActivity.SHOW_PLANS))

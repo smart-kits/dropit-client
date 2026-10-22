@@ -106,6 +106,7 @@ import xyz.smart_kits.dropit.Me
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.FileState
+import xyz.smart_kits.dropit.shared.canOpenLink
 import xyz.smart_kits.dropit.shared.state
 import xyz.smart_kits.dropit.receive.Downloader
 import xyz.smart_kits.dropit.shared.Letter
@@ -259,7 +260,7 @@ fun HomeScreen(
             val outbox = Outbox(ctx)
             val job = withContext(Dispatchers.IO) { outbox.hold(inbound, to) }
             InApp.add(job.id)
-            outbox.enqueue(job.id)
+            withContext(Dispatchers.IO) { outbox.start(job.id) }
             val info = try {
                 WorkManager.getInstance(ctx).getWorkInfosForUniqueWorkFlow(job.id)
                     .onEach { list -> list.firstOrNull()?.progress?.let { p -> progress = p.getInt(SendWorker.K, 0) to p.getInt(SendWorker.N, 0) } }
@@ -464,7 +465,8 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                         LinkAction({ onOfferDone(offer) }, text = stringResource(R.string.dismiss))
                         Spacer(Modifier.width(4.dp))
-                        Btn(stringResource(R.string.send_this), {
+                        // A sensitive one has no one-tap send: its words are not even here to send
+                        if (!offer.sensitive) Btn(stringResource(R.string.send_this), {
                             val o = offer
                             // Gone once it is in; if it fails it stays, with the reason in the envelope, to try again
                             send(Inbound(text = o.text, streams = listOfNotNull(o.uri?.toString()))) { onOfferDone(o) }
@@ -744,25 +746,40 @@ internal fun Context.shareFiles(files: List<LetterFile>, text: String? = null): 
 internal fun Context.copyImage(f: LetterFile): Boolean {
     val uri = fileUri(f) ?: return false
     if (!app.downloader.stillThere(f.saved!!)) return false
-    getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newUri(contentResolver, "dropit", uri))
+    if (!runCatching { getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newUri(contentResolver, "dropit", uri)) }.isSuccess) return false
     app.store.clipSeen = System.currentTimeMillis()
     return true
 }
 
-/** True when something took the address */
-internal fun Context.openLink(url: String): Boolean =
-    runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+/**
+ * True when something took the address. Only http(s) addresses are opened ([canOpenLink]): what another device called a link, or an
+ * address the service gave back, is looked at before it is handed to the system. [httpsOnly]: for an address the service hands back to
+ * be opened (a checkout), which is secure or nothing.
+ */
+internal fun Context.openLink(url: String, httpsOnly: Boolean = false): Boolean {
+    if (!canOpenLink(url, httpsOnly)) return false
+    return runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url.trim())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+}
 
-internal fun Context.copy(text: String) {
-    getSystemService(ClipboardManager::class.java).setPrimaryClip(sensitiveClip(text))
+/**
+ * Put words on the clipboard. False when the system would not take them (a very long text does not fit through to the clipboard
+ * service): the caller says so, and no state is changed.
+ */
+internal fun Context.copy(text: String): Boolean {
+    if (!runCatching { getSystemService(ClipboardManager::class.java).setPrimaryClip(sensitiveClip(text)) }.isSuccess) return false
     // What dropit itself put there is not offered back as "new on your clipboard"
     app.store.clipSeen = System.currentTimeMillis()
+    return true
 }
 
 internal fun Context.shareText(text: String) {
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
     runCatching { startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
+
+/** Whether the app that put this on the clipboard said it is sensitive (a password, a code): Android 13 and newer carry the mark */
+internal fun android.content.ClipDescription.isSensitive(): Boolean =
+    android.os.Build.VERSION.SDK_INT >= 33 && runCatching { extras?.getBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, false) }.getOrNull() == true
 
 /** Text for the clipboard that the system keeps out of its on-screen preview (Android 13 and newer): what arrived is the person's own, not for the screen to show */
 internal fun sensitiveClip(text: String): ClipData = ClipData.newPlainText("dropit", text).also { clip ->

@@ -22,6 +22,9 @@ const val AUTO_DOWNLOAD_CELLULAR_MAX = 20L shl 20
 /** How much of a text a notice shows */
 const val NOTICE_TEXT_MAX = 240
 
+/** What the service calls the way in of an item made by sending an earlier one again (`source`) */
+const val RESEND_SOURCE = "resend"
+
 /** One item as the service lists it: the fields the phone uses */
 data class Incoming(
     val seq: Long,
@@ -40,8 +43,11 @@ data class Incoming(
     val from: From? = null,
 ) {
     val isFile: Boolean get() = url != null
-    /** The letter it belongs to: its batch, or itself */
-    val letterId: String get() = group?.id ?: "s$seq"
+    /**
+     * The letter it belongs to: its batch, or itself. Something sent again is always its own letter, whatever batch it carries a mark
+     * of: it is one item sent to other devices, and must not be taken into the card of the batch it was first sent in.
+     */
+    val letterId: String get() = if (source == RESEND_SOURCE) "s$seq" else group?.id ?: "s$seq"
 }
 
 data class PullPage(val items: List<Incoming>, val next: Long, val more: Boolean)
@@ -153,19 +159,32 @@ fun arrive(
 private fun letterOf(id: String, pieces: List<Incoming>, before: Letter?, retentionMs: Long?): Letter {
     val ordered = pieces.sortedBy { it.group?.i ?: 0 }
     val words = ordered.firstOrNull { !it.isFile }
-    val files = ordered.filter { it.isFile }.map { LetterFile(it.filename ?: "file", it.bytes, it.mime, it.seq, expires = retentionMs?.let { ms -> it.at + ms }) }
+    val files = ordered.filter { it.isFile }.map {
+        LetterFile(it.filename ?: "file", it.bytes, it.mime, it.seq, expires = retentionMs?.let { ms -> it.at + ms }, i = it.group?.i)
+    }
     val base = before ?: Letter(id = id, mine = false, at = pieces.minOf { it.at })
+    // What the sender calls a link is a link only when it is an http(s) address; otherwise it is kept as text
+    val wordsKind = words?.kind?.takeIf { it != "url" || canOpenLink(words?.text) } ?: words?.kind?.let { "text" }
     return base.copy(
         seqs = (base.seqs + pieces.map { it.seq }).distinct().sorted(),
         source = base.source ?: pieces.first().source,
-        kind = base.kind ?: words?.kind,
+        kind = base.kind ?: wordsKind,
         text = base.text ?: words?.text,
         title = base.title ?: words?.title,
         fromTitle = base.fromTitle ?: pieces.firstNotNullOfOrNull { it.from?.title },
         fromUrl = base.fromUrl ?: pieces.firstNotNullOfOrNull { it.from?.url },
-        files = (base.files + files).sortedBy { it.seq },
+        files = inBatchOrder(base.files + files),
     )
 }
+
+/**
+ * Files in the order they were sent: by their place in the batch. With several going up at once they reach the service (and so get
+ * their numbers) in the order they finished, which is not the order they were sent in. A file kept by an earlier version has no place
+ * written down: then all of them go by number, as before.
+ */
+fun inBatchOrder(files: List<LetterFile>): List<LetterFile> =
+    if (files.all { it.i != null }) files.sortedWith(compareBy<LetterFile> { it.i }.thenBy { it.seq ?: Long.MAX_VALUE })
+    else files.sortedBy { it.seq ?: Long.MAX_VALUE }
 
 enum class NoticeAction { COPY, OPEN, SHARE, DOWNLOAD }
 

@@ -120,3 +120,116 @@ fun withExif(jpeg: ByteArray, exif: ByteArray): ByteArray {
     jpeg.copyInto(out, o, from, jpeg.size)
     return out
 }
+
+// ── What re-encoding would lose ──────────────────────────────────────────
+// Making a photo smaller means decoding it and writing a new, plain JPEG. Everything beyond the one picture and its EXIF block is lost
+// by that: the video of a motion photo, the second picture of a multi-picture file, the gain map of an HDR photo. A photo that carries
+// any of them is sent as it is. Only the decisions and the byte reading are here; the app reads the file and feeds them.
+
+/** How much of the start of a file is looked at to see what it carries: all the blocks before the picture data (each at most 64 KB) */
+const val JPEG_SCAN_BYTES = 1 shl 20
+
+private fun ascii(s: String) = ByteArray(s.length) { s[it].code.toByte() }
+private val MPF_ID = ascii("MPF") + byteArrayOf(0)
+private val XMP_ID = ascii("http://ns.adobe.com/xap/1.0/") + byteArrayOf(0)
+private val XMP_EXTENSION_ID = ascii("http://ns.adobe.com/xmp/extension/") + byteArrayOf(0)
+
+/** What an XMP block says when the photo is more than one picture: a motion photo's video, a container of pictures, a gain map */
+private val XMP_EXTRAS = listOf("GCamera:MicroVideo", "GCamera:MotionPhoto", "Container:Directory", "HDRGainMap", "hdrgm:").map(::ascii)
+
+private fun startsAt(b: ByteArray, at: Int, limit: Int, id: ByteArray): Boolean =
+    at + id.size <= limit && id.indices.all { b[at + it] == id[it] }
+
+private fun containsAny(b: ByteArray, from: Int, to: Int, needles: List<ByteArray>): Boolean {
+    for (n in needles) {
+        var i = from
+        while (i + n.size <= to) {
+            if (b[i] == n[0] && startsAt(b, i, to, n)) return true
+            i++
+        }
+    }
+    return false
+}
+
+/** What the start of a JPEG says about it */
+class JpegHead(
+    /** The whole EXIF segment, when it has one and it is complete in what was looked at */
+    val exif: ByteArray?,
+    /** An EXIF segment starts but is cut off by the end of what was looked at: its details cannot be copied across */
+    val exifCut: Boolean,
+    /** More than one picture in the file (an MPF block) */
+    val multiPicture: Boolean,
+    /** A motion photo's video, a container of pictures or an HDR gain map is described in its XMP */
+    val extras: Boolean,
+    /** Where the picture data starts (its marker), or -1 when the blocks before it did not end within what was looked at */
+    val scanAt: Int,
+) {
+    /** Whether making this one smaller would lose something that is not the picture itself, or that cannot be checked */
+    val blocksShrink: Boolean get() = multiPicture || extras || exifCut || scanAt < 0
+}
+
+/** [bytes] is the start of a file ([JPEG_SCAN_BYTES] of it, or all when it is shorter); null when it is not a JPEG */
+fun jpegHead(bytes: ByteArray): JpegHead? {
+    if (bytes.size < 4 || bytes[0] != 0xFF.toByte() || bytes[1] != 0xD8.toByte()) return null
+    var exif: ByteArray? = null
+    var exifCut = false
+    var mpf = false
+    var extras = false
+    var scanAt = -1
+    var p = 2
+    while (p + 2 <= bytes.size) {
+        if (bytes[p] != 0xFF.toByte()) break
+        val marker = bytes[p + 1].toInt() and 0xFF
+        if (marker == 0xFF) { p++; continue }
+        if (marker == 0xDA) { scanAt = p; break }
+        if (marker == 0xD9) break
+        if (marker == 0x01 || marker in 0xD0..0xD7) { p += 2; continue }
+        if (p + 4 > bytes.size) break
+        val length = ((bytes[p + 2].toInt() and 0xFF) shl 8) or (bytes[p + 3].toInt() and 0xFF)
+        if (length < 2) break
+        val end = p + 2 + length
+        val body = p + 4
+        val seen = minOf(end, bytes.size)
+        when {
+            marker == 0xE1 && startsAt(bytes, body, seen, EXIF_ID) ->
+                if (end <= bytes.size) { if (exif == null) exif = bytes.copyOfRange(p, end) } else exifCut = true
+            marker == 0xE1 && startsAt(bytes, body, seen, XMP_ID) ->
+                if (containsAny(bytes, body, seen, XMP_EXTRAS)) extras = true
+            marker == 0xE1 && startsAt(bytes, body, seen, XMP_EXTENSION_ID) -> extras = true
+            marker == 0xE2 && startsAt(bytes, body, seen, MPF_ID) -> mpf = true
+        }
+        if (end > bytes.size) break
+        p = end
+    }
+    return JpegHead(exif, exifCut, mpf, extras, scanAt)
+}
+
+/**
+ * Finds where the picture ends and says whether anything follows it, from the file's bytes fed in order starting at the picture data
+ * ([JpegHead.scanAt]). In the picture data a 0xFF is always followed by 0x00 or a restart mark, so the first 0xFF 0xD9 is the end.
+ * What follows (the video of a motion photo, a second picture, a maker's trailer) would be lost; zero bytes of padding are not counted.
+ */
+class JpegTail {
+    private var previous = 0
+    var endFound = false
+        private set
+    var trailing = 0L
+        private set
+    private var trailingData = false
+
+    fun feed(buffer: ByteArray, n: Int) {
+        for (i in 0 until n) {
+            val b = buffer[i].toInt() and 0xFF
+            if (!endFound) {
+                if (previous == 0xFF && b == 0xD9) endFound = true
+                previous = b
+            } else {
+                trailing++
+                if (b != 0) trailingData = true
+            }
+        }
+    }
+
+    /** The picture ends, and nothing but padding follows it. A file that ends before its end mark cannot be told, so it is not clean either */
+    val clean: Boolean get() = endFound && !trailingData
+}

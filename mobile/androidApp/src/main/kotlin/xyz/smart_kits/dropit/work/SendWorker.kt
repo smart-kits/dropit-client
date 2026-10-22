@@ -127,9 +127,13 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             sent.failure?.let { throw it }
         } catch (e: CancellationException) {
-            outbox.drop(job.id)            // cancelled: nothing half-sent stays behind, and the copies go
-            notes.cancel(job.id)
-            runCatching { app.letters.remove(setOf(job.id)); app.letters.release() }    // and so does the card of an earlier try
+            // Only the person's own Cancel takes the copies away: nothing half-sent stays behind, and the card of an earlier try goes too.
+            // A stop by the system (its time limit, its quota) leaves everything for the run that follows, which sends what is left
+            if (Outbox.cancelledByPerson(stopReason)) {
+                outbox.drop(job.id)
+                notes.cancel(job.id)
+                runCatching { app.letters.remove(setOf(job.id)); app.letters.release() }
+            }
             throw e
         } catch (e: ApiError) {
             if (e.failure == Failure.AUTH_LOST) app.store.forget()

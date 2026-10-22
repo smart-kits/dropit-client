@@ -19,6 +19,8 @@ data class LetterFile(
     val thumb: String? = null,
     /** When the service stops having it (when it arrived plus how long the account's plan keeps things); null: not known */
     val expires: Long? = null,
+    /** Its place in the batch it came in (from 1), for showing the files in the order they were sent; null: not known (a letter kept by an earlier version) */
+    val i: Int? = null,
 )
 
 /** [SENT]: a file this phone sent: only its small picture is kept here, so there is nothing to save or open */
@@ -65,10 +67,16 @@ data class Letter(
     /** Set while a send of this letter did not go through: the card says why and offers to try again */
     val failure: SendFailure? = null,
 ) {
+    /**
+     * Words that are a link to open: the sender called it one *and* it is an http(s) address. Anything else that was called a link is
+     * only text here (it can be copied, not opened).
+     */
+    val isLink: Boolean get() = kind == "url" && canOpenLink(text)
+
     /** What the letter is, for its heading: a link, text, one picture / video / file, or a count */
     val shape: LetterShape
         get() = when {
-            files.isEmpty() -> if (kind == "url") LetterShape.Link else LetterShape.Text
+            files.isEmpty() -> if (isLink) LetterShape.Link else LetterShape.Text
             text != null -> LetterShape.TextAndFiles(files.size)
             files.size > 1 -> LetterShape.Files(files.size)
             files[0].mime.orEmpty().startsWith("image/") -> LetterShape.Image

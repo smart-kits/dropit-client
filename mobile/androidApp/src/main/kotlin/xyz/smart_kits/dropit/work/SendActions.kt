@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import kotlin.concurrent.thread
 
 /**
  * Retry from a "not sent" notification: the held copies go again; what already went is not sent twice. Or, when the devices it was
@@ -12,11 +13,21 @@ import android.content.Intent
 class SendActions : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(JOB) ?: return
-        val outbox = Outbox(context)
-        Notes(context).cancel(id)          // an action button does not close its notification; the new result replaces it
-        val job = outbox.load(id) ?: return
-        if (intent.action == TO_ALL) outbox.save(job.copy(to = emptyList(), toNames = emptyList()))
-        outbox.enqueue(id)
+        val toAll = intent.action == TO_ALL
+        // Handing the job to the system waits for a database write: not on the main thread, which is where a receiver runs
+        val pending = goAsync()
+        thread(name = "dropit-retry") {
+            try {
+                val outbox = Outbox(context)
+                if (outbox.load(id) == null) return@thread
+                // Pressed twice, or while a run is still going: the run that has it goes on (start says no); the notification still goes,
+                // as an action button does not close its notification and the run's own result replaces it
+                outbox.start(id, toAll)
+                Notes(context).cancel(id)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
     companion object {

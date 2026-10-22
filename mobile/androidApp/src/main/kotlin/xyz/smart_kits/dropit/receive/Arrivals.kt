@@ -6,7 +6,6 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -22,8 +21,9 @@ import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.LOCKED_NOTICE
 import xyz.smart_kits.dropit.shared.Notice
 import xyz.smart_kits.dropit.shared.NoticeAction
+import xyz.smart_kits.dropit.shared.canOpenLink
 import xyz.smart_kits.dropit.ui.MainActivity
-import xyz.smart_kits.dropit.ui.sensitiveClip
+import xyz.smart_kits.dropit.ui.copy
 
 /**
  * What arrived, drawn as notifications. On the lock screen all it says is "dropit · something new"; the
@@ -86,8 +86,9 @@ class Arrivals(private val context: Context) {
             // One file: saved from here, without opening dropit; the result is shown in this notification's place (see DownloadWorker)
             a == NoticeAction.DOWNLOAD -> PendingIntent.getBroadcast(
                 context, code, Intent(context, ReceiveActions::class.java).setAction(ReceiveActions.DOWNLOAD).putExtra(ReceiveActions.LETTER, notice.id).putExtra(ReceiveActions.NOTE, notice.id.hashCode()), flags)
-            a == NoticeAction.OPEN && text != null && text.length <= SHORT_TEXT -> PendingIntent.getActivity(
-                context, code, Intent(Intent.ACTION_VIEW, Uri.parse(text)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
+            // Only an http(s) address is opened from here, whatever the sender called it: anything else opens the app instead
+            a == NoticeAction.OPEN && text != null && text.length <= SHORT_TEXT && canOpenLink(text) -> PendingIntent.getActivity(
+                context, code, Intent(Intent.ACTION_VIEW, Uri.parse(text.trim())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
             a == NoticeAction.SHARE && text != null && text.length <= SHORT_TEXT -> PendingIntent.getActivity(
                 context, code,
                 Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
@@ -141,9 +142,11 @@ class ReceiveActions : BroadcastReceiver() {
         }
         if (intent.action != COPY) return
         val text = context.app.letters.all.value.firstOrNull { it.id == intent.getStringExtra(LETTER) }?.text ?: return
-        context.getSystemService(ClipboardManager::class.java).setPrimaryClip(sensitiveClip(text))
-        // What dropit itself put there is not offered back as "new on your clipboard"
-        context.app.store.clipSeen = System.currentTimeMillis()
+        // Too long for the clipboard (the system refuses it): the notification stays, and says to copy it in the app
+        if (!context.copy(text)) {
+            Toast.makeText(context, R.string.copy_too_long, Toast.LENGTH_LONG).show()
+            return
+        }
         NotificationManagerCompat.from(context).cancel(intent.getIntExtra(NOTE, 0))
         Toast.makeText(context, R.string.copied, Toast.LENGTH_SHORT).show()
     }

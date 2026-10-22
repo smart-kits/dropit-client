@@ -40,8 +40,8 @@ class LetterOps(private val ctx: Context, private val scope: CoroutineScope) {
     /** A line a letter says in red until it is stale: what was asked of it could not be done */
     val notes = mutableStateMapOf<String, Int>()
 
-    /** When today's downloads start again (epoch ms), once the service has said; null until a save meets the limit */
-    var limitUntil by mutableStateOf<Long?>(null)
+    /** When today's downloads start again (epoch ms), once the service has said; null until a save meets the limit. What the phone kept, so it is there after the app was closed */
+    var limitUntil by mutableStateOf(ctx.app.downloader.limitUntil())
         private set
 
     /** The letter whose words were just copied: its button shows a check for a moment */
@@ -69,7 +69,7 @@ class LetterOps(private val ctx: Context, private val scope: CoroutineScope) {
     private fun limitHit(seq: Long, retryAfterSec: Long?): LetterFile? {
         if (retryAfterSec != null) {
             val ms = retryAfterSec.coerceIn(0, 86_400) * 1000
-            limitUntil = System.currentTimeMillis() + ms
+            limitUntil = ctx.app.downloader.limitUntil() ?: (System.currentTimeMillis() + ms)
             scope.launch {
                 delay(ms)
                 failures.entries.removeAll { it.value == SaveFailure.LIMIT }
@@ -131,8 +131,8 @@ class LetterOps(private val ctx: Context, private val scope: CoroutineScope) {
 
     fun copyText(letter: Letter) {
         val text = letter.text ?: run { note(letter.id, R.string.file_failed); return }
-        ctx.copy(text)
-        flash(letter.id)
+        // The system refuses a text that is too long for the clipboard: the row says so
+        if (ctx.copy(text)) flash(letter.id) else note(letter.id, R.string.copy_too_long)
     }
 
     fun copyImage(letter: Letter, file: LetterFile) {
@@ -148,7 +148,7 @@ class LetterOps(private val ctx: Context, private val scope: CoroutineScope) {
         letters.sortedBy { it.at }.mapNotNull { it.text }.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
 
     fun copyTexts(letters: List<Letter>) {
-        ctx.copy(joinedText(letters) ?: return)
+        if (!ctx.copy(joinedText(letters) ?: return)) letters.firstOrNull()?.let { note(it.id, R.string.copy_too_long) }
     }
 
     /**
@@ -184,7 +184,9 @@ class LetterOps(private val ctx: Context, private val scope: CoroutineScope) {
     fun perform(act: Act, letter: Letter, clear: () -> Unit) {
         when (act) {
             Act.COPY -> copyText(letter)
-            Act.OPEN_LINK -> if (letter.text?.let(ctx::openLink) != true) note(letter.id, R.string.no_browser)
+            // Opened only when it really is an http(s) address ([Letter.isLink]); otherwise the row offers Copy, never this
+            // What was called a link but is not an http(s) address is copied instead
+            Act.OPEN_LINK -> if (!letter.isLink) copyText(letter) else if (letter.text?.let { ctx.openLink(it) } != true) note(letter.id, R.string.no_browser)
             Act.SAVE, Act.SAVE_ALL, Act.RETRY -> saveAll(letter)
             Act.OPEN_FILE -> letter.files.firstOrNull()?.let { open(letter, it) }
             Act.SHARE -> share(listOf(letter))
@@ -209,9 +211,9 @@ class LetterOps(private val ctx: Context, private val scope: CoroutineScope) {
         retrying = retrying + letter.id
         scope.launch {
             try {
-                if (toAll) outbox.save(job.copy(to = emptyList(), toNames = emptyList()))
-                // This try, by its own number: the unique name still holds the earlier, failed one until the new one has taken its place
-                val run = outbox.enqueue(letter.id)
+                // This try, by its own number: the unique name still holds the earlier, failed one until the new one has taken its place.
+                // Null: a run of it is already going (tapped twice, or the notification's button was): that one has the job, and is left be
+                val run = withContext(Dispatchers.IO) { outbox.start(letter.id, toAll) } ?: return@launch
                 WorkManager.getInstance(ctx).getWorkInfoByIdFlow(run).first { it?.state?.isFinished == true }
             } finally {
                 retrying = retrying - letter.id

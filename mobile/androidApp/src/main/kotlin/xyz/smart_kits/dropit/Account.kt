@@ -146,6 +146,10 @@ class Account(private val context: Context, private val store: Store, private va
         store.forget()
     }
 
+    /** The largest single item the plan takes, as last kept on this phone; null when not known. Reads only what is kept: never asks the service */
+    fun cachedItemBytesLimit(): Long? =
+        store.meJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject["item_bytes_limit"]?.jsonPrimitive?.longOrNull }.getOrNull() }
+
     /**
      * The account line: cached for an hour, refreshed when asked. Null when it can't be had. [stale]: whatever was kept, however old, is
      * fine — for drawing a screen at once while the real answer is on its way (the caller asks again with [fresh]).
