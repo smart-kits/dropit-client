@@ -207,6 +207,16 @@ export const safeLink = (u) => {
   } catch { return null; }
 };
 
+/**
+ * The upgrade link of a limit error, ready to open: a safe link, tagged with where it was opened (`src=ext`).
+ * Null when there is none to open — no link was given, or the limit is the hourly one (waiting is the way past it).
+ */
+export const upgradeLink = (data) => {
+  if (data?.window === 'hour') return null;
+  const url = safeLink(data?.upgrade_url);
+  return url ? `${url}${url.includes('?') ? '&' : '?'}src=ext` : null;
+};
+
 /** The sentence for an error answer from the service. Numbers come from the answer, never from here. */
 export function errorText(code, data = {}, status, t, now = Date.now()) {
   if (code === 'PAYLOAD_TOO_LARGE' && data.field === 'size' && data.limit) return t.tooLarge(mb(data.limit));

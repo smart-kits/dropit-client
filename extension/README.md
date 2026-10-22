@@ -34,12 +34,37 @@ Click the dropit icon, or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>. It
 - **Something selected on the page?** It's already in the box, and it goes with a note of the page it came from.
   Edit it first if you like.
 - **Paste anything**: text, a link (sent as a link), a screenshot, files copied in Finder (<kbd>⌘</kbd><kbd>V</kbd>).
-  Or *Choose files*.
+  Or the paperclip in the box (*Attach files*).
 - **Several at once** — some text and up to 10 files — arrive together as one delivery.
 - <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line. <kbd>Enter</kbd> that picks a word in an input method never sends.
 
-While it sends, the stamp stays pressed, the envelope's red-and-blue stripes run, and a batch counts up
+While it sends, the **Send** button reads *Sending*, the envelope's red-and-blue stripes run, and a batch counts up
 (*Sending 2 of 3…*). Then the popup **stays open**: *✓ Sent #71 · 14:07* under an empty box, ready for the next thing.
+
+**Recently sent** lists the last five things this browser sent (from the popup, the right-click menu or the shortcut), newest first:
+text and links have a copy button, a link's title opens it. In the browser that created the account, each row also says who it went to
+(*→ All*, *→ a device's name*, *→ 3 devices*). The list is kept only in this browser's own storage,
+forgotten after a week or when you sign out, and never sent anywhere. If a send comes back, a card with a pale red outline, the reason and a
+*Try again* button sits above it until you edit the box.
+
+The **sun icon** at the top right holds the rest: *Add a device*, *Send to by default* (see below), the theme (match system, light or dark), the source code,
+reporting a problem, the privacy notice and signing out.
+
+## Choose which devices a send goes to
+
+In the browser that **created the account**, once the account has another device, the **Send** button gets a second part
+on its right, *Send | devices*. By default everything goes to all your devices, and nothing changes. To pick:
+
+- **This one send**: open the right part. One list, *Send to which devices*, with your default already ticked.
+  Untick what you don't want, then press the big button at the bottom, which is the only thing that sends. Afterwards it goes
+  back to the default. Close the list without pressing it and nothing changed. At least one device stays ticked.
+  A small number on the button says how many devices the next send reaches, when that is not all of them.
+- **Every send**: menu at the top right › *Send to by default*. Ticking saves at once. The right-click menu and the keyboard
+  shortcut send to this default too.
+- **Saved in this browser only.** Ticking every device saves *All*, so devices you add later are included; ticking some
+  saves just those. Signing out or reinstalling puts it back to *All*. A device that was removed is taken off the default
+  (you are told once); if none is left it is back to *All*.
+- A browser that joined with a pairing code can't read the device list, so it only has **Send**, and sends to all.
 
 ## Add a device
 
@@ -48,7 +73,7 @@ phone, Obsidian or another computer:
 
 - **Right after *Create a new account*** it already shows a 6-character code and its QR code (also copied for you).
   Scan the QR code with your phone's camera, or type the code in Obsidian, in a terminal (`dropit pair <code>`) or in
-  another browser. Later, it's **+ Add a device** next to the device count at the top.
+  another browser. Later, it's *Add a device* in the menu at the top right.
 - **It notices when the other device has joined**: the code goes away and the line under the box says
   *✓ The new device joined: iPhone · Shortcuts*.
 - **A code lasts 5 minutes and works once**; the countdown is under it. Clicking away closes the popup but not the code —
@@ -90,7 +115,7 @@ After updating from an older version Chrome sometimes leaves them blank — set 
 
 - **After a right-click or a key** — a short note at the top of the page: *dropit · Sent #71*.
   If it didn't go: a red *dropit · Returned: …* with the reason, for five seconds.
-- **In the popup** — *✓ Sent #71* under the box, or a red **RETURNED** mark with the reason; what you wrote stays put.
+- **In the popup** — *✓ Sent #71* under the box, or a card with a pale red outline, the reason and a *Try again* button; what you wrote stays put.
 - **On the icon** — a blue ✓ or a red ✗ for a moment, and a red **!** while this browser isn't joined to your account.
 - **Offline is never shown as sent.** A connection dropped on the way (a flaky proxy, patchy Wi-Fi) is tried twice more
   before it counts as failed.
@@ -114,8 +139,9 @@ After updating from an older version Chrome sometimes leaves them blank — set 
    click **Load unpacked** and choose the folder. Pin the dropit icon to the toolbar if you like seeing the ✓.
 3. **Join your account.** Click the icon. On a device you already use, show a pairing code — in the web inbox
    under *Devices*, in Obsidian under *Settings → dropit*, or with `dropit code` in a terminal.
-   Type the 6 characters and press *Join*; case, spaces and `0`/`O` mix-ups don't matter.
-   Your very first device? Use the small *Create a new account* link under the form instead — the popup then shows a code
+   Type the 6 characters in the airmail-striped box and press *Agree and join*; case, spaces and `0`/`O` mix-ups don't matter.
+   The three steps under the box (*Where to get the code*) say how to get one.
+   Your very first device? Use *Agree and create a new account* next to *No account yet?* instead — the popup then shows a code
    for [your next device](#add-a-device) straight away.
    If many accounts were created on your network today, creating one may take a few extra seconds ("Preparing the account…") instead of sending you elsewhere.
 
@@ -143,7 +169,7 @@ even if it leaked, nobody could read your items, add devices or change settings 
 [add your other devices](#add-a-device), and like any full key it could read your items if it leaked, so sign that
 browser out on a computer that isn't yours. Either way the key stays in the extension's own storage on this computer
 and never enters a web page — the page only hands over the bytes. To disconnect this browser, use
-*Sign out on this browser* at the bottom of the popup, or remove it from another device.
+*Sign out on this browser* in the menu at the top right of the popup, or remove it from another device.
 
 ## What isn't possible
 
@@ -152,7 +178,7 @@ and never enters a web page — the page only hands over the bytes. To disconnec
 - **A few image hosts only serve their own pages.** When even naming the page doesn't help, the red note says so
   and suggests *Send image link*.
 - **Dragging a file from the desktop onto the popup** doesn't work — the popup closes the moment you click elsewhere.
-  Copy it in Finder and paste it into the popup, or use *Choose files*.
+  Copy it in Finder and paste it into the popup, or use the paperclip.
 - **Sending only.** The extension doesn't receive: to receive on a computer, use [Obsidian](https://github.com/smart-kits/dropit-obsidian),
   the [terminal](../cli/) or the web inbox.
 - Desktop Chrome has no system share sheet: the right-click entry, the icon and the two keys are its share buttons.
@@ -163,10 +189,13 @@ and never enters a web page — the page only hands over the bytes. To disconnec
 extension/
 ├── manifest.json     Manifest V3
 ├── background.js     Right-click menu, keys, sending, the note on the page, badge and notifications
-├── popup.html/.js    The popup: joining, the send box, progress, adding a device
+├── popup.html/.js    The popup: joining, the send box, progress, recently sent, the menu, adding a device
+├── recent.js         The short list of what this browser sent, kept in its own storage
+├── targets.js        Pure decisions for choosing devices: the default, checking it against the device list, how a target is written short
+├── icons.js          The popup's line icons
 ├── pairing.js        Pure decisions for adding a device: which key may, which slot to replace, when to stop watching
 ├── qr.js             A tiny QR encoder (from the Obsidian plugin, MIT), pinned by fingerprints in the tests
-├── popup.css         The airmail look (shared with the one-site window)
+├── popup.css         The popup's look: airmail envelope, cards, light and dark (shared with the one-site window)
 ├── payload.js        Pure decisions: what Enter sends, metadata and its size, menus, batches, error text
 ├── page.js           Run inside the page: title and description, selection, fetching a file, the note
 ├── api.js            Requests, retries, falling back to the built-in address

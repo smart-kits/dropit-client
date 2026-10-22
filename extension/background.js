@@ -1,6 +1,6 @@
 import { store, sendText, sendFile, me, authLost } from './api.js';
 import { t } from './i18n.js';
-import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb, isPdf, safeLink } from './payload.js';
+import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb, isPdf, upgradeLink } from './payload.js';
 import { readPage, readSelection, fetchStart, fetchChunk, fetchDrop, showToast } from './page.js';
 
 const NAVY = '#1f4e9e';   // arrived
@@ -46,7 +46,7 @@ async function run(fn, tab) {
     if (authLost(err)) return notify(t.revokedTitle, t.revoked);
     flash(false, err.message);
     // A limit the paid plan lifts: the service gave a link (free accounts only) and said which limit it was
-    const link0 = safeLink(err.data?.upgrade_url);
+    const link0 = upgradeLink(err.data);
     const up = link0 ? { url: link0, why: err.data.why } : null;
     const link = up ? { text: t.upgradeFor(up.why), url: up.url } : null;
     if (!(await inPage(tab, showToast, [t.toastFailed(err.message), true, link]))) notify(t.failedTitle, err.message, up);

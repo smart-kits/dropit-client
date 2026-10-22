@@ -5,7 +5,9 @@
  * users install it more readily, and store review is faster.
  */
 import { t } from './i18n.js';
-import { errorText, endpointList } from './payload.js';
+import { errorText, endpointList, squash, clip } from './payload.js';
+import { remember } from './recent.js';
+import { DEFAULT_KEY, usable, sameSet } from './targets.js';
 
 const DEFAULT_ENDPOINTS = ['https://dropit.smart-kits.xyz'];
 // What is kept, for how long and who sees it — linked from the join screen
@@ -30,7 +32,8 @@ export const authLost = (err) => AUTH_LOST.includes(err?.code);
  * knows exactly which device this was and lets the new join take its place instead of using another slot.
  */
 export async function forgetToken(token) {
-  await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope']);
+  await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'recent', DEFAULT_KEY]);
+  await chrome.storage.session?.remove('devices_cache').catch(() => {});
   if (token) await chrome.storage.local.set({ previous_token: token });
 }
 
@@ -102,21 +105,53 @@ async function settle(promise) {
   }
 }
 
+/**
+ * Where a send goes. `to`: a list of device ids, null for every device, or left out to use this browser's saved
+ * default. A send that finds none of its devices left (they were removed) puts the default back to every device,
+ * so the next try goes through; the caller shows the error.
+ * @returns the answer, the ids it went to (null = every device) and whether this browser may choose at all
+ */
+async function toward(to, run) {
+  const cfg = await store.get();
+  const saved = usable(cfg[DEFAULT_KEY]);
+  const ids = to === undefined ? saved : to;
+  try {
+    const res = await run(ids?.length ? ids : null);
+    // What the service says it used (some ids may have been dropped), else what was asked for
+    const used = ids?.length ? (Array.isArray(res.to) ? res.to.map((d) => d.device_id) : ids) : null;
+    return { res, used, record: cfg.scope === 'full' };
+  } catch (err) {
+    if (err.code === 'TARGET_UNAVAILABLE' && saved && sameSet(ids, saved)) await chrome.storage.local.remove(DEFAULT_KEY);
+    throw err;
+  }
+}
+
 /** Text or a link. `meta` must already fit (payload.js fitMeta). */
-export function sendText({ kind, raw, meta }) {
-  return settle(api('POST', '/v1/ingest', { kind, raw, source: SOURCE, client_ts: Date.now(), ...(meta ? { meta } : {}) }));
+export async function sendText({ kind, raw, meta, to }) {
+  const { res, used, record } = await toward(to, (ids) => settle(api('POST', '/v1/ingest',
+    { kind, raw, source: SOURCE, client_ts: Date.now(), ...(meta ? { meta } : {}), ...(ids ? { to: ids } : {}) })));
+  if (!res.deduped) await remember({ seq: res.seq, kind, text: raw, label: clip(squash(kind === 'url' && meta?.title ? meta.title : raw), 120), ...(record ? { to: used } : {}) });
+  return res;
 }
 
 /** One file in one request. The service names it by time and type when there is no `name`. */
-export function sendFile(blob, { name, mime, from, group } = {}) {
-  const q = new URLSearchParams({ source: SOURCE });
-  if (name) q.set('name', name);
-  if (from?.url) {
-    q.set('from_url', from.url);
-    if (from.title) q.set('from_title', from.title);
+export async function sendFile(blob, { name, mime, from, group, to } = {}) {
+  const { res, used, record } = await toward(to, (ids) => {
+    const q = new URLSearchParams({ source: SOURCE });
+    if (name) q.set('name', name);
+    if (from?.url) {
+      q.set('from_url', from.url);
+      if (from.title) q.set('from_title', from.title);
+    }
+    if (group) for (const k of ['id', 'i', 'n']) q.set(k === 'id' ? 'group' : k, String(group[k]));
+    if (ids) q.set('to', ids.join(','));
+    return settle(api('POST', `/v1/ingest/file?${q}`, blob, { type: mime }));
+  });
+  if (!res.deduped) {
+    const type = mime || blob.type || '';
+    await remember({ seq: res.seq, kind: 'file', mime: type, label: name || (type.startsWith('image/') ? t.recentImage : t.recentFile), ...(record ? { to: used } : {}) });
   }
-  if (group) for (const k of ['id', 'i', 'n']) q.set(k === 'id' ? 'group' : k, String(group[k]));
-  return settle(api('POST', `/v1/ingest/file?${q}`, blob, { type: mime }));
+  return res;
 }
 
 /** The account line: cached, refreshed when older than an hour (or when asked) */

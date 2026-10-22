@@ -3,53 +3,101 @@
 <title>dropit</title>
 <link rel="stylesheet" href="popup.css">
 
-<header>
+<header id="top" hidden>
   <p class="wordmark"><img src="icon-32.png" alt="">dropit</p>
   <span class="plan" id="plan"></span>
-  <!-- Next to the device count; only a browser whose key may add devices (it created the account) shows it -->
-  <button class="link add" id="add-device" type="button" hidden>
-    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-    <span data-i18n="addDevice"></span>
-  </button>
+  <!-- One button at the top right holds everything that is not sending: adding a device, theme, links, signing out -->
+  <div class="menu-wrap">
+    <button class="icon-btn" id="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" data-i18n-label="settings">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg>
+    </button>
+    <div class="menu" id="menu" role="menu" hidden>
+      <!-- Only a browser whose key may add devices (it created the account) shows it -->
+      <button role="menuitem" id="add-device" type="button" hidden data-i18n="addDevice"></button>
+      <!-- Only a browser whose key can read the device list, and only when there is another device to choose -->
+      <button role="menuitem" id="defaults-open" class="has-value" type="button" hidden><span data-i18n="menuDefaults"></span><span class="val" id="defaults-val"></span></button>
+      <button role="menuitem" id="theme" type="button"></button>
+      <a role="menuitem" href="https://github.com/smart-kits/dropit-client" target="_blank" rel="noopener" data-i18n="source"></a>
+      <a role="menuitem" id="issue" target="_blank" rel="noopener" data-i18n="issue"></a>
+      <a role="menuitem" id="privacy" target="_blank" rel="noopener"></a>
+      <button role="menuitem" class="warn" id="unpair" type="button" data-i18n="unpair"></button>
+    </div>
+  </div>
 </header>
 
 <!-- Joining is the usual case. Creating an account by mistake splits someone's items across two
-     accounts, so it is a quiet link under the join form, not a button next to it. -->
-<section class="envelope setup" id="setup" hidden>
-  <h1 data-i18n="setupTitle"></h1>
-  <div class="row">
-    <input type="text" id="code" maxlength="10" autocomplete="off" spellcheck="false">
-    <button class="solid" id="claim" data-i18n="claim"></button>
+     accounts, so it comes second, under its own "No account yet?". -->
+<section class="setup" id="setup" hidden>
+  <div class="hello">
+    <p class="big"><img src="icon.png" alt="">dropit</p>
+    <p data-i18n="tagline"></p>
   </div>
-  <p class="note" data-i18n="setupNote"></p>
+  <!-- The same airmail frame as the send box: this is the one thing to do here -->
+  <div class="envelope join">
+    <h1 data-i18n="setupTitle"></h1>
+    <input type="text" id="code" maxlength="10" autocomplete="off" spellcheck="false">
+    <button class="primary" id="claim" data-i18n="claim"></button>
+  </div>
+  <section class="how" aria-labelledby="how-title">
+    <h2 id="how-title" data-i18n="howTitle"></h2>
+    <ol class="steps">
+      <li><span class="tb" data-icon="plus"><em aria-hidden="true">1</em></span><b data-i18n="step1T"></b><span data-i18n="step1B"></span></li>
+      <li><i class="arr" data-icon="chev" aria-hidden="true"></i><span class="tb" data-icon="qr"><em aria-hidden="true">2</em></span><b data-i18n="step2T"></b><span data-i18n="step2B"></span></li>
+      <li><i class="arr" data-icon="chev" aria-hidden="true"></i><span class="tb" data-icon="enter"><em aria-hidden="true">3</em></span><b data-i18n="step3T"></b><span data-i18n="step3B"></span></li>
+    </ol>
+  </section>
+  <!-- Joining is the usual case; creating an account by mistake splits items across two accounts, so it is a quiet link -->
+  <p class="between"><span data-i18n="firstTime"></span> <button class="quiet" id="create" type="button" data-i18n="create"></button></p>
   <!-- What joining sends, right where joining happens: the buttons say "Agree and …" -->
   <p class="note" id="consent"></p>
-  <p class="first"><span data-i18n="firstTime"></span> <button class="link" id="create" data-i18n="create"></button></p>
   <div class="notice" id="setup-returned" role="alert" hidden><b aria-hidden="true">!</b><span></span></div>
+</section>
+
+<!-- The default devices, from the menu: ticking saves at once -->
+<section class="defaults" id="defaults" hidden>
+  <div class="df-head">
+    <button class="icon-btn" id="df-back" type="button" data-i18n-label="dfBack"><span data-icon="back"></span></button>
+    <h1 data-i18n="dfTitle"></h1>
+  </div>
+  <p class="df-sub" data-i18n="dfSub"></p>
+  <div class="df-bar"><span class="saved" id="df-saved" aria-live="polite"></span><button class="link all" id="df-all" type="button" data-i18n="tpAll"></button></div>
+  <ul class="devs card" id="df-list"></ul>
+  <p class="df-note" id="df-note"></p>
 </section>
 
 <section id="main" hidden>
   <!-- Enter sends; what it will send is said under the box, so there is never a choice to make -->
   <form class="envelope" id="send-form">
-    <div class="compose">
-      <textarea id="compose" rows="3" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
-      <ul class="attached" id="attached" hidden></ul>
-      <p class="will" id="will" aria-live="polite"></p>
+    <div class="line">
+      <div class="field">
+        <textarea id="compose" rows="1" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
+        <button class="clip" id="choose" type="button" data-i18n-label="chooseFiles">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/></svg>
+        </button>
+        <input type="file" id="files" multiple hidden>
+      </div>
+      <!-- "Send | devices": the right part (only for a key that can read the device list, with another device to
+           choose) opens the one list of devices for this send; nothing is sent until its bottom button is pressed -->
+      <div class="split" id="split">
+        <button class="send" id="send" type="submit"><span id="stamp-word" data-i18n="stamp"></span></button>
+        <button class="more" id="targets-btn" type="button" hidden aria-haspopup="dialog" aria-expanded="false" aria-controls="tpanel" data-i18n-label="targetsBtn">
+          <span class="ic" data-icon="devices"></span><span class="ic dn" data-icon="down"></span>
+          <b class="badge" id="targets-badge" hidden></b>
+        </button>
+        <div class="tpanel" id="tpanel" role="dialog" aria-labelledby="tp-title" hidden>
+          <div class="tp-head"><h2 id="tp-title" data-i18n="tpTitle"></h2><button class="link all" id="tp-all" type="button" data-i18n="tpAll"></button></div>
+          <p class="tp-sub" id="tp-sub" aria-live="polite"></p>
+          <ul class="devs" id="tp-list"></ul>
+          <p class="tp-keep" id="tp-keep" role="alert" hidden><span id="tp-keep-text"></span><button class="link" id="tp-keep-all" type="button" data-i18n="tpAll"></button></p>
+          <button class="tp-send" id="tp-send" type="button"></button>
+          <div class="tp-foot"><span data-i18n="tpNote"></span><button class="link" id="tp-default" type="button"></button></div>
+        </div>
+      </div>
     </div>
-    <div class="stamp-wrap">
-      <button class="stamp" id="send" type="submit"><span class="face"><b id="stamp-word" data-i18n="stamp"></b><small data-i18n="stampHint"></small></span></button>
-    </div>
-    <div class="returned" id="returned" role="alert" hidden><b data-i18n="returned"></b><span></span><a class="up" id="returned-up" href="#" hidden></a></div>
+    <ul class="attached" id="attached" hidden></ul>
+    <p class="will" id="will" aria-live="polite"></p>
+    <p class="will" id="tnote" aria-live="polite"></p>
   </form>
-  <div class="tools">
-    <button class="link" id="choose" type="button">
-      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/></svg>
-      <span data-i18n="chooseFiles"></span>
-    </button>
-    <input type="file" id="files" multiple hidden>
-    <span class="hint" data-i18n="hint"></span>
-  </div>
-</section>
 
 <!-- Adding a device: a code and its QR, a countdown, and a quiet check for the new device joining.
      Shown right after creating an account, since that is the one sensible next step. -->
@@ -72,10 +120,22 @@
   <div class="notice" id="pair-returned" role="alert" hidden><b aria-hidden="true">!</b><span></span></div>
 </section>
 
-<!-- The public repository: see the code, or say what went wrong -->
-<footer>
-  <a href="https://github.com/smart-kits/dropit-client" target="_blank" rel="noopener" data-i18n="source"></a>
-  <a id="issue" target="_blank" rel="noopener" data-i18n="issue"></a>
-  <button class="link warn" id="unpair" type="button" data-i18n="unpair" hidden></button>
-</footer>
+  <!-- A send that came back stays here, with the way to try again, until the next edit or send -->
+  <div class="card letter failed" id="failed" role="alert" hidden>
+    <div class="row">
+      <span class="tile" id="failed-tile"></span>
+      <div class="body"><p class="tt" id="failed-title"></p><p class="mt" id="failed-meta"></p></div>
+      <button class="act bad" id="retry" type="button"></button>
+    </div>
+    <p class="why"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.2v.1"/></svg><span id="failed-why"></span></p>
+    <a class="up" id="returned-up" href="#" hidden></a>
+  </div>
+
+  <section id="recent" hidden>
+    <h2 data-i18n="recentTitle"></h2>
+    <ul class="letters" id="recent-list"></ul>
+  </section>
+  <p class="empty" id="empty" data-i18n="hint" hidden></p>
+</section>
+
 <script type="module" src="popup.js"></script>

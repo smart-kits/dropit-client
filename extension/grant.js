@@ -1,6 +1,7 @@
 import { t, lang } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
+chrome.storage.local.get('theme').then(({ theme }) => { if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme; }).catch(() => {});
 document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t.html[el.dataset.i18n];
 

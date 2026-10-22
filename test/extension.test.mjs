@@ -6,7 +6,7 @@
  */
 import {
   META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, safeLink, endpointList, isPdf, seqRange,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 import * as P from '../extension/pow.js';
@@ -135,8 +135,19 @@ for (const [lang, t] of Object.entries(STRINGS)) {
   for (const why of ['per_day', 'queue', 'space', 'file_size', 'devices', 'realtime', 'uploads', 'downloads', 'kept']) ok(`E13 ${lang} an upgrade line for why=${why}`, typeof t.upgradeFor(why) === 'string' && t.upgradeFor(why) !== t.upgradeFor('nonsense'));
   ok(`E13 ${lang} an unknown reason still says something`, t.upgradeFor('nonsense').length > 0);
   eq(`E12 ${lang} queue full`, errorText('QUOTA_EXCEEDED', { field: 'items' }, 507, t), t.quotaItems);
+  if (lang === 'en') {
+    const up = 'https://dropit.example/upgrade?u=1&why=per_day&buy=year';
+    eq('E15 upgrade link is tagged with the extension', upgradeLink({ upgrade_url: up, why: 'per_day' }), `${up}&src=ext`);
+    eq('E15 a link without a query gets ?src', upgradeLink({ upgrade_url: 'https://dropit.example/upgrade' }), 'https://dropit.example/upgrade?src=ext');
+    eq('E15 the hourly limit is never sold, even if a link came', upgradeLink({ upgrade_url: up, window: 'hour' }), null);
+    eq('E15 no link, no upgrade', upgradeLink({ why: 'per_day' }), null);
+    eq('E15 an unsafe link stays dropped', upgradeLink({ upgrade_url: 'javascript:alert(1)' }), null);
+    eq('E15 no error body at all', upgradeLink(undefined), null);
+  }
   if (lang === 'en') for (const [u, want] of [["https://dropit.example/upgrade?u=1", "https://dropit.example/upgrade?u=1"], ["http://127.0.0.1:8799/upgrade", "http://127.0.0.1:8799/upgrade"], ["http://localhost:8780/x", "http://localhost:8780/x"], ["javascript:alert(1)", null], ["data:text/html,<b>x</b>", null], ["file:///etc/passwd", null], ["obsidian://open?vault=x", null], ["http://evil.example/up", null], ["//evil.example/x", null], ["", null], [null, null]]) eq(`E13 a link from the service: ${String(u).slice(0, 40)}`, safeLink(u), want);
   eq(`E12 ${lang} storage full`, errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, t), t.quotaBytes);
+  ok(`E14 ${lang} device limit says how a free account gets a slot back`, t.errors.DEVICE_LIMIT_REACHED !== t.errors.DEVICE_REVOKED && (lang === 'en' ? /remove one/i : /移除一台/).test(errorText('DEVICE_LIMIT_REACHED', { limit: 3 }, 403, t)));
+  ok(`E14 ${lang} no sentence carries a hard-coded plan number`, ['rateHour', 'quotaItems', 'quotaBytes'].every((k) => !/\d/.test(t[k])) && !/\d/.test(t.rateDay('00:00').replace('00:00', '')));
   ok(`E12 ${lang} unknown code`, errorText('NOPE', {}, 500, t).includes('500'));
 }
 eq('isPdf', [isPdf('https://a.com/r.PDF'), isPdf('https://a.com/r.pdf?x=1'), isPdf('https://a.com/pdf/123'), isPdf('x', 'application/pdf')], [true, true, false, true]);

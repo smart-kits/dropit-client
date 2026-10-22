@@ -2,10 +2,13 @@ import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase,
 import { deviceKey } from './device.js';
 import { withPow } from './pow.js';
 import { t, lang } from './i18n.js';
-import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink } from './payload.js';
+import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, upgradeLink, squash, clip } from './payload.js';
+import { icon } from './icons.js';
+import { recentList, RECENT_KEY } from './recent.js';
 import { readPage, readSelection } from './page.js';
 import { scopeFromProbe, canAddDevices, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
 import { QR } from './qr.js';
+import { DEFAULT_KEY, usable, candidates, reconcile, toValue, shortTarget, deviceIcon, activity } from './targets.js';
 
 const $ = (id) => document.getElementById(id);
 // Opened as a small window (setup from a right-click, or picking files where the popup can't stay open)
@@ -14,12 +17,16 @@ document.body.classList.toggle('window', inWindow);
 
 document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t.html[el.dataset.i18n];
-$('code').placeholder = t.html.codePlaceholder;
+for (const el of document.querySelectorAll('[data-i18n-label]')) el.setAttribute('aria-label', el.title = t.html[el.dataset.i18nLabel]);
+$('code').placeholder = t.html.codeExample;      // an example of what a code looks like; the label is for screen readers
+$('code').setAttribute('aria-label', t.html.codePlaceholder);
+for (const el of document.querySelectorAll('[data-icon]')) el.prepend(icon(el.dataset.icon));
 // What joining sends, said before either button is pressed; the buttons read "Agree and …"
 $('consent').append(`${t.consent} `, Object.assign(document.createElement('a'),
   { href: PRIVACY_URL, target: '_blank', rel: 'noopener', textContent: t.privacyLink }));
 $('compose').placeholder = t.html.placeholder;
 $('pair-close').setAttribute('aria-label', t.html.closePair);
+Object.assign($('privacy'), { href: PRIVACY_URL, textContent: t.privacyLink });
 
 // A new issue with the version and browser filled in — never anything from this account
 const version = chrome.runtime.getManifest().version;
@@ -28,7 +35,8 @@ $('issue').href = 'https://github.com/smart-kits/dropit-client/issues/new'
   + `&body=${encodeURIComponent(t.issueBody(`Extension: ${version} · ${navigator.userAgent}`))}`;
 
 // status: File → 'busy' | 'done' while a batch is going out
-const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, busy: false, status: new Map() };
+// pick: where the next send goes when chosen in the panel — undefined = the default, null = every device, else ids
+const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, busy: false, status: new Map(), pick: undefined };
 
 // ── First run ───────────────────────────────────────────────────────────
 
@@ -92,7 +100,8 @@ $('unpair').onclick = async () => {
   const { token, device_id } = await store.get();
   try {
     await api('DELETE', `/v1/devices/${encodeURIComponent(device_id)}`);
-    await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'previous_token']);
+    await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'previous_token', RECENT_KEY, DEFAULT_KEY]);
+    await chrome.storage.session?.remove('devices_cache').catch(() => {});
   } catch {
     await forgetToken(token);
   }
@@ -105,18 +114,34 @@ $('unpair').onclick = async () => {
 const compose = $('compose');
 
 function returned(message, err = null) {
-  const box = $('returned');
+  const box = $('failed');
   box.hidden = !message;
-  box.querySelector('span').textContent = message ?? '';
+  if (!message) return;
+  // The card says what is coming back: the text, else the file names, else the page
+  const text = squash(state.text), files = state.files;
+  const title = text ? clip(text, 120)
+    : files.length === 1 ? files[0].name
+    : files.length ? t.failedFiles(files.length)
+    : state.page.title || state.page.url || '';
+  const kind = text ? intentOf(state).kind === 'url' ? 'link' : 'text'
+    : files.length ? (files.every((f) => f.type.startsWith('image/')) ? 'image' : 'file') : 'link';
+  $('failed-tile').replaceChildren(icon(kind));
+  $('failed-title').textContent = title;
+  $('failed-meta').textContent = clockNow();
+  $('failed-why').textContent = message;
+  $('retry').replaceChildren(icon('retry'));
+  $('retry').title = t.retry;
+  $('retry').setAttribute('aria-label', t.retryLabel(title));
   // A limit the paid plan lifts: the service gives a link (to free accounts only) and says which limit it was
   const up = $('returned-up');
-  const url = safeLink(err?.data?.upgrade_url);
+  const url = upgradeLink(err?.data);
   up.hidden = !url;
   if (url) {
     up.textContent = t.upgradeFor(err.data.why);
     up.onclick = (ev) => { ev.preventDefault(); chrome.tabs.create({ url }); };
   }
 }
+$('retry').onclick = () => $('send-form').requestSubmit();
 
 /** The line under the box: what Enter will send, how sending is going, or what was just sent */
 function say(text, done = false) {
@@ -214,9 +239,11 @@ $('send-form').onsubmit = async (ev) => {
   if (intent.type === 'page' && !state.page.url) return compose.focus();
   busy(true);
   returned(null);
+  noteTarget('');
   say(t.sendingNow);
+  const to = currentTo();
   try {
-    const out = await send(intent);
+    const out = await send(intent, to);
     if (out.pending) {                     // asking for a site in the small window, which sends from there
       busy(false);
       return say(t.grantOpened(out.host));
@@ -229,26 +256,36 @@ $('send-form').onsubmit = async (ev) => {
     busy(false);
     drawFiles();
     grow();
-    say(deduped ? `✓ ${t.alreadySent(seqs[0])}` : t.sentLine(seqRange(seqs), clockNow()), true);
+    state.pick = undefined;               // a choice made in the panel is for one send
+    drawTargets();
+    drawRecent();
+    say(deduped ? `✓ ${t.alreadySent(seqs[0])}`
+      : to !== undefined && targets.scope === 'full' ? t.sentTo(seqRange(seqs), shortTarget(to, targets.names, t))
+      : t.sentLine(seqRange(seqs), clockNow()), true);
     compose.focus();
   } catch (err) {
     busy(false);
     if (authLost(err)) return render(err.message);
+    if (err.code === 'TARGET_UNAVAILABLE') {         // those devices are gone: the choice and the default are void
+      state.pick = undefined;
+      targets.def = usable((await store.get())[DEFAULT_KEY]);       // already put back to every device if it was the default
+      refreshTargets();
+    }
     drawFiles();
     explain();
     returned(err.done ? t.partlySent(err.done, err.total, err.message) : err.message, err);
   }
 };
 
-async function send(intent) {
+async function send(intent, to) {
   if (intent.type === 'page') {
-    const res = await sendText({ kind: 'url', raw: state.page.url, meta: fitMeta(pageMeta(state.page)) });
+    const res = await sendText({ kind: 'url', raw: state.page.url, meta: fitMeta(pageMeta(state.page)), to });
     return { seqs: [res.seq], deduped: res.deduped };
   }
-  if (intent.type === 'pdf') return sendPdf(state.page.url);
+  if (intent.type === 'pdf') return sendPdf(state.page.url, to);
   if (intent.type === 'text') {
     const raw = intent.kind === 'url' ? state.text.trim() : state.text;
-    const res = await sendText({ kind: intent.kind, raw, meta: fitMeta(intent.from ? { from: intent.from } : null) });
+    const res = await sendText({ kind: intent.kind, raw, meta: fitMeta(intent.from ? { from: intent.from } : null), to });
     return { seqs: [res.seq], deduped: res.deduped };
   }
   // Text and files as one batch, one after the other, with progress. Check everything before sending anything.
@@ -267,9 +304,9 @@ async function send(intent) {
       if (it.text) {
         const kind = intentOf({ text: it.text }).kind;
         res = await sendText({ kind, raw: kind === 'url' ? it.text.trim() : it.text,
-          meta: fitMeta({ ...(intent.from ? { from: intent.from } : {}), ...(groups[k] ? { group: groups[k] } : {}) }) });
+          meta: fitMeta({ ...(intent.from ? { from: intent.from } : {}), ...(groups[k] ? { group: groups[k] } : {}) }), to });
       } else {
-        res = await sendFile(it.file, { name: nameOf(it.file), mime: it.file.type, group: groups[k] });
+        res = await sendFile(it.file, { name: nameOf(it.file), mime: it.file.type, group: groups[k], to });
         state.status.set(it.file, 'done');
         drawFiles();
       }
@@ -289,7 +326,7 @@ async function send(intent) {
  * The PDF this tab shows, as a file. Opening the popup lent this tab's site to the extension, which is
  * usually enough; a site that still refuses gets the one-site question in the small window.
  */
-async function sendPdf(url) {
+async function sendPdf(url, to) {
   const limit = (await me().catch(() => null))?.item_bytes_limit;
   let res;
   try {
@@ -303,7 +340,7 @@ async function sendPdf(url) {
   if (limit && Number(res.headers.get('content-length') || 0) > limit) { res.body?.cancel(); throw new Error(t.tooLarge(mb(limit))); }
   const blob = await res.blob();
   if (limit && blob.size > limit) throw new Error(t.tooLarge(mb(limit)));
-  const out = await sendFile(blob, { name: fileNameOf(url, res.headers.get('content-disposition')), mime: blob.type || 'application/pdf' });
+  const out = await sendFile(blob, { name: fileNameOf(url, res.headers.get('content-disposition')), mime: blob.type || 'application/pdf', to });
   return { seqs: [out.seq], deduped: out.deduped };
 }
 
@@ -316,7 +353,347 @@ function busy(on) {
   $('send-form').classList.toggle('sending', on);
   compose.readOnly = on;
   $('choose').disabled = on;
+  $('targets-btn').disabled = on;
+  if (on) panelClose();
 }
+
+// ── What was sent lately ─────────────────────────────────────────────────
+
+/** "14:15" today, "10-19 14:15" before */
+function when(at) {
+  const d = new Date(at), loc = lang === 'zh' ? 'zh-CN' : 'en-GB';
+  const time = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit', hour12: false });
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString(loc, { month: '2-digit', day: '2-digit' })} ${time}`;
+}
+
+async function copyOut(btn, text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch { return; }
+  btn.replaceChildren(icon('check'));
+  btn.title = t.copied;
+  setTimeout(() => { btn.replaceChildren(icon('copy')); btn.title = t.copy; }, 1400);
+}
+
+/** One row per thing that went through: what it was, when, and the one next step the data allows (copy) */
+async function drawRecent() {
+  const list = await recentList();
+  $('recent').hidden = !list.length;
+  $('empty').hidden = !!list.length;
+  $('recent-list').replaceChildren(...list.map((e) => {
+    const li = document.createElement('li');
+    const tile = Object.assign(document.createElement('span'), { className: 'tile' });
+    tile.append(icon(e.kind === 'url' ? 'link' : e.kind === 'file' ? (e.mime?.startsWith('image/') ? 'image' : 'file') : 'text'));
+    const body = Object.assign(document.createElement('div'), { className: 'body' });
+    const href = e.kind === 'url' ? safeLink(e.text) : null;
+    const title = href
+      ? Object.assign(document.createElement('a'), { className: 'tt', href, target: '_blank', rel: 'noopener' })
+      : Object.assign(document.createElement('p'), { className: 'tt' });
+    title.textContent = e.label;
+    title.title = e.label;
+    // Who it went to, short; an entry made before this was kept (or by a key that can't choose) shows its number instead
+    const where = e.to === undefined ? '' : `→ ${shortTarget(e.to, targets.names, t)}`;
+    body.append(title, Object.assign(document.createElement('p'), { className: 'mt', textContent: where ? `${where} · ${when(e.at)}` : `${when(e.at)} · #${e.seq}`, title: `#${e.seq}` }));
+    li.append(tile, body);
+    if (e.text) {
+      const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'act', title: t.copy });
+      copy.setAttribute('aria-label', t.copyLabel(e.label));
+      copy.append(icon('copy'));
+      copy.onclick = () => copyOut(copy, e.text);
+      li.append(copy);
+    }
+    return li;
+  }));
+}
+// A send made elsewhere (right-click, shortcut) while the popup is open
+chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && RECENT_KEY in changes) drawRecent(); });
+
+// ── Which devices a send goes to ─────────────────────────────────────────
+// Only a key that can read the device list can choose (the browser that created the account). The list is kept in
+// memory (and, for a moment, in session storage so reopening is instant) and fetched again whenever the panel opens.
+
+const targets = {
+  scope: null, self: null, ready: false, loading: null,
+  list: [],              // devices a send can go to (full access, not this browser), most recently active first
+  names: new Map(),      // id → name, for writing "→ Mac" in the receipt and the recent list
+  def: null,             // this browser's saved default: ids, or null = every device
+};
+const CACHE_KEY = 'devices_cache', CACHE_MS = 30_000;
+const mayChoose = () => targets.scope === 'full' && targets.list.length > 0;
+
+/** Where the next send goes: the panel's pick, else the default. undefined until the saved default has been read. */
+function currentTo() {
+  if (targets.scope !== 'full' || !targets.ready) return state.pick;      // the sender then uses the saved default itself
+  return state.pick !== undefined ? state.pick : targets.def;
+}
+
+function setList(list) {
+  targets.list = list;
+  targets.names = new Map(list.map((d) => [d.device_id, d.name]));
+}
+
+async function initTargets() {
+  if (targets.scope !== 'full') { targets.ready = false; return drawTargets(); }
+  const cfg = await store.get();
+  targets.self = cfg.device_id;
+  targets.def = usable(cfg[DEFAULT_KEY]);
+  targets.ready = true;
+  const { [CACHE_KEY]: cache } = await chrome.storage.session?.get(CACHE_KEY).catch(() => ({})) ?? {};
+  const cached = cache?.self === targets.self;
+  if (cached) setList(cache.list);
+  drawTargets();
+  drawRecent();
+  if (!cached || Date.now() - cache.at > CACHE_MS) refreshTargets().then((message) => { if (message && $('tpanel').hidden) noteTarget(message); });
+}
+
+/** Fetch the device list again and check the saved default against it. Resolves to a message about the default, if any. */
+function refreshTargets() {
+  if (targets.scope !== 'full') return Promise.resolve('');
+  targets.loading ??= (async () => {
+    let message = '';
+    try {
+      const { devices } = await api('GET', '/v1/devices');
+      setList(candidates(devices, targets.self));
+      chrome.storage.session?.set({ [CACHE_KEY]: { self: targets.self, at: Date.now(),
+        list: targets.list.map((d) => ({ device_id: d.device_id, name: d.name, scope: d.scope, last_seen_at: d.last_seen_at ?? null })) } }).catch(() => {});
+      const r = reconcile(targets.def, targets.list);
+      if (r.changed) {
+        targets.def = r.to;
+        await (r.to ? store.set({ [DEFAULT_KEY]: r.to }) : chrome.storage.local.remove(DEFAULT_KEY));
+        message = r.reset ? t.targetsReset : t.targetsTrimmed;
+      }
+    } catch (err) {
+      if (authLost(err)) render(err.message);
+    } finally {
+      targets.loading = null;
+      drawTargets();
+      drawRecent();
+    }
+    return message;
+  })();
+  return targets.loading;
+}
+
+/** What the right part and the menu show */
+function drawTargets() {
+  const may = mayChoose();
+  $('split').classList.toggle('two', may);
+  $('targets-btn').hidden = !may;
+  if (!may && !$('tpanel').hidden) panelClose();
+  $('defaults-open').hidden = !may;
+  $('defaults-val').textContent = t.defaultValue(shortTarget(targets.def, targets.names, t));
+  // The badge says how many devices this send reaches, only when that is not every device
+  const to = panel.sel ? toValue(panel.sel, targets.list) : currentTo();
+  const n = may && to ? to.length : 0;
+  $('targets-badge').hidden = !n;
+  $('targets-badge').textContent = n || '';
+  $('tp-default').textContent = t.tpDefault(shortTarget(targets.def, targets.names, t));
+}
+
+/** A line under the box about the default (a device in it was removed); empty clears it */
+function noteTarget(text) {
+  $('tnote').textContent = text;
+}
+
+/** One device: its small drawing, name, when it was last active, and a tick box. `onToggle(id, box)` */
+function deviceRow(d, checked, onToggle) {
+  const li = document.createElement('li');
+  const label = Object.assign(document.createElement('label'), { className: 'dev' });
+  const tile = Object.assign(document.createElement('span'), { className: 'tile' });
+  tile.append(icon(deviceIcon(d.name)));
+  const body = Object.assign(document.createElement('div'), { className: 'body' });
+  body.append(
+    Object.assign(document.createElement('p'), { className: 'tt', textContent: d.name, title: d.name }),
+    Object.assign(document.createElement('p'), { className: 'mt', textContent: activity(d, Date.now(), t, lang === 'zh' ? 'zh-CN' : 'en', ago) }));
+  const box = Object.assign(document.createElement('input'), { type: 'checkbox', className: 'tick', checked });
+  box.setAttribute('aria-label', d.name);
+  box.onchange = () => onToggle(d.device_id, box);
+  label.append(tile, body, box);
+  li.append(label);
+  return li;
+}
+
+// The panel: "Send to which devices". The ticks start from the default and change only this one send.
+const panel = { sel: null, opener: null };
+
+function panelDraw() {
+  if (!panel.sel) return;
+  $('tp-list').replaceChildren(...targets.list.map((d) => deviceRow(d, panel.sel.has(d.device_id), (id, box) => {
+    if (!box.checked && panel.sel.size === 1) {          // never none: the last one stays ticked
+      box.checked = true;
+      $('tp-keep-text').textContent = t.keepOne;
+      $('tp-keep').hidden = false;
+      return;
+    }
+    $('tp-keep').hidden = true;
+    box.checked ? panel.sel.add(id) : panel.sel.delete(id);
+    panelCount();
+  })));
+  panelCount();
+}
+
+function panelCount() {
+  $('tp-send').textContent = t.tpSend(panel.sel.size);
+  drawTargets();
+}
+
+function panelPlace() {
+  // The popup is as tall as its page: make room for the panel hanging below the box
+  document.body.style.minHeight = '';
+  const need = Math.ceil($('tpanel').getBoundingClientRect().bottom + window.scrollY + 12);
+  if (need > document.body.offsetHeight) document.body.style.minHeight = `${need}px`;
+}
+
+async function panelOpen() {
+  if (!mayChoose() || state.busy) return;
+  closeMenuIfOpen();
+  const start = state.pick !== undefined ? state.pick : targets.def;
+  panel.sel = new Set(start ?? targets.list.map((d) => d.device_id));
+  $('tp-sub').textContent = t.html.tpSub;
+  $('tp-keep').hidden = true;
+  $('tpanel').hidden = false;
+  $('targets-btn').setAttribute('aria-expanded', 'true');
+  panelDraw();
+  panelPlace();
+  $('tp-list').querySelector('input')?.focus();
+  const message = await refreshTargets();
+  if (!panel.sel) return;                                // closed meanwhile
+  // Devices that are gone can't stay ticked; none left means every device
+  const have = new Set(targets.list.map((d) => d.device_id));
+  const kept = [...panel.sel].filter((id) => have.has(id));
+  panel.sel = new Set(kept.length ? kept : targets.list.map((d) => d.device_id));
+  if (!mayChoose()) return;
+  if (message) $('tp-sub').textContent = message;
+  panelDraw();
+  panelPlace();
+}
+
+function panelClose(focusButton = false) {
+  panel.sel = null;
+  $('tpanel').hidden = true;
+  document.body.style.minHeight = '';
+  $('targets-btn').setAttribute('aria-expanded', 'false');
+  drawTargets();
+  if (focusButton) $('targets-btn').focus();
+}
+
+$('targets-btn').onclick = () => ($('tpanel').hidden ? panelOpen() : panelClose());
+$('tp-all').onclick = $('tp-keep-all').onclick = () => {
+  panel.sel = new Set(targets.list.map((d) => d.device_id));
+  $('tp-keep').hidden = true;
+  panelDraw();
+};
+// The bottom button is what sends: this once, to exactly the ticked devices
+$('tp-send').onclick = () => {
+  const to = toValue(panel.sel, targets.list);
+  panelClose();
+  state.pick = to;
+  drawTargets();
+  $('send-form').requestSubmit();
+};
+$('tp-default').onclick = () => { panelClose(); defaultsOpen(); };
+document.addEventListener('click', (ev) => {
+  if (!$('tpanel').hidden && !ev.target.closest('#tpanel, #targets-btn')) panelClose();
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !$('tpanel').hidden) { ev.preventDefault(); panelClose(true); }
+  else if (ev.key === 'Escape' && !$('defaults').hidden) { ev.preventDefault(); defaultsClose(); }
+});
+
+// The default devices, from the menu: ticking saves at once, and at least one stays ticked
+const dflt = { sel: null };
+
+async function defaultsOpen() {
+  closeMenuIfOpen();
+  dflt.sel = new Set(targets.def ?? targets.list.map((d) => d.device_id));
+  $('top').hidden = $('main').hidden = true;
+  $('defaults').hidden = false;
+  $('df-saved').textContent = '';
+  defaultsDraw();
+  $('df-back').focus();
+  const message = await refreshTargets();
+  if ($('defaults').hidden) return;
+  dflt.sel = new Set(targets.def ?? targets.list.map((d) => d.device_id));
+  if (message) $('df-saved').textContent = message;
+  defaultsDraw();
+}
+
+function defaultsDraw() {
+  const all = !targets.def;
+  $('df-list').replaceChildren(...targets.list.map((d) => deviceRow(d, dflt.sel.has(d.device_id), (id, box) => {
+    if (!box.checked && dflt.sel.size === 1) {
+      box.checked = true;
+      $('df-saved').textContent = `${t.keepOne}${t.html.tpAll}`;
+      return;
+    }
+    box.checked ? dflt.sel.add(id) : dflt.sel.delete(id);
+    defaultsSave();
+  })));
+  $('df-note').textContent = all ? t.dfNoteAll : t.dfNotePart;
+}
+
+async function defaultsSave() {
+  const to = toValue(dflt.sel, targets.list);
+  targets.def = to;
+  await (to ? store.set({ [DEFAULT_KEY]: to }) : chrome.storage.local.remove(DEFAULT_KEY));
+  $('df-saved').textContent = `✓ ${t.html.dfSaved}`;
+  $('df-note').textContent = to ? t.dfNotePart : t.dfNoteAll;
+  drawTargets();
+}
+
+$('df-all').onclick = () => { dflt.sel = new Set(targets.list.map((d) => d.device_id)); defaultsDraw(); defaultsSave(); };
+$('df-back').onclick = () => defaultsClose();
+$('defaults-open').onclick = () => defaultsOpen();
+function defaultsClose() {
+  $('defaults').hidden = true;
+  $('top').hidden = $('main').hidden = false;
+  $('menu-btn').focus();
+}
+
+// ── The menu at the top right ────────────────────────────────────────────
+
+const menu = $('menu');
+const items = () => [...menu.querySelectorAll('[role=menuitem]')].filter((el) => !el.hidden);
+function menuClose(focusButton = false) {
+  menu.hidden = true;
+  $('menu-btn').setAttribute('aria-expanded', 'false');
+  if (focusButton) $('menu-btn').focus();
+}
+const closeMenuIfOpen = () => { if (!menu.hidden) menuClose(); };
+$('menu-btn').onclick = () => {
+  if (!menu.hidden) return menuClose();
+  menu.hidden = false;
+  $('menu-btn').setAttribute('aria-expanded', 'true');
+  items()[0]?.focus();
+};
+document.addEventListener('click', (ev) => { if (!menu.hidden && !ev.target.closest('.menu-wrap')) menuClose(); });
+document.addEventListener('keydown', (ev) => {
+  if (menu.hidden) return;
+  if (ev.key === 'Escape') { ev.preventDefault(); return menuClose(true); }
+  if (ev.key === 'Tab') return menuClose();
+  const move = { ArrowDown: 1, ArrowUp: -1 }[ev.key];
+  if (!move) return;
+  ev.preventDefault();
+  const list = items(), at = list.indexOf(document.activeElement);
+  list[(at + move + list.length) % list.length]?.focus();
+});
+menu.addEventListener('click', (ev) => { if (ev.target.closest('#theme') == null) menuClose(); });
+
+// Theme: follows the system until picked here; the pick is this browser's own
+const THEMES = ['auto', 'light', 'dark'];
+let theme = 'auto';
+function applyTheme(mode) {
+  theme = THEMES.includes(mode) ? mode : 'auto';
+  if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.dataset.theme = theme;
+  $('theme').textContent = t.themeLine(t.themes[theme]);
+}
+applyTheme('auto');
+chrome.storage.local.get('theme').then(({ theme: saved }) => applyTheme(saved)).catch(() => {});
+$('theme').onclick = () => {
+  applyTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
+  chrome.storage.local.set({ theme }).catch(() => {});
+};
 
 // ── Adding a device ─────────────────────────────────────────────────────
 // Only a key that may add devices offers it: the one that created the account. A browser joined with a code
@@ -344,6 +721,8 @@ async function offerAdding() {
   try { scope = await myScope(); } catch (err) { return render(err.message); }
   const may = canAddDevices(scope);
   $('add-device').hidden = !may || !$('pair').hidden;
+  targets.scope = scope;
+  initTargets();
   if (may) await pairResume();
 }
 
@@ -533,6 +912,7 @@ async function showPlan(fresh = false) {
 async function render(message) {
   const { token } = await store.get();
   $('setup').hidden = !!token;
+  $('top').hidden = !token;
   $('main').hidden = !token;
   $('unpair').hidden = !token;
   $('plan').textContent = '';
@@ -545,6 +925,7 @@ async function render(message) {
   }
   showPlan();
   offerAdding();
+  drawRecent();
   compose.focus();
   const tab = await currentTab();
   const { page, selection } = await readTab(tab);
