@@ -155,6 +155,21 @@ export function groupsFor(n, id = randomId()) {
   return Array.from({ length: n }, (_, k) => ({ id, i: k + 1, n }));
 }
 
+/**
+ * A send that stopped part way leaves what did not go; sent again, those belong to the batch they were in: the same id, each in
+ * the place it had, the count of the whole. `left(groups, k)` is what to remember when the item at place k failed (the ones before
+ * it went); `keys` says which things are left (a file as itself, a text as its words), so a retry of something else is a new batch.
+ * `resumeGroups(left, keys)` → the markers for those things, or null when what is there now is not what was left.
+ */
+export function leftOver(groups, keys, k) {
+  if (!groups[0] || k < 1 || k >= groups.length) return null;
+  return { id: groups[0].id, n: groups[0].n, places: groups.slice(k).map((g) => g.i), keys: keys.slice(k) };
+}
+export function resumeGroups(left, keys) {
+  if (!left || left.keys.length !== keys.length || !keys.every((x, k) => x === left.keys[k])) return null;
+  return keys.map((_, k) => ({ id: left.id, i: left.places[k], n: left.n }));
+}
+
 function randomId() {
   const a = new Uint8Array(12);
   crypto.getRandomValues(a);
@@ -214,7 +229,10 @@ export const safeLink = (u) => {
 export const upgradeLink = (data) => {
   if (data?.window === 'hour') return null;
   const url = safeLink(data?.upgrade_url);
-  return url ? `${url}${url.includes('?') ? '&' : '?'}src=ext` : null;
+  if (!url) return null;
+  const h = url.indexOf('#');                     // src goes before a #fragment: after it, it would be part of the fragment
+  const base = h < 0 ? url : url.slice(0, h);
+  return `${base}${base.includes('?') ? '&' : '?'}src=ext${h < 0 ? '' : url.slice(h)}`;
 };
 
 /** The sentence for an error answer from the service. Numbers come from the answer, never from here. */

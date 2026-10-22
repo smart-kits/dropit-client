@@ -27,18 +27,20 @@ export function candidates(devices, selfId) {
 
 /**
  * Check a saved default against the devices that exist now.
- * `to`: what to use from now on (null = every device); `trimmed`: some saved ids were gone (they are dropped);
+ * `to`: what to use from now on (null = every device); `trimmed`: some saved ids were gone (they are dropped), `gone` says how many;
  * `reset`: none was left, so it is back to every device; `changed`: the stored value must be rewritten.
- * A default that names every device is the same as "every device", so it is stored as nothing.
+ * Only what is gone is taken out. A chosen set that happens to name every device now still stays a chosen set (a device that
+ * joins later is not added to it): it becomes "every device" when the person ticks them all (toValue), not here.
  */
 export function reconcile(saved, list) {
   const ids = usable(saved) ?? [];
   const have = new Set(list.map((d) => d.device_id));
   const valid = ids.filter((id) => have.has(id));
+  const gone = ids.length - valid.length;
   const reset = ids.length > 0 && valid.length === 0;
-  const trimmed = valid.length > 0 && valid.length < ids.length;
-  const to = !valid.length || valid.length === have.size ? null : valid;
-  return { to, trimmed, reset, changed: saved !== undefined && JSON.stringify(saved) !== JSON.stringify(to) };
+  const trimmed = valid.length > 0 && gone > 0;
+  const to = valid.length ? valid : null;
+  return { to, gone, trimmed, reset, changed: saved !== undefined && JSON.stringify(saved) !== JSON.stringify(to) };
 }
 
 /** A set of ticked ids as what is stored and sent: null when it covers every device */

@@ -6,10 +6,12 @@
  */
 import {
   META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, endpointList, isPdf, seqRange,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, leftOver, resumeGroups, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, endpointList, isPdf, seqRange,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 import * as P from '../extension/pow.js';
+import { reconcile, toValue } from '../extension/targets.js';
+import { pruneRecent, recentList, remember, RECENT_KEY } from '../extension/recent.js';
 import { readFileSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -139,6 +141,8 @@ for (const [lang, t] of Object.entries(STRINGS)) {
     const up = 'https://dropit.example/upgrade?u=1&why=per_day&buy=year';
     eq('E15 upgrade link is tagged with the extension', upgradeLink({ upgrade_url: up, why: 'per_day' }), `${up}&src=ext`);
     eq('E15 a link without a query gets ?src', upgradeLink({ upgrade_url: 'https://dropit.example/upgrade' }), 'https://dropit.example/upgrade?src=ext');
+    eq('E15 src goes before a #fragment', [upgradeLink({ upgrade_url: 'https://dropit.example/upgrade#plans' }), upgradeLink({ upgrade_url: 'https://dropit.example/upgrade?a=1#plans' })],
+      ['https://dropit.example/upgrade?src=ext#plans', 'https://dropit.example/upgrade?a=1&src=ext#plans']);
     eq('E15 the hourly limit is never sold, even if a link came', upgradeLink({ upgrade_url: up, window: 'hour' }), null);
     eq('E15 no link, no upgrade', upgradeLink({ why: 'per_day' }), null);
     eq('E15 an unsafe link stays dropped', upgradeLink({ upgrade_url: 'javascript:alert(1)' }), null);
@@ -167,6 +171,82 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   let threw = null;
   try { groupsFor(17); } catch (err) { threw = err.code; }
   eq('E13 seventeen is refused before sending', threw, 'BATCH_TOO_LARGE');
+}
+
+// E13b · a send that stopped part way is sent again into the same batch
+{
+  const fileA = { name: 'a.png' }, fileB = { name: 'b.png' }, fileC = { name: 'c.png' };
+  const keys = ['words', fileA, fileB, fileC];
+  const groups = groupsFor(4, 'abcdefgh');
+  eq('E13b nothing left when the first one failed (nothing went): a plain retry', leftOver(groups, keys, 0), null);
+  eq('E13b one thing is no batch', leftOver(groupsFor(1), ['x'], 0), null);
+  const left = leftOver(groups, keys, 2);                 // the words and a.png went; b.png failed; c.png was never started
+  eq('E13b what is left: the batch, its size, the place each had', [left.id, left.n, left.places], ['abcdefgh', 4, [3, 4]]);
+  eq('E13b the same things again: same id, same places, same count (not a new batch of two)', resumeGroups(left, [fileB, fileC]),
+    [{ id: 'abcdefgh', i: 3, n: 4 }, { id: 'abcdefgh', i: 4, n: 4 }]);
+  eq('E13b one thing left is still the 4th of its batch', resumeGroups(leftOver(groups, keys, 3), [fileC]), [{ id: 'abcdefgh', i: 4, n: 4 }]);
+  eq('E13b something else added: a new batch', resumeGroups(left, [fileB, fileC, { name: 'd.png' }]), null);
+  eq('E13b one taken away: a new batch', resumeGroups(left, [fileC]), null);
+  eq('E13b the same count, another file: a new batch', resumeGroups(left, [fileB, { name: 'x.png' }]), null);
+  eq('E13b nothing remembered: a new batch', resumeGroups(null, [fileB]), null);
+  const t2 = leftOver(groupsFor(2, 'zzzzzzzz'), ['edited text', fileA], 1);
+  eq('E13b a text is the same by its words: edited, it is not the same thing', [resumeGroups(t2, [fileA]) !== null, resumeGroups(leftOver(groupsFor(3, 'zzzzzzzz'), ['t', 'u', fileA], 1), ['t', fileA])], [true, null]);
+}
+
+// E16 · a saved default meets the devices there are now: only what is gone leaves
+{
+  const dev = (...ids) => ids.map((id) => ({ device_id: id }));
+  eq('E16 a device gone: it leaves, the rest stay, one is counted', (({ to, gone, trimmed, reset, changed }) => ({ to, gone, trimmed, reset, changed }))(reconcile(['a', 'b', 'x'], dev('a', 'b', 'c'))),
+    { to: ['a', 'b'], gone: 1, trimmed: true, reset: false, changed: true });
+  eq('E16 a chosen set that names every device stays a chosen set (a device added later is not in it), and nothing is said', (({ to, trimmed, reset, changed }) => ({ to, trimmed, reset, changed }))(reconcile(['a', 'b'], dev('a', 'b'))),
+    { to: ['a', 'b'], trimmed: false, reset: false, changed: false });
+  eq('E16 …even when one of them is removed and the rest are everything that is left: still a chosen set, and it is said', (({ to, gone, trimmed }) => ({ to, gone, trimmed }))(reconcile(['a', 'b', 'x'], dev('a', 'b'))),
+    { to: ['a', 'b'], gone: 1, trimmed: true });
+  eq('E16 all of them gone: back to every device, said', (({ to, gone, trimmed, reset, changed }) => ({ to, gone, trimmed, reset, changed }))(reconcile(['x', 'y'], dev('a'))),
+    { to: null, gone: 2, trimmed: false, reset: true, changed: true });
+  eq('E16 nothing saved: nothing to say or write', (({ to, gone, trimmed, reset, changed }) => ({ to, gone, trimmed, reset, changed }))(reconcile(undefined, dev('a'))),
+    { to: null, gone: 0, trimmed: false, reset: false, changed: false });
+  eq('E16 an empty list that was stored is cleaned away without a word', (({ trimmed, reset, changed }) => ({ trimmed, reset, changed }))(reconcile([], dev('a'))), { trimmed: false, reset: false, changed: true });
+  eq('E16 ticking every device in the panel still means every device', toValue(new Set(['a', 'b']), dev('a', 'b')), null);
+  eq('E16 the notice says how many, in both languages', [STRINGS.en.targetsTrimmed(1), STRINGS.en.targetsTrimmed(3), STRINGS.zh.targetsTrimmed(3), STRINGS.en.targetsReset(2)],
+    ['A device in your default was removed, so it was taken off the list', '3 devices in your default were removed, so they were taken off the list', '默认里有 3 台设备已被移除，已从默认里去掉', 'The devices in your default were removed. The default is back to All']);
+}
+
+// E17 · what was sent lately is kept a week, and then it is gone from storage, not only from the list
+{
+  const realChrome = globalThis.chrome;
+  const store = {};
+  globalThis.chrome = { storage: { local: {
+    get: async (k) => ({ ...(k in store ? { [k]: JSON.parse(JSON.stringify(store[k])) } : {}) }),
+    set: async (o) => { for (const [k, v] of Object.entries(o)) store[k] = JSON.parse(JSON.stringify(v)); },
+    remove: async (k) => { delete store[k]; },
+  } } };
+  const DAY = 864e5, now = Date.now();
+  try {
+    store[RECENT_KEY] = [{ seq: 5, kind: 'text', label: 'new', at: now - DAY }, { seq: 4, kind: 'text', label: 'old', at: now - 8 * DAY }, { seq: 3, kind: 'text', label: 'older', at: now - 30 * DAY }];
+    eq('E17 the list leaves out what is over a week old', (await recentList()).map((e) => e.seq), [5]);
+    eq('E17 …but storage still holds it until it is pruned', store[RECENT_KEY].length, 3);
+    eq('E17 pruning returns what is left', (await pruneRecent()).map((e) => e.seq), [5]);
+    eq('E17 …and storage no longer holds the rest', store[RECENT_KEY].map((e) => e.seq), [5]);
+    store[RECENT_KEY] = [{ seq: 1, kind: 'text', label: 'x', at: now - 9 * DAY }];
+    await pruneRecent();
+    ok('E17 when nothing is left the key is removed', !(RECENT_KEY in store), JSON.stringify(store));
+    let writes = 0;
+    const set = globalThis.chrome.storage.local.set, remove = globalThis.chrome.storage.local.remove;
+    globalThis.chrome.storage.local.set = async (o) => { writes++; return set(o); };
+    globalThis.chrome.storage.local.remove = async (k) => { writes++; return remove(k); };
+    store[RECENT_KEY] = [{ seq: 6, kind: 'text', label: 'fresh', at: now - 1000 }];
+    await pruneRecent();
+    await pruneRecent();
+    eq('E17 nothing over a week old: nothing is written', writes, 0);
+    delete store[RECENT_KEY];
+    eq('E17 nothing stored: nothing is written and nothing comes back', [await pruneRecent(), writes], [[], 0]);
+    store[RECENT_KEY] = 'not a list';
+    await pruneRecent();
+    ok('E17 something that is not a list is cleaned away', !(RECENT_KEY in store));
+    await remember({ seq: 9, kind: 'text', label: 'now', text: 'now' });
+    ok('E17 a new entry is kept, and remember also drops what is over a week old', store[RECENT_KEY].length === 1 && store[RECENT_KEY][0].seq === 9);
+  } finally { globalThis.chrome = realChrome; }
 }
 
 // E14 · what Enter sends

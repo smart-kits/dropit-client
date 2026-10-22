@@ -2,9 +2,9 @@ import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase,
 import { deviceKey } from './device.js';
 import { withPow } from './pow.js';
 import { t, lang } from './i18n.js';
-import { fitMeta, pageMeta, intentOf, groupsFor, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, upgradeLink, squash, clip } from './payload.js';
+import { fitMeta, pageMeta, intentOf, groupsFor, leftOver, resumeGroups, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, upgradeLink, squash, clip } from './payload.js';
 import { icon } from './icons.js';
-import { recentList, RECENT_KEY } from './recent.js';
+import { recentList, pruneRecent, RECENT_KEY } from './recent.js';
 import { readPage, readSelection } from './page.js';
 import { scopeFromProbe, canAddDevices, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
 import { QR } from './qr.js';
@@ -36,7 +36,7 @@ $('issue').href = 'https://github.com/smart-kits/dropit-client/issues/new'
 
 // status: File → 'busy' | 'done' while a batch is going out
 // pick: where the next send goes when chosen in the panel — undefined = the default, null = every device, else ids
-const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, busy: false, status: new Map(), pick: undefined };
+const state = { text: '', files: [], fromSelection: false, page: {}, tab: null, busy: false, status: new Map(), pick: undefined, resume: null };
 
 // ── First run ───────────────────────────────────────────────────────────
 
@@ -294,7 +294,10 @@ async function send(intent, to) {
   if (big) throw new Error(`${big.name}: ${t.tooLarge(mb(limit))}`);
   const items = [...(intent.text ? [{ text: intent.text }] : []), ...state.files.map((file) => ({ file }))];
   if (state.files.length > FILES_MAX) throw new Error(t.batchTooLarge(FILES_MAX));
-  const groups = groupsFor(items.length);
+  // Sent again after a failure part way, what is left stays in the batch it was in (the same id, the place each had)
+  const keys = items.map((it) => it.file ?? it.text);
+  const groups = resumeGroups(state.resume, keys) ?? groupsFor(items.length);
+  state.resume = null;
   const seqs = [];
   for (const [k, it] of items.entries()) {
     say(t.sendingOf(k + 1, items.length));
@@ -316,6 +319,7 @@ async function send(intent, to) {
       if (k > 0 && intent.text) { state.text = compose.value = ''; state.fromSelection = false; }
       state.files = state.files.filter((f) => state.status.get(f) !== 'done');
       state.status.clear();
+      state.resume = leftOver(groups, keys, k);
       throw Object.assign(err, { done: k, total: items.length });
     }
   }
@@ -460,7 +464,7 @@ function refreshTargets() {
       if (r.changed) {
         targets.def = r.to;
         await (r.to ? store.set({ [DEFAULT_KEY]: r.to }) : chrome.storage.local.remove(DEFAULT_KEY));
-        message = r.reset ? t.targetsReset : t.targetsTrimmed;
+        if (r.reset || r.trimmed) message = r.reset ? t.targetsReset(r.gone) : t.targetsTrimmed(r.gone);   // said only when a device in it was really removed
       }
     } catch (err) {
       if (authLost(err)) render(err.message);
@@ -925,7 +929,7 @@ async function render(message) {
   }
   showPlan();
   offerAdding();
-  drawRecent();
+  pruneRecent().then(drawRecent);                // what is over a week old is removed from storage as the list is opened
   compose.focus();
   const tab = await currentTab();
   const { page, selection } = await readTab(tab);
