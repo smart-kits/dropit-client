@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 套餐相关的提示：只在有东西接近上限或刚变化时出现。数字全部来自服务，由 App 填入 -->
+    <string name="mo_sep"></string>
+    <string name="mo_list_sep">、</string>
+    <string name="mo_ok">知道了</string>
+    <string name="mo_see_plans">看看套餐</string>
+    <string name="mo_keep">继续后台接收</string>
+    <string name="mo_keep_trial">继续后台接收 · 首月 %1$s</string>
+    <string name="mo_keep_year">继续后台接收 · %1$s/年</string>
+    <string name="mo_renew">续一年 · %1$s</string>
+    <string name="mo_reopen">再开通</string>
+    <string name="mo_manage">管理订阅</string>
+
+    <string name="mo_pill_trial">升级 · 首月 %1$s</string>
+    <string name="mo_pill_year">升级 · %1$s/年</string>
+
+    <plurals name="mo_t0">
+        <item quantity="other">后台接收体验还剩 %1$d 天</item>
+    </plurals>
+    <string name="mo_p1_line">不会自动续费</string>
+    <string name="mo_p1b">自动续费</string>
+    <string name="mo_p1b_manage">自动续费 · 可随时取消</string>
+    <string name="mo_p3">之前投的内容按付费版留到 %1$s。</string>
+    <string name="mo_p5">付费版已结束。</string>
+    <string name="mo_stop">。</string>
+
+    <plurals name="mo_t1_head">
+        <item quantity="other">后台接收体验还剩 %1$d 天。</item>
+    </plurals>
+    <string name="mo_t2_head">后台接收体验明天结束。</string>
+    <plurals name="mo_trial_tail">
+        <item quantity="other">体验结束后，新内容要打开 App 才会拉到（内容保留 %1$d 天），付费版一直有后台接收。</item>
+    </plurals>
+    <plurals name="mo_enjoy_a">
+        <item quantity="other">这 %1$d 天里你投了 %2$d 条，有 %3$d 台设备在收。</item>
+    </plurals>
+    <plurals name="mo_enjoy_b">
+        <item quantity="other">这 %1$d 天里你投了 %2$d 条。</item>
+    </plurals>
+    <string name="mo_enjoy_c">这 %1$d 天里有 %2$d 台设备在收。</string>
+    <plurals name="mo_enjoy_d">
+        <item quantity="other">你已经投了 %1$d 条，有 %2$d 台设备在收。</item>
+    </plurals>
+    <plurals name="mo_enjoy_e">
+        <item quantity="other">你已经投了 %1$d 条。</item>
+    </plurals>
+    <string name="mo_enjoy_f">有 %1$d 台设备在收。</string>
+
+    <string name="mo_t3_head">后台接收体验结束了。</string>
+    <string name="mo_t3_during">体验期里：%1$s。</string>
+    <string name="mo_t3_days">%1$d 天</string>
+    <plurals name="mo_t3_items">
+        <item quantity="other">投了 %1$d 条</item>
+    </plurals>
+    <string name="mo_t3_devices">%1$d 台设备实时接收</string>
+    <plurals name="mo_t3_now">
+        <item quantity="other">从现在起新内容要打开 App 才会拉到，内容只保留 %1$d 天；付费版一直有后台接收</item>
+    </plurals>
+    <string name="mo_t3_price_trial">，首月 %1$s，之后 %2$s/年，可随时取消。</string>
+    <string name="mo_t3_price_year">，%1$s/年，可随时取消。</string>
+    <string name="mo_t3_price_none">。</string>
+
+    <string name="mo_p1">付费版有效到 %1$s。到期后：每天 %2$d 条、单个文件 %3$d MB、%4$d 台设备、后台接收停止；到期前投的内容仍按 %5$d 天保留，之后 %5$d 天内空间和积压也按付费版算。</string>
+    <string name="mo_p2_head">付费版已到期。</string>
+    <plurals name="mo_p2_items">
+        <item quantity="other">这个账号累计投了 %1$d 条。</item>
+    </plurals>
+    <string name="mo_p2_now">现在起：每天 %1$d 条、单个文件 %2$d MB、%3$d 台设备、后台接收停止。</string>
+    <string name="mo_p2_kept">已经投的内容照付费版保留；到 %1$s 前空间和积压仍按付费版算。</string>
+    <string name="mo_p4_now">已开通付费版。现在起：每天 %1$d 条、单个文件 %2$d MB、%3$d 台设备、保留 %4$d 天、后台接收一直有。</string>
+    <string name="mo_p4_sub_trial">首月 %1$s，之后每年 %2$s 自动续费，可在「管理订阅」随时取消。</string>
+    <string name="mo_p4_sub">每年 %1$s 自动续费，可在「管理订阅」随时取消。</string>
+    <string name="mo_p4_sub_plain">自动续费，可在「管理订阅」随时取消。</string>
+    <string name="mo_p4_once">有效到 %1$s，不会自动续费。</string>
+    <string name="mo_p4_life">终身有效（限量早鸟）。</string>
+
+    <string name="mo_n1">今天已投 %1$d / %2$d 条，明天 %3$s 恢复（UTC 零点）。</string>
+    <string name="mo_n1_paid">付费版每天 %1$d 条。</string>
+    <plurals name="mo_n2">
+        <item quantity="other">空间用了 %1$s / %2$s。最早的一条到期后自动腾出（免费版内容保留 %3$d 天）。</item>
+    </plurals>
+
+    <string name="mo_n3_up">设备 %1$d / %2$d。移除一台不用的设备，或升级到付费版（%3$d 台）。</string>
+    <string name="mo_n3">设备 %1$d / %2$d。移除一台不用的设备，才能再加。</string>
+
+    <plurals name="mo_w6">
+        <item quantity="other">免费版的内容保留 %1$d 天。设备超过 %1$d 天没打开，那期间的内容就收不到了；付费版保留 %2$d 天。</item>
+    </plurals>
+</resources>

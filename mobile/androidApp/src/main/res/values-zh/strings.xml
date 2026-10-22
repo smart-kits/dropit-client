@@ -6,22 +6,13 @@
     <string name="label_send">投递</string>
     <string name="label_sending">投递中</string>
     <string name="label_returned">退回</string>
-    <string name="label_received">已收到</string>
-    <string name="label_pull">拉取新内容</string>
     <string name="pulling">拉取中…</string>
     <string name="pull_none">已是最新</string>
     <string name="pull_n">收到 %1$d 条</string>
     <string name="pull_failed">没能连上服务，稍后再试</string>
     <string name="label_kind_text">文字</string>
-    <string name="label_kind_link">链接</string>
-    <string name="label_kind_image">图片</string>
-    <string name="label_kind_video">视频</string>
-    <string name="label_kind_file">文件</string>
     <plurals name="label_n_files">
         <item quantity="other">%1$d 个文件</item>
-    </plurals>
-    <plurals name="label_text_n_files">
-        <item quantity="other">文字 + %1$d 个文件</item>
     </plurals>
     <string name="label_this_phone">这台手机</string>
     <string name="label_clip_new">剪贴板里有新内容</string>
@@ -113,10 +104,7 @@
     <string name="settings">设置</string>
     <string name="pull">拉取新内容</string>
     <string name="more">更多</string>
-    <string name="empty_title">还没有内容。</string>
-    <string name="empty_body">在电脑上投一条试试，它会出现在这里。</string>
     <string name="empty_body_alone">这是账号里的第一台设备。手机、电脑、浏览器、Obsidian 都能装，再加一台，投出去的东西才有地方收。</string>
-    <string name="sent_mark">✓ 已投递 · %1$s</string>
     <string name="from_page">来自 %1$s</string>
     <string name="open">打开</string>
     <string name="copy">复制</string>
@@ -188,7 +176,7 @@
     <string name="set_plan_sub">%1$s · 已用 %2$s / %3$s</string>
     <string name="set_version">版本</string>
     <string name="set_source">开源代码</string>
-    <string name="set_sign_out">在这台手机上退出</string>
+    <string name="set_sign_out">退出这台手机</string>
     <string name="set_sign_out_sub">从账号移除这台手机，其他设备不受影响</string>
     <string name="sign_out_confirm">退出</string>
 
@@ -232,17 +220,14 @@
     <string name="tile_once_note">一次付清 · 不自动续费</string>
     <string name="tile_life_note">一次买断 · 以后不再付费</string>
     <string name="file_save">保存</string>
-    <string name="file_saving">正在保存…</string>
-    <string name="file_saved">已存到「下载 / dropit」。</string>
-    <string name="file_until">请在 %1$s 前保存：之后服务器上就没有了。</string>
-    <string name="file_expired">已过期：服务器上已经没有了，无法再下载。dropit 只投递，不保存。</string>
     <string name="file_limit">这个账号今天的下载次数用完了，明天恢复。</string>
-    <string name="file_offline">没有网络。联网后再试。</string>
+    <string name="file_limit_morning">这个账号今天的下载次数用完了，明早 %1$s 恢复。</string>
+    <string name="file_limit_tomorrow">这个账号今天的下载次数用完了，明天 %1$s 恢复。</string>
+    <string name="file_limit_today">这个账号今天的下载次数用完了，今天 %1$s 恢复。</string>
     <string name="file_failed">没能保存，请再试一次。</string>
     <string name="file_unsupported">保存文件需要 Android 10 或更新的系统。</string>
     <string name="file_gone">这个文件已从手机里删掉了。没过期的话可以重新保存。</string>
     <string name="file_copy_image">复制图片</string>
-    <string name="file_image_copied">图片已复制。</string>
     <string name="plan_row_downloads">每天下载</string>
     <string name="plan_name_free">免费版</string>
     <string name="plan_name_paid">付费版</string>
@@ -271,15 +256,15 @@
     <string name="plan_paid_until">付费到 %1$s</string>
     <string name="plan_paid_life">终身付费</string>
     <string name="why_per_day">今天的 %1$d 条用完了</string>
-    <string name="why_per_day_sub">付费版每天 %1$d 条。</string>
+    <string name="why_per_day_sub">明天恢复。付费版每天 %1$d 条。</string>
     <string name="why_file_size">这个文件超过了 %1$d MB 的上限</string>
     <string name="why_file_size_sub">付费版单个文件 %1$d MB。</string>
     <string name="why_space">%1$s 的空间满了</string>
-    <string name="why_space_sub">付费版有 %1$s。</string>
+    <string name="why_space_sub">最早的一条到期后自动腾出。付费版有 %1$s。</string>
     <string name="why_queue">积压的内容太多了</string>
-    <string name="why_queue_sub">付费版最多积压 %1$d 条。</string>
+    <string name="why_queue_sub">积压的内容到期后自动腾出。付费版最多积压 %1$d 条。</string>
     <string name="why_devices">%1$d 个设备名额都用上了</string>
-    <string name="why_devices_sub">付费版放得下 %1$d 台。</string>
+    <string name="why_devices_sub">移除一台不用的设备就能再加；或升级到付费版：%1$d 台。</string>
     <string name="why_realtime">实时送达的 %1$d 天体验到期了</string>
     <string name="why_uploads">今天的文件上传次数用完了</string>
     <string name="why_uploads_sub">付费版的每天上限高得多。</string>
@@ -313,9 +298,8 @@
     <string name="update_check_sub">%1$s · 点一下检查更新</string>
     <string name="update_available_sub">%1$s · 有新版本</string>
     <string name="update_later">以后再说</string>
-    <string name="sel_count">已选 %d</string>
+    <string name="sel_count">已选 %d 条</string>
     <string name="sel_all">全选</string>
-    <string name="sel_clear">清除</string>
     <string name="sel_start">选择并清除</string>
     <string name="cleared_n">已清除 %d 条</string>
     <string name="undo">撤销</string>
@@ -325,5 +309,47 @@
     <string name="slow_net_load">网络较慢，还在加载…</string>
     <string name="other_plans">其他方案</string>
     <string name="no_browser">没有应用能打开这个链接。请安装或启用浏览器后再试</string>
-    <string name="chip_upgrade_price">免费版 %s</string>
+    <string name="tab_received">收到的</string>
+    <string name="tab_sent">投出的</string>
+    <string name="pull_hint">下拉刷新</string>
+    <string name="pull_release">松开刷新</string>
+    <string name="empty_received_title">还没有收到内容</string>
+    <string name="empty_received_body">从电脑、网页或另一台手机投一条，这里就会出现。</string>
+    <string name="empty_sent_title">还没有投出过</string>
+    <string name="empty_sent_body">在上面写点什么，或把文件拖进来，点「投递」。</string>
+    <string name="meta_sent">已投递</string>
+    <string name="when_yesterday">昨天 %1$s</string>
+    <plurals name="n_images">
+        <item quantity="other">%1$d 张图</item>
+    </plurals>
+    <string name="st_saved">已保存到 下载/dropit</string>
+    <plurals name="st_saved_n">
+        <item quantity="other">%1$d 个已保存到 下载/dropit</item>
+    </plurals>
+    <string name="st_saved_photo">已保存到 相册/dropit</string>
+    <plurals name="st_saved_photos_n">
+        <item quantity="other">%1$d 个已保存到 相册/dropit</item>
+    </plurals>
+    <plurals name="st_saved_mixed_n">
+        <item quantity="other">%1$d 个已保存（图片在相册，其余在下载，均在 dropit 文件夹）</item>
+    </plurals>
+    <string name="share_nothing">没有可分享的内容：手机上没有这些文件的副本</string>
+    <string name="st_saving">保存中…</string>
+    <string name="st_offline">没存上：没有网络</string>
+    <string name="st_failed">没存上：手机存储或网络出了问题</string>
+    <string name="st_expired">已过期，服务器不再保留</string>
+    <string name="expired_short">已过期</string>
+    <string name="save_all">保存全部</string>
+    <string name="retry">重试</string>
+    <string name="clear">清除</string>
+    <string name="sheet_note">「清除」只清这台手机上的列表，6 秒内可撤销；服务器上的内容和已保存的文件不受影响。</string>
+    <string name="sheet_sent_note">这是这台手机投出的内容，这里只留了缩略预览。</string>
+    <string name="sheet_open">查看操作</string>
+    <string name="sel_toggle">选择</string>
+    <string name="sel_exit">退出选择</string>
+    <string name="undo_sub">只清这台手机的列表 · 6 秒内可撤销</string>
+    <plurals name="undo_unsaved">
+        <item quantity="other">其中 %1$d 个文件还没保存</item>
+    </plurals>
+    <string name="no_app_open">手机上没有能打开这个文件的应用</string>
 </resources>

@@ -38,8 +38,8 @@ class ChannelTest {
         val full = chooseChannel(true, Probe.Refused(refused("trial_full")))
         assertEquals(Choice(Channel.OFF, Message("realtimeOver")), over)
         assertEquals(Choice(Channel.OFF, Message("realtimeFull")), full)
-        assertEquals("今天的实时名额满了，明天自动恢复", Strings.ZH.render(full.why!!))
-        assertEquals("后台接收的体验期结束了，付费版一直有", Strings.ZH.render(over.why!!))
+        assertEquals("今天的实时体验名额满了，明天自动恢复；打开 App 仍可收取", Strings.ZH.render(full.why!!))
+        assertEquals("后台接收体验已结束 · 付费版一直有", Strings.ZH.render(over.why!!))
         // any other refusal is about push, not about the account: a connection may still work
         assertEquals(Choice(Channel.CONNECTION), chooseChannel(true, Probe.Refused(ApiError(502, "PUSH_FAILED", JsonObject(emptyMap())))))
         assertNull(realtimeRefusal(ApiError(429, "RATE_LIMITED", JsonObject(emptyMap()))))

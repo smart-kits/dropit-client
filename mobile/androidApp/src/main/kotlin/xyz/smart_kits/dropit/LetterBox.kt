@@ -3,6 +3,7 @@ package xyz.smart_kits.dropit
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
@@ -77,6 +78,24 @@ class LetterBox(context: Context) {
         // Small copies of pictures whose letter is gone go with it
         val kept = list.flatMap { l -> l.files.mapNotNull { it.thumb } }.toSet() + held
         thumbs.listFiles()?.filter { it.absolutePath !in kept }?.forEach { it.delete() }
+    }
+
+    /** The same from a picture already in the phone's Downloads (a received one, once saved). Null when it cannot be read. */
+    fun thumb(context: Context, source: Uri, key: String, mime: String?, edge: Int = 360): String? {
+        if (mime?.startsWith("image/") != true) return null
+        return runCatching {
+            val resolver = context.contentResolver
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= edge) sample *= 2
+            val bitmap = resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
+            thumbs.mkdirs()
+            val out = File(thumbs, key.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".jpg")
+            out.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+            bitmap.recycle()
+            out.absolutePath
+        }.getOrNull()
     }
 
     /** A small copy of a picture, at most [edge] pixels on its long side. Null for anything that is not a picture. */

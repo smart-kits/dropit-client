@@ -24,6 +24,8 @@ import xyz.smart_kits.dropit.receive.Downloader
 import xyz.smart_kits.dropit.receive.Receiving
 import xyz.smart_kits.dropit.shared.DropitClient
 import xyz.smart_kits.dropit.shared.Strings
+import xyz.smart_kits.dropit.ui.Moments
+import xyz.smart_kits.dropit.ui.StoreMemory
 import xyz.smart_kits.dropit.update.Updater
 import xyz.smart_kits.dropit.work.Outbox
 import java.util.Locale
@@ -37,6 +39,8 @@ class App : Application() {
         private set
     lateinit var plans: PlansRepo
         private set
+    lateinit var peers: Peers
+        private set
     lateinit var downloader: Downloader
         private set
     lateinit var letters: LetterBox
@@ -47,6 +51,9 @@ class App : Application() {
         private set
     lateinit var updater: Updater
         private set
+
+    /** What the notes about the plan have already said (see Moments) */
+    val moments: Moments by lazy { Moments(StoreMemory(store)) }
 
     /** For what has to go on after the screen is gone: telling the service this phone's push address, catching up */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -69,6 +76,15 @@ class App : Application() {
         val page = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
         val mayAsk = checkSelfPermission(android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) == PackageManager.PERMISSION_GRANTED
         runCatching { from.startActivity(if (mayAsk) direct else page) }.onFailure { runCatching { from.startActivity(page) } }
+    }
+
+    /**
+     * Open a connection to the service ahead of a send, while the person is still choosing or writing (a new connection takes seconds on a
+     * bad network). Called from where something is about to be sent: the share sheet, the clipboard entry, the screen coming forward.
+     * Not from start-up or a push, and not when no one has joined yet. Nothing waits for it.
+     */
+    fun warm() {
+        if (account.signedIn) scope.launch { runCatching { client.warm() } }
     }
 
     /** Send what was handed over before joining (see Intake) */
@@ -98,6 +114,7 @@ class App : Application() {
         client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','), trace = { android.util.Log.i("dropit-net", it) })
         account = Account(this, store, client)
         plans = PlansRepo(store, client)
+        peers = Peers(store, client)
         letters = LetterBox(this)
         arrivals = Arrivals(this)
         downloader = Downloader(this, client, letters)
@@ -110,6 +127,7 @@ class App : Application() {
         updater = Updater(this, store)
         createChannels()
         addShortcuts()
+        xyz.smart_kits.dropit.entry.Overlay.resume(this)   // the floating button, if it was switched on (an experiment; off by default)
         Outbox(this).sweep()
         if (updater.enabled) scope.launch { updater.check() }
         // What is on sale and for how much: asked for again when what is kept is more than an hour old
@@ -121,7 +139,13 @@ class App : Application() {
         if (account.signedIn) {
             scope.launch {
                 if (store.receiveOn && store.receiveState == null) receiving.enable()
-                else receiving.register()
+                else {
+                    receiving.register()
+                    // On a connection: keeps it going after the app's process was started again (not from a push or a send: those only need the process)
+                    receiving.resumeLive()
+                    // Refused because the trial ended: the account may have been upgraded since (the answer is kept for an hour, so this is rarely a request)
+                    if (store.receiveState == "refused:realtimeOver") receiving.onAccount(account.me()?.wsAvailable)
+                }
             }
         }
     }

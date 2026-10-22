@@ -44,6 +44,12 @@ data class Ink(
     val airRed: Color,
     val airNavy: Color,
     val stampPaper: Color,
+    /** The blue wash behind a list row's type block and its button (9% of navy; lighter ink on dark) */
+    val tile: Color,
+    /** The track of the segmented control */
+    val seg: Color,
+    /** Green: only for "saved" */
+    val ok: Color,
     val dark: Boolean,
 )
 
@@ -54,14 +60,14 @@ val LightInk = Ink(
     ground = Color(0xFFEEF1F5), paper = Color(0xFFFFFFFF), ink = Color(0xFF15171C), dim = Color(0xFF595E67),
     line = Color(0xFFD3D8DF), red = Color(0xFFC8102E), navy = Color(0xFF1F4E9E), mark = Color(0xFF1F4E9E),
     wash = Color(0x141F4E9E), airRed = Color(0xFFC8102E), airNavy = Color(0xFF1F4E9E),
-    stampPaper = Color(0xFFE6EAF0), dark = false,
+    stampPaper = Color(0xFFE6EAF0), tile = Color(0x171F4E9E), seg = Color(0xFFDDE1E8), ok = Color(0xFF1F7A4D), dark = false,
 )
 
 val DarkInk = Ink(
     ground = Color(0xFF111318), paper = Color(0xFF1B1E24), ink = Color(0xFFE9EAEC), dim = Color(0xFFA3A8B0),
     line = Color(0xFF30353E), red = Color(0xFFFF6B78), navy = Color(0xFF7AA2F0), mark = Color(0xFF86A8F2),
     wash = Color(0x1F5B8DEF), airRed = Color(0xFFD42A41), airNavy = Color(0xFF3563B8),
-    stampPaper = Color(0xFFF4F5F7), dark = true,
+    stampPaper = Color(0xFFF4F5F7), tile = Color(0x247AA2F0), seg = Color(0xFF262A31), ok = Color(0xFF6FCF9B), dark = true,
 )
 
 val LocalInk = staticCompositionLocalOf { LightInk }

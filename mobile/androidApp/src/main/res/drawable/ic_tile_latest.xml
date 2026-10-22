@@ -1,0 +1,5 @@
+<!-- A down arrow into a tray, in one colour: the "Get latest" tile (the system tints it). Apart from the dropit mark of "Send clipboard" by shape alone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M5,20h14v-2H5V20zM19,9h-4V3H9v6H5l7,7L19,9z" />
+</vector>

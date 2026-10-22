@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import xyz.smart_kits.dropit.R
+import xyz.smart_kits.dropit.ui.theme.Ink
 import xyz.smart_kits.dropit.ui.theme.ink
 import xyz.smart_kits.dropit.ui.theme.label
 import xyz.smart_kits.dropit.ui.theme.mono
@@ -88,7 +93,7 @@ fun Btn(
     loading: Boolean = false,
 ) {
     val c = ink
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(10.dp)
     val accent = tint ?: c.ink
     val live = enabled && !loading
     Row(
@@ -176,10 +181,11 @@ fun GroupHead(text: String) {
     Txt(text.uppercase(), label(13.sp, tracking = .08.em), ink.dim, Modifier.padding(start = 2.dp, top = 16.dp, bottom = 6.dp).semantics { heading() })
 }
 
-/** A paper panel with a hairline: rows inside are divided by hairlines */
+/** A white card, softly raised: rows inside are divided by hairlines */
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(ink.paper).border(1.dp, ink.line, RoundedCornerShape(3.dp)), content = content)
+    val shape = RoundedCornerShape(14.dp)
+    Column(modifier.fillMaxWidth().shadow(1.dp, shape).clip(shape).background(ink.paper), content = content)
 }
 
 @Composable
@@ -187,7 +193,10 @@ fun PanelDivider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(ink.line))
 }
 
-/** One row of a panel: what it is, a pencil line under it, and what sits at the far end */
+/**
+ * One row of a panel: a small tile with an icon ([icon]; red when [danger]), what it is with a line under it, and what sits at the far end.
+ * At least 60 dp high, so a finger finds it; it grows with the text.
+ */
 @Composable
 fun PanelRow(
     title: String,
@@ -196,6 +205,8 @@ fun PanelRow(
     subColor: Color = ink.dim,
     titleColor: Color = ink.ink,
     onClick: (() -> Unit)? = null,
+    icon: ImageVector? = null,
+    danger: Boolean = false,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
@@ -203,35 +214,139 @@ fun PanelRow(
         modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .heightIn(min = 60.dp)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (icon != null) IconTile(icon, danger = danger)
         Column(Modifier.weight(1f)) {
-            Txt(title, sans(14.sp, lineHeight = 20.sp), titleColor)
-            if (sub != null) Txt(sub, sans(12.sp, lineHeight = 17.sp), subColor)
+            Txt(title, sans(15.sp, lineHeight = 20.sp), if (danger && titleColor == ink.ink) ink.red else titleColor)
+            if (sub != null) Txt(sub, sans(12.5.sp, lineHeight = 17.sp), subColor, Modifier.padding(top = 1.dp))
             extra?.invoke(this)
         }
         trailing()
     }
 }
 
-/** On or off. Navy when on: it means "arrivals are on" wherever it is used. */
+/** The 36 dp tile behind a row's icon: the blue wash with a navy icon, or the red wash with a red one */
+@Composable
+fun IconTile(icon: ImageVector, modifier: Modifier = Modifier, danger: Boolean = false, size: Dp = 36.dp) {
+    val c = ink
+    Box(
+        modifier.size(size).clip(RoundedCornerShape(10.dp)).background(if (danger) c.red.copy(alpha = .12f) else c.tile),
+        contentAlignment = Alignment.Center,
+    ) { Glyph(icon, if (danger) c.red else c.navy, size = size * .55f) }
+}
+
+/** On or off. Navy when on: it means "arrivals are on" wherever it is used. 48 × 28 with a white knob; the touch area is 48 × 48. */
 @Composable
 fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, name: String? = null) {
     val c = ink
     Box(
         modifier
-            .size(width = 48.dp, height = 40.dp)
+            .size(width = 48.dp, height = 48.dp)
             .toggleable(checked, remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange)
             // Read out with its name (the row's text is a separate node: a bare switch says only "switch")
             .semantics { if (name != null) contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(width = 38.dp, height = 22.dp).clip(CircleShape).background(if (checked) c.navy else c.line)) {
-            Box(Modifier.padding(3.dp).offset(x = if (checked) 16.dp else 0.dp).size(16.dp).clip(CircleShape).background(c.paper))
+        Box(Modifier.size(width = 48.dp, height = 28.dp).clip(CircleShape).background(if (checked) c.navy else c.seg)) {
+            Box(Modifier.padding(3.dp).offset(x = if (checked) 20.dp else 0.dp).size(22.dp).shadow(1.5.dp, CircleShape).clip(CircleShape).background(Color.White))
         }
+    }
+}
+
+/** The fill of the one red button on a screen (send, buy): the same red as the stamp's face, a little lifted on the dark ground */
+val Ink.btn: Color get() = if (dark) Color(0xFFCC2238) else Color(0xFFC8102E)
+
+/**
+ * The big button of a screen or sheet: 52 dp high, the full width, 12 dp corners, bold. [red] for what sends or pays, navy otherwise
+ * ([ghost]: the blue wash instead of a fill, for the quieter of two). Without [enabled] it is the grey of a button that waits for a choice.
+ */
+@Composable
+fun Cta(
+    text: String, onClick: () -> Unit, modifier: Modifier = Modifier, red: Boolean = false, ghost: Boolean = false, enabled: Boolean = true,
+    loading: Boolean = false, corner: Dp = 12.dp, icon: ImageVector? = null,
+) {
+    val c = ink
+    val shape = RoundedCornerShape(corner)
+    val fill = when {
+        !enabled -> if (c.dark) Color(0xFF2A2E36) else Color(0xFFE4E7EC)
+        ghost -> c.tile
+        red -> c.btn
+        else -> c.navy
+    }
+    val fg = when {
+        !enabled -> if (c.dark) Color(0xFF8D939D) else Color(0xFF6B717B)
+        ghost -> c.navy
+        c.dark && !red -> Color(0xFF0E1626)
+        else -> Color.White
+    }
+    Row(
+        modifier.fillMaxWidth().height(52.dp).clip(shape).background(fill)
+            .clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick).padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (loading) Spinner(fg, 20.dp) else if (icon != null) Glyph(icon, fg, size = 22.dp)
+        Txt(text, sans(16.sp, FontWeight.Bold, lineHeight = 20.sp), fg, align = TextAlign.Center, maxLines = 2)
+    }
+}
+
+/** The bottom of a screen that ends in one big button: on the ground colour, a hairline above, clear of the gesture bar */
+@Composable
+fun CtaBar(modifier: Modifier = Modifier, note: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    val c = ink
+    Column(
+        modifier.fillMaxWidth().background(c.ground).drawBehind { drawRect(c.line, Offset.Zero, androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx())) }
+            .navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        content()
+        if (note != null) Txt(note, sans(12.5.sp, lineHeight = 17.5.sp), c.dim, Modifier.padding(top = 8.dp), align = TextAlign.Center)
+    }
+}
+
+/** A checkbox the size of the design's: 26 dp, rounded square, navy when ticked */
+@Composable
+fun Check(checked: Boolean, modifier: Modifier = Modifier) {
+    val c = ink
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier.size(26.dp).clip(shape).background(if (checked) c.navy else Color.Transparent).border(2.dp, if (checked) c.navy else c.dim, shape),
+        contentAlignment = Alignment.Center,
+    ) { if (checked) Glyph(Icons.Check, if (c.dark) Color(0xFF0E1626) else Color.White, size = 16.dp) }
+}
+
+/** A two-way choice in one pill (Shrink | Original): the chosen one is raised on the track */
+@Composable
+fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val c = ink
+    Row(modifier.height(34.dp).clip(RoundedCornerShape(10.dp)).background(c.seg).padding(2.dp)) {
+        options.forEachIndexed { k, name ->
+            val on = k == selected
+            val shape = RoundedCornerShape(8.dp)
+            Box(
+                Modifier.fillMaxHeight().shadow(if (on) 1.dp else 0.dp, shape).clip(shape).background(if (on) c.paper else Color.Transparent)
+                    .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(k) }).padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) { Txt(name, sans(13.sp, FontWeight.SemiBold, lineHeight = 16.sp), if (on) c.ink else c.dim, maxLines = 1) }
+        }
+    }
+}
+
+/** A small button on the blue wash (Check for updates): 36 dp high */
+@Composable
+fun WashBtn(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, loading: Boolean = false) {
+    val c = ink
+    Row(
+        modifier.alpha(if (enabled) 1f else .5f).height(36.dp).clip(RoundedCornerShape(10.dp)).background(c.tile)
+            .clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick).padding(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (loading) Spinner(c.navy, 14.dp)
+        Txt(text, sans(13.5.sp, FontWeight.SemiBold, lineHeight = 17.sp), c.navy, maxLines = 1)
     }
 }
 

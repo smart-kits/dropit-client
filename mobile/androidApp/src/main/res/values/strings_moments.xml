@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Notes about the plan: only when something is close or has just changed. Every number is the service's, filled in by the app -->
+    <string name="mo_sep">" "</string>
+    <string name="mo_list_sep">", "</string>
+    <string name="mo_ok">OK</string>
+    <string name="mo_see_plans">See plans</string>
+    <string name="mo_keep">Keep it on</string>
+    <string name="mo_keep_trial">Keep it on · first month %1$s</string>
+    <string name="mo_keep_year">Keep it on · %1$s a year</string>
+    <string name="mo_renew">Renew a year · %1$s</string>
+    <string name="mo_reopen">Get Paid again</string>
+    <string name="mo_manage">Manage subscription</string>
+
+    <!-- The pill at the top of the home screen -->
+    <string name="mo_pill_trial">Upgrade · first month %1$s</string>
+    <string name="mo_pill_year">Upgrade · %1$s a year</string>
+
+    <!-- Settings, under the plan -->
+    <plurals name="mo_t0">
+        <item quantity="one">Background-receiving trial: %1$d day left</item>
+        <item quantity="other">Background-receiving trial: %1$d days left</item>
+    </plurals>
+    <string name="mo_p1_line">Doesn’t renew by itself</string>
+    <string name="mo_p1b">Renews automatically</string>
+    <string name="mo_p1b_manage">Renews automatically · cancel anytime</string>
+    <string name="mo_p3">Items sent while Paid are kept as Paid until %1$s.</string>
+    <string name="mo_p5">Paid has ended.</string>
+    <!-- The end of a sentence that is joined to another: ". " in English -->
+    <string name="mo_stop">". "</string>
+
+    <!-- Trial card: ending soon (T1) and tomorrow (T2) -->
+    <plurals name="mo_t1_head">
+        <item quantity="one">Background receiving has %1$d day left.</item>
+        <item quantity="other">Background receiving has %1$d days left.</item>
+    </plurals>
+    <string name="mo_t2_head">Background receiving ends tomorrow.</string>
+    <plurals name="mo_trial_tail">
+        <item quantity="one">After the trial, new items arrive only when you open the app (items are kept %1$d day); Paid keeps background receiving on.</item>
+        <item quantity="other">After the trial, new items arrive only when you open the app (items are kept %1$d days); Paid keeps background receiving on.</item>
+    </plurals>
+    <!-- What the account has already had: days, items, devices; a part that is nothing is left out -->
+    <plurals name="mo_enjoy_a">
+        <item quantity="one">In %1$d days you’ve sent %2$d item to %3$d devices.</item>
+        <item quantity="other">In %1$d days you’ve sent %2$d items to %3$d devices.</item>
+    </plurals>
+    <plurals name="mo_enjoy_b">
+        <item quantity="one">In %1$d days you’ve sent %2$d item.</item>
+        <item quantity="other">In %1$d days you’ve sent %2$d items.</item>
+    </plurals>
+    <string name="mo_enjoy_c">In %1$d days, %2$d devices have been receiving.</string>
+    <plurals name="mo_enjoy_d">
+        <item quantity="one">You’ve sent %1$d item to %2$d devices.</item>
+        <item quantity="other">You’ve sent %1$d items to %2$d devices.</item>
+    </plurals>
+    <plurals name="mo_enjoy_e">
+        <item quantity="one">You’ve sent %1$d item.</item>
+        <item quantity="other">You’ve sent %1$d items.</item>
+    </plurals>
+    <string name="mo_enjoy_f">%1$d devices have been receiving.</string>
+
+    <!-- Trial card: ended (T3) -->
+    <string name="mo_t3_head">The background-receiving trial has ended.</string>
+    <string name="mo_t3_during">During it: %1$s.</string>
+    <string name="mo_t3_days">%1$d days</string>
+    <plurals name="mo_t3_items">
+        <item quantity="one">%1$d item sent</item>
+        <item quantity="other">%1$d items sent</item>
+    </plurals>
+    <string name="mo_t3_devices">%1$d devices receiving live</string>
+    <plurals name="mo_t3_now">
+        <item quantity="one">From now on new items arrive when you open the app, and are kept %1$d day. Paid keeps background receiving on</item>
+        <item quantity="other">From now on new items arrive when you open the app, and are kept %1$d days. Paid keeps background receiving on</item>
+    </plurals>
+    <string name="mo_t3_price_trial">: first month %1$s, then %2$s a year, cancel anytime.</string>
+    <string name="mo_t3_price_year">: %1$s a year, cancel anytime.</string>
+    <string name="mo_t3_price_none">.</string>
+
+    <!-- Paid plan: ending soon (P1), ended (P2), started (P4) -->
+    <string name="mo_p1">Paid runs until %1$s. After that: %2$d items a day, %3$d MB files, %4$d devices, background receiving stops; items sent before then keep their %5$d days, and for %5$d more days space and backlog still count as Paid.</string>
+    <string name="mo_p2_head">Paid has ended.</string>
+    <plurals name="mo_p2_items">
+        <item quantity="one">This account has sent %1$d item in total.</item>
+        <item quantity="other">This account has sent %1$d items in total.</item>
+    </plurals>
+    <string name="mo_p2_now">From now on: %1$d items a day, %2$d MB files, %3$d devices, background receiving stops.</string>
+    <string name="mo_p2_kept">Items already sent keep their Paid retention; until %1$s space and backlog still count as Paid.</string>
+    <string name="mo_p4_now">Paid is on. You now have: %1$d items a day, %2$d MB files, %3$d devices, %4$d-day retention, background receiving always on.</string>
+    <string name="mo_p4_sub_trial">First month %1$s, then %2$s a year, renewing automatically; cancel anytime under “Manage subscription”.</string>
+    <string name="mo_p4_sub">%1$s a year, renewing automatically; cancel anytime under “Manage subscription”.</string>
+    <string name="mo_p4_sub_plain">Renews automatically; cancel anytime under “Manage subscription”.</string>
+    <string name="mo_p4_once">Valid until %1$s; it won’t renew by itself.</string>
+    <string name="mo_p4_life">For life (limited early-bird).</string>
+
+    <!-- Beside what was just sent: the day's items or the space is close -->
+    <string name="mo_n1">%1$d of %2$d items today; resets tomorrow at %3$s (00:00 UTC).</string>
+    <string name="mo_n1_paid">Paid: %1$d a day.</string>
+    <plurals name="mo_n2">
+        <item quantity="one">%1$s of %2$s used. Space frees up as the oldest item expires (free items are kept %3$d day).</item>
+        <item quantity="other">%1$s of %2$s used. Space frees up as the oldest item expires (free items are kept %3$d days).</item>
+    </plurals>
+
+    <!-- Devices: all places in use -->
+    <string name="mo_n3_up">Devices %1$d / %2$d. Remove one you don’t use, or go Paid (%3$d devices).</string>
+    <string name="mo_n3">Devices %1$d / %2$d. Remove one you don’t use to add another.</string>
+
+    <!-- A file that expired: said once -->
+    <plurals name="mo_w6">
+        <item quantity="one">Free keeps items %1$d day. A device that stays closed longer than that misses what was sent; Paid keeps them %2$d days.</item>
+        <item quantity="other">Free keeps items %1$d days. A device that stays closed longer than that misses what was sent; Paid keeps them %2$d days.</item>
+    </plurals>
+</resources>

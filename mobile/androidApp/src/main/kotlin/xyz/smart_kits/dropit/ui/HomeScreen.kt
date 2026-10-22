@@ -9,11 +9,8 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.activity.compose.BackHandler
@@ -45,7 +42,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -60,7 +66,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -102,7 +111,12 @@ import xyz.smart_kits.dropit.receive.Downloader
 import xyz.smart_kits.dropit.shared.Letter
 import xyz.smart_kits.dropit.shared.LetterFile
 import xyz.smart_kits.dropit.shared.LetterShape
+import xyz.smart_kits.dropit.shared.ResendAvail
+import xyz.smart_kits.dropit.shared.Targets
+import xyz.smart_kits.dropit.shared.resendAvail
+import xyz.smart_kits.dropit.work.Resend
 import xyz.smart_kits.dropit.shared.Plans
+import xyz.smart_kits.dropit.shared.UpgradeFrom
 import xyz.smart_kits.dropit.shared.fileSize
 import xyz.smart_kits.dropit.shared.seqRange
 import xyz.smart_kits.dropit.shared.shortUrl
@@ -115,7 +129,8 @@ import xyz.smart_kits.dropit.ui.kit.Postmark
 import xyz.smart_kits.dropit.ui.kit.ErrorLine
 import xyz.smart_kits.dropit.ui.kit.Returned
 import xyz.smart_kits.dropit.ui.kit.SectionHead
-import xyz.smart_kits.dropit.ui.kit.Stamp
+import xyz.smart_kits.dropit.ui.kit.SplitSend
+import xyz.smart_kits.dropit.ui.kit.reducedMotion
 import xyz.smart_kits.dropit.ui.kit.Tag
 import xyz.smart_kits.dropit.ui.kit.Tip
 import xyz.smart_kits.dropit.ui.kit.Txt
@@ -136,7 +151,8 @@ private data class Picked(val uri: Uri, val name: String, val size: Long?)
 
 /** How the last send from this screen ended: said in the envelope until the next edit or send */
 private sealed interface Outcome {
-    data class Sent(val line: String, val extra: List<String>) : Outcome
+    /** [near]: the day's items or the space are close, said once beside the result (see Moments) */
+    data class Sent(val line: String, val extra: List<String>, val near: NearView? = null) : Outcome
     data class Failed(val reasons: List<String>, val upgrade: String?, val why: String?) : Outcome
 }
 
@@ -158,12 +174,15 @@ private fun Context.describe(uri: Uri): Picked {
  * Joined: the envelope to send from on top, then what arrived and what this phone sent, newest first.
  * Sending never closes anything: the envelope empties and is ready for the next thing.
  */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit, onSignedOut: () -> Unit, go: (Screen) -> Unit) {
+fun HomeScreen(
+    resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit, onSignedOut: () -> Unit, go: (Screen) -> Unit,
+    /** A limit's notification was tapped: the checkout for what was met opens at once ("" when it is not known which) */
+    checkoutWhy: String? = null, onCheckoutStarted: () -> Unit = {},
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var menuOpen by remember { mutableStateOf(false) }
     val c = ink
     val draft = rememberTextFieldState()
     val files = remember { mutableStateListOf<Picked>() }
@@ -171,11 +190,23 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
     var progress by remember { mutableStateOf(0 to 0) }
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     var me by remember { mutableStateOf<Me?>(null) }
-    // A free account, with paying on offer: the places that meet a limit can offer the way past it (the plans screen, naming it)
+    // A free account, with paying on offer: the places that meet a limit can offer the way past it (its checkout, naming what that plan gives for exactly that limit)
     val upgradeOffered = BuildConfig.PAYMENTS && ctx.app.plans.offering && me?.paid == false
     val letters by ctx.app.letters.all.collectAsState()
-    // Every way to upgrade on this screen goes straight to the checkout (see Buy)
+    // A limit that was just met goes straight to the checkout; the pill and the cards open the plans first (see Buy)
     val buy = rememberBuy()
+    val moments = ctx.app.moments
+    // What was sent since the account was last asked, so the notes about a day's items or the space being close are right without asking after every send
+    var sentSince by remember { mutableStateOf(0) }
+    var sentBytes by remember { mutableStateOf(0L) }
+    // Chosen again whenever the account's answer changes or a card is put away
+    var cardTick by remember { mutableStateOf(0) }
+    val momentsNow = remember(me, cardTick, resumed) { System.currentTimeMillis() }
+    // A limit that was just met says so in the envelope, which comes before every note
+    val wallShowing = (outcome as? Outcome.Failed)?.upgrade != null
+    val card = remember(me, cardTick, wallShowing, momentsNow) { me?.let { moments.homeCard(it, momentsNow, wallShowing) } }
+    // The pill moves only under pressure, and then only a few times (see PlanChip)
+    val pressing = remember(me, card, outcome, sentSince, momentsNow) { me?.let { moments.pressure(it, ctx.app.store.meAt, momentsNow, card, sentSince) } == true }
     // Clearing the list: a long press picks a letter, then taps pick more; the heading says how many and offers all / clear.
     // Clearing takes effect at once and can be undone for a few seconds, so there is no "are you sure"
     var picked by remember { mutableStateOf(setOf<String>()) }
@@ -193,8 +224,19 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
     // plan change elsewhere: another device joins, a payment goes through)
     LaunchedEffect(resumed) {
         if (me == null) me = ctx.app.account.me(stale = true)
+        me?.let { moments.observe(it, System.currentTimeMillis()) }
+        cardTick++
         me = ctx.app.account.me(fresh = true)
+        sentSince = 0; sentBytes = 0
+        me?.let { moments.observe(it, System.currentTimeMillis()) }
+        cardTick++
         if (!ctx.app.account.signedIn) onSignedOut()
+    }
+    // A tap on a limit's notification: the checkout for it (or, where paying is not on offer, nothing more than the plans' words)
+    LaunchedEffect(checkoutWhy) {
+        val w = checkoutWhy ?: return@LaunchedEffect
+        onCheckoutStarted()
+        if (BuildConfig.PAYMENTS && ctx.app.plans.offering) buy.start(UpgradeFrom.SHARE, w.ifEmpty { null }) else go(Screen.Plans(w.ifEmpty { null }, UpgradeFrom.SHARE))
     }
     // How the last send went stays until the next edit, then goes: it is about what was there
     var settled by remember { mutableStateOf("" to 0) }
@@ -206,13 +248,16 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
         files += uris.map(ctx::describe)
     }
 
-    /** Hold, hand to the background, and say here how it went. [sent] runs once it is in. */
-    fun send(inbound: Inbound, sent: () -> Unit) {
+    /**
+     * Hold, hand to the background, and say here how it went. [sent] runs once it is in. [to]: the devices chosen for this one send;
+     * without it, this phone's default (everyone unless the person chose some).
+     */
+    fun send(inbound: Inbound, to: Targets? = null, sent: () -> Unit) {
         if (inbound.isEmpty || busy) return
         busy = true; outcome = null; progress = 0 to 0
         scope.launch {
             val outbox = Outbox(ctx)
-            val job = withContext(Dispatchers.IO) { outbox.hold(inbound) }
+            val job = withContext(Dispatchers.IO) { outbox.hold(inbound, to) }
             InApp.add(job.id)
             outbox.enqueue(job.id)
             val info = try {
@@ -227,10 +272,25 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
             if (info.state == WorkInfo.State.SUCCEEDED) {
                 val said = out.getString(SendWorker.DONE).orEmpty().lines()
                 val clock = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-                outcome = Outcome.Sent(ctx.getString(R.string.sent_at, seqRange(out.getLongArray(SendWorker.SEQS)?.toList().orEmpty()), clock), said.drop(1))
+                val seqs = out.getLongArray(SendWorker.SEQS)?.toList().orEmpty()
+                val bytesSent = files.sumOf { it.size ?: 0L }
+                outcome = Outcome.Sent(ctx.getString(R.string.sent_at, seqRange(seqs), clock), said.drop(1))
                 sent()
                 settled = draft.text.toString() to files.size
-                me = ctx.app.account.me()
+                sentSince += seqs.size; sentBytes += bytesSent
+                var latest = ctx.app.account.me()
+                // Close to a limit by what was sent since the last answer: ask for the real numbers once, so the line beside the result is right
+                if (latest != null && !latest.paid && (itemsTier(latest, ctx.app.store.meAt, System.currentTimeMillis(), sentSince) != Tier.NONE || spaceNear(latest, sentBytes))) {
+                    val fresh = ctx.app.account.me(fresh = true)
+                    if (fresh != null) { latest = fresh; sentSince = 0; sentBytes = 0 }
+                }
+                me = latest
+                // One note at a time: the cards at the top come first
+                if (latest != null && moments.homeCard(latest, System.currentTimeMillis()) == null) {
+                    val near = moments.takeNear(latest, ctx.app.store.meAt, System.currentTimeMillis(), sentSince, sentBytes)
+                    val cur = outcome
+                    if (near != null && cur is Outcome.Sent) outcome = cur.copy(near = near)
+                }
             } else {
                 // Kept as written, to try again: press the stamp once more
                 outcome = Outcome.Failed(
@@ -243,202 +303,340 @@ fun HomeScreen(resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().background(c.ground).safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 28.dp),
-    ) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Brand()
-            Spacer(Modifier.weight(1f))
-            // Until the plan is known the pill's place is held, so it does not pop in and push things
-            if (me == null) Box(Modifier.size(width = 84.dp, height = 34.dp).clip(RoundedCornerShape(17.dp)).border(1.5.dp, c.line, RoundedCornerShape(17.dp)))
-            me?.let {
-                // Where an upgrade starts: a free account, when paying is on offer, gets a pill that says so and opens the plans in one tap.
-                // Anything else (paid; or paying is off in this build) is just a statement of the plan, and says nothing about buying
-                val offering = BuildConfig.PAYMENTS && ctx.app.plans.offering && !it.paid
-                when {
-                    offering -> {
-                        // The pill says what the account is (the free plan) and what it costs to leave it, with the arrow that says it can be tapped: the first month's price when the account can still have it
-                        val year = ctx.app.plans.catalog.value?.offer("year")
-                        val price = year?.let { y -> if (y.trialCents != null && it.trialAvailable) Plans.money(y.trialCents!!, y.currency) else Plans.money(y.cents, y.currency) }
-                        PlanChip(
-                            if (price != null) stringResource(R.string.chip_upgrade_price, price) else stringResource(R.string.chip_free),
-                            accent = true, moving = true, loading = buy.opening != null, action = stringResource(R.string.chip_upgrade_label),
-                        ) { buy.start() }
-                    }
-                    it.paid -> PlanChip(stringResource(R.string.chip_paid), accent = false) { go(Screen.Account) }
-                    else -> Txt(
-                        stringResource(R.string.plan_line, stringResource(R.string.label_free), it.devicesUsed, it.devicesLimit), sans(12.sp).copy(fontFeatureSettings = "tnum"), c.dim,
-                        Modifier.padding(end = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+    val ops = remember { LetterOps(ctx, scope) }
+    // Received and Sent are two lists; which one shows is remembered across a turn of the screen, not across launches
+    var showSent by rememberSaveable { mutableStateOf(false) }
+    val received = remember(letters) { letters.filter { !it.mine } }
+    val sent = remember(letters) { letters.filter { it.mine } }
+    val shown = if (showSent) sent else received
+    var sheetId by remember { mutableStateOf<String?>(null) }
+    val now = remember(letters, resumed) { System.currentTimeMillis() }
+    // The first file that expired says once what a phone left closed costs on the free plan; it stays up while this screen does
+    val keptPeriod = me?.createdAt?.toString() ?: "account"
+    var keptNoteId by remember { mutableStateOf<String?>(null) }
+    val firstExpired = if (me?.paid == false && !selecting) shown.firstOrNull { it.upgradeWhy(now, ops) == "kept" }?.id else null
+    LaunchedEffect(firstExpired) {
+        if (keptNoteId == null && firstExpired != null && moments.keptNoteDue(keptPeriod)) { keptNoteId = firstExpired; moments.markKeptNote(keptPeriod) }
+    }
+    // The dot on the Sent tab: something was sent since that list was last looked at (one time kept on this phone)
+    var sentSeen by remember { mutableLongStateOf(ctx.app.store.sentSeenAt.takeIf { it != 0L } ?: System.currentTimeMillis().also { ctx.app.store.sentSeenAt = it }) }
+    LaunchedEffect(showSent, sent.size) {
+        if (showSent) { val t = System.currentTimeMillis(); sentSeen = t; ctx.app.store.sentSeenAt = t }
+    }
+    val sentDot = !showSent && sent.any { it.at > sentSeen }
+
+    // Pulling the list down asks the service for what is new
+    var pulling by remember { mutableStateOf(false) }
+    var pullLine by remember { mutableStateOf<String?>(null) }
+    fun pullList() {
+        if (pulling) return
+        pulling = true
+        scope.launch {
+            val r = ctx.app.receiving.pullNow("manual")
+            pulling = false
+            pullLine = when {
+                r.failed -> ctx.getString(R.string.pull_failed)
+                r.count == 0 -> ctx.getString(R.string.pull_none)
+                else -> ctx.getString(R.string.pull_n, r.count)
+            }
+            delay(3000)
+            pullLine = null
+        }
+    }
+    /** Say something under the tabs for a few seconds */
+    fun flash(text: String) {
+        scope.launch { pullLine = text; delay(3000); if (pullLine == text) pullLine = null }
+    }
+    fun clear(ids: Set<String>) {
+        undo = ctx.app.letters.remove(ids)
+        picked = emptySet()
+        sheetId = null
+    }
+    val pickedLetters = letters.filter { it.id in picked }
+
+    // Who it goes to. The devices are asked for when there is a reason (another device exists, the panel opens, the sent list shows), not on a timer
+    val peers = ctx.app.peers
+    val peerState by peers.state.collectAsState()
+    val defaultTo by peers.defaultTo.collectAsState()
+    val receivers = peers.receivers(peerState.peers)
+    val selfId = ctx.app.store.deviceId
+    var sheet by remember { mutableStateOf<SheetMode?>(null) }
+    var sheetBusy by remember { mutableStateOf(false) }
+    var sheetError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(resumed, me?.devicesUsed) { if ((me?.devicesUsed ?: 0) > 1) peers.refresh(maxAgeMs = 300_000) }
+    LaunchedEffect(showSent) { if (showSent && (me?.devicesUsed ?: 0) > 1) peers.refresh(maxAgeMs = 60_000) }
+    LaunchedEffect(sheet) { if (sheet != null) peers.refresh(maxAgeMs = 15_000) }
+    ops.onResend = { l ->
+        when (resendAvail(l, System.currentTimeMillis(), receivers.size)) {
+            ResendAvail.OK -> { sheetError = null; sheet = SheetMode.Resend(l) }
+            ResendAvail.EXPIRED -> ops.note(l.id, R.string.st_resend_expired)
+            ResendAvail.NONE -> {}
+        }
+    }
+    val pullState = rememberPullToRefreshState()
+
+    Box(Modifier.fillMaxSize().background(c.ground)) {
+    PullToRefreshBox(
+        isRefreshing = pulling, onRefresh = { if (!selecting) pullList() }, state = pullState,
+        modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
+        indicator = {
+            val f = pullState.distanceFraction
+            if (pulling || f > 0f) {
+                val ready = f >= 1f
+                Row(
+                    Modifier.align(Alignment.TopCenter)
+                        .offset { IntOffset(0, ((if (pulling) 1f else f.coerceAtMost(1.2f)) * 64.dp.toPx() - 36.dp.toPx()).roundToInt()) }
+                        .shadow(3.dp, CircleShape).clip(CircleShape).background(c.paper).padding(horizontal = 16.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (pulling) xyz.smart_kits.dropit.ui.kit.Spinner(c.navy, 18.dp) else Glyph(Icons.Up, c.navy, Modifier.rotate(if (ready) 0f else 180f), size = 18.dp)
+                    Txt(
+                        stringResource(when { pulling -> R.string.pulling; ready -> R.string.pull_release; else -> R.string.pull_hint }),
+                        sans(13.5.sp, FontWeight.SemiBold), c.navy,
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))     // the pill and the menu are two targets: far enough apart that one finger picks one
-            LinkAction({ menuOpen = true }, icon = Icons.Menu, name = stringResource(R.string.menu_name), iconSize = 26.dp, minSize = 48.dp)
-        }
-        buy.error?.let { ErrorLine(errorText(it), Modifier.padding(bottom = 10.dp)) }
-        if (menuOpen) MenuSheet(go, onDismiss = { menuOpen = false })
-
-        SetupTips(resumed)
-
-        // Copied something before opening dropit: one tap sends it. A quiet slip; the stamp stays the main button
-        if (offer != null) {
-            Column(
-                Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(3.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(3.dp))
-                    .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 2.dp),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Glyph(Icons.Copy, c.dim, size = 14.dp)
-                    Txt(stringResource(R.string.label_clip_new).uppercase(), label(13.sp, tracking = .06.em), c.dim)
+        },
+    ) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = if (selecting) 110.dp else 28.dp),
+    ) {
+        if (!selecting) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Brand()
+                // What the account is, in a line next to the name; a free account with paying on offer has the pill instead, in the same place
+                val offering = BuildConfig.PAYMENTS && ctx.app.plans.offering && me?.paid == false
+                val holdsPill = BuildConfig.PAYMENTS && ctx.app.plans.offering && (me == null || me?.paid == false)
+                Spacer(Modifier.width(8.dp))
+                when {
+                    holdsPill -> Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                        val m = me
+                        if (m == null) {
+                            // Until the plan is known the pill's place is held, so it does not pop in and push things
+                            Box(Modifier.size(width = 84.dp, height = 34.dp).clip(RoundedCornerShape(17.dp)).border(1.5.dp, c.line, RoundedCornerShape(17.dp)))
+                        } else if (offering) {
+                            // Where an upgrade starts with nothing pressing: it says what it costs to leave the free plan (the first month's price when
+                            // the account can still have it, else the year's) and opens the plans, where all three ways to pay are laid out. It moves
+                            // only while something is close (see Moments.pressure), and only a few times
+                            val prices = pricesOf(ctx.app.plans.catalog.value, m.trialAvailable, open = true)
+                            val label = when {
+                                prices.trial != null -> stringResource(R.string.mo_pill_trial, prices.trial)
+                                prices.year != null -> stringResource(R.string.mo_pill_year, prices.year)
+                                else -> stringResource(R.string.action_upgrade)
+                            }
+                            PlanChip(label, moving = pressing, action = stringResource(R.string.chip_upgrade_label)) { go(Screen.Plans(from = UpgradeFrom.PILL)) }
+                        }
+                    }
+                    me == null -> Spacer(Modifier.weight(1f))
+                    else -> me?.let {
+                        Txt(
+                            stringResource(R.string.plan_line, stringResource(if (it.paid) R.string.label_paid else R.string.label_free), it.devicesUsed, it.devicesLimit),
+                            sans(12.5.sp).copy(fontFeatureSettings = "tnum"), c.dim, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                Txt(offer.preview, sans(14.sp, lineHeight = 20.sp), c.ink, Modifier.padding(top = 3.dp, end = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    LinkAction({ onOfferDone(offer) }, text = stringResource(R.string.dismiss))
-                    Spacer(Modifier.width(4.dp))
-                    Btn(stringResource(R.string.send_this), {
-                        val o = offer
-                        // Gone once it is in; if it fails it stays, with the reason in the envelope, to try again
-                        send(Inbound(text = o.text, streams = listOfNotNull(o.uri?.toString()))) { onOfferDone(o) }
-                    }, small = true, enabled = !busy)
+                Spacer(Modifier.width(12.dp))     // the pill and the gear are two targets: far enough apart that one finger picks one
+                LinkAction({ go(Screen.Settings) }, Modifier.offset(x = 10.dp), icon = Icons.Gear, name = stringResource(R.string.label_settings), iconSize = 26.dp, minSize = 48.dp)
+            }
+            buy.error?.let { ErrorLine(errorText(it), Modifier.padding(bottom = 10.dp)) }
+            // One note about the plan at a time, only when something is close or has just changed (see Moments)
+            card?.let { k ->
+                me?.let { m ->
+                    HomeMomentCard(k, m, momentsNow, onDismiss = { moments.dismiss(k); cardTick++ }, go = go, buy = buy, modifier = Modifier.padding(bottom = 10.dp))
                 }
             }
-        }
+            TargetsNote()
 
-        Envelope(Modifier.fillMaxWidth(), transit = busy) {
-            BasicTextField(
-                state = draft,
-                modifier = Modifier.fillMaxWidth().contentReceiver(
-                    // A picture pasted or dropped in from the keyboard becomes a file to send
-                    ReceiveContentListener { content ->
-                        if (!content.hasMediaType(MediaType.Image)) content
-                        else content.consume { item -> item.uri?.let { files += ctx.describe(it); true } ?: false }
-                    },
-                ),
-                textStyle = sans(15.sp, lineHeight = 22.5.sp).copy(color = c.ink),
-                cursorBrush = SolidColor(c.red),
-                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 9),
-                decorator = { field ->
-                    Box(Modifier.fillMaxWidth().dashed(c.line).heightIn(min = 76.dp).padding(horizontal = 12.dp, vertical = 10.dp)) {
-                        if (draft.text.isEmpty()) Txt(stringResource(R.string.compose_hint), sans(15.sp, lineHeight = 22.5.sp), c.dim)
-                        field()
+            SetupTips(resumed)
+
+            // Copied something before opening dropit: one tap sends it. A quiet slip; the stamp stays the main button
+            if (offer != null) {
+                Column(
+                    Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(3.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(3.dp))
+                        .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 2.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Glyph(Icons.Copy, c.dim, size = 14.dp)
+                        Txt(stringResource(R.string.label_clip_new).uppercase(), label(13.sp, tracking = .06.em), c.dim)
                     }
-                },
-            )
-            if (files.isNotEmpty()) {
-                FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (f in files.toList()) {
-                        Row(
-                            Modifier.clip(RoundedCornerShape(6.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(6.dp)).padding(start = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Txt(f.name, sans(12.sp), c.ink, Modifier.widthIn(max = 150.dp), maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
-                            f.size?.let { Txt(fileSize(it), mono(11.sp), c.dim, Modifier.padding(start = 6.dp)) }
-                            LinkAction({ files.remove(f) }, icon = Icons.X, name = stringResource(R.string.remove_file, f.name), enabled = !busy)
+                    Txt(offer.preview, sans(14.sp, lineHeight = 20.sp), c.ink, Modifier.padding(top = 3.dp, end = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                        LinkAction({ onOfferDone(offer) }, text = stringResource(R.string.dismiss))
+                        Spacer(Modifier.width(4.dp))
+                        Btn(stringResource(R.string.send_this), {
+                            val o = offer
+                            // Gone once it is in; if it fails it stays, with the reason in the envelope, to try again
+                            send(Inbound(text = o.text, streams = listOfNotNull(o.uri?.toString()))) { onOfferDone(o) }
+                        }, small = true, enabled = !busy)
+                    }
+                }
+            }
+
+            Envelope(Modifier.fillMaxWidth(), transit = busy, padding = androidx.compose.foundation.layout.PaddingValues(10.dp)) {
+                val nothing = draft.text.isBlank() && files.isEmpty()
+                fun sendNow(to: Targets?) {
+                    // Sent: the envelope empties, ready for the next one
+                    send(Inbound(text = draft.text.toString(), streams = files.map { it.uri.toString() }), to) { draft.clearText(); files.clear() }
+                }
+                // The place to write, and the send button beside it, level with the bottom of it: as the writing grows (up to six lines),
+                // the button stays the height of one line
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                    BasicTextField(
+                        state = draft,
+                        modifier = Modifier.weight(1f).contentReceiver(
+                            // A picture pasted or dropped in from the keyboard becomes a file to send
+                            ReceiveContentListener { content ->
+                                if (!content.hasMediaType(MediaType.Image)) content
+                                else content.consume { item -> item.uri?.let { files += ctx.describe(it); true } ?: false }
+                            },
+                        ),
+                        textStyle = sans(15.sp, lineHeight = 22.5.sp).copy(color = c.ink),
+                        cursorBrush = SolidColor(c.red),
+                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6),
+                        decorator = { field ->
+                            Row(Modifier.fillMaxWidth().dashed(c.line).heightIn(min = 56.dp).padding(start = 12.dp, end = 2.dp), verticalAlignment = Alignment.Bottom) {
+                                Box(Modifier.weight(1f).padding(vertical = 17.dp)) {
+                                    if (draft.text.isEmpty()) Txt(stringResource(R.string.compose_hint), sans(15.sp, lineHeight = 22.5.sp), c.dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    field()
+                                }
+                                // Attaching sits inside the place to write, where the eye already is
+                                LinkAction({ pick.launch(arrayOf("*/*")) }, icon = Icons.Clip, name = stringResource(R.string.attach), iconSize = 22.dp, minSize = 52.dp, enabled = !busy)
+                            }
+                        },
+                    )
+                    SplitSend(
+                        stringResource(if (busy) R.string.label_sending else R.string.label_send).uppercase(), busy, chooser = receivers.isNotEmpty(),
+                        onSend = { sendNow(null) },
+                        onChoose = { sheetError = null; sheet = SheetMode.Send },
+                        partial = defaultTo.size.takeIf { it > 0 && receivers.isNotEmpty() },
+                    )
+                }
+                // The panel for this one send (see TargetSheet): the default is ticked; nothing goes until its button is pressed
+                if (sheet == SheetMode.Send) TargetSheet(
+                    SheetMode.Send, peerState, receivers, defaultTo, busy = false, error = null,
+                    nothingToSend = nothing,
+                    onSubmit = { targets -> sheet = null; sendNow(targets) },
+                    onOpenDefault = { go(Screen.DefaultTargets) },
+                    onRetryLoad = { scope.launch { peers.refresh() } },
+                    onDismiss = { sheet = null },
+                )
+                if (files.isNotEmpty()) {
+                    FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (f in files.toList()) {
+                            Row(
+                                Modifier.clip(RoundedCornerShape(6.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(6.dp)).padding(start = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Txt(f.name, sans(12.sp), c.ink, Modifier.widthIn(max = 150.dp), maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+                                f.size?.let { Txt(fileSize(it), mono(11.sp), c.dim, Modifier.padding(start = 6.dp)) }
+                                LinkAction({ files.remove(f) }, icon = Icons.X, name = stringResource(R.string.remove_file, f.name), enabled = !busy)
+                            }
                         }
                     }
                 }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                LinkAction({ pick.launch(arrayOf("*/*")) }, Modifier.offset(x = (-6).dp), text = stringResource(R.string.attach), icon = Icons.Clip, enabled = !busy)
-                Spacer(Modifier.weight(1f))
-                Stamp(
-                    stringResource(if (busy) R.string.label_sending else R.string.label_send).uppercase(),
-                    onClick = {
-                        // Sent: the envelope empties, ready for the next one
-                        send(Inbound(text = draft.text.toString(), streams = files.map { it.uri.toString() })) { draft.clearText(); files.clear() }
-                    },
-                    busy = busy,
-                )
-            }
-            val line = when {
-                busy && progress.second > 1 -> stringResource(R.string.sending_n, progress.first.coerceAtLeast(1), progress.second)
-                busy -> stringResource(R.string.sending)
-                else -> null
-            }
-            line?.let { Txt(it, sans(12.sp), c.dim, Modifier.padding(top = 6.dp)) }
-            when (val o = outcome) {
-                is Outcome.Sent -> {
-                    Txt(o.line, sans(12.sp, FontWeight.SemiBold), c.navy, Modifier.padding(top = 6.dp))
-                    for (x in o.extra) Txt(x, sans(12.sp, lineHeight = 17.sp), c.dim)
+                val line = when {
+                    busy && progress.second > 1 -> stringResource(R.string.sending_n, progress.first.coerceAtLeast(1), progress.second)
+                    busy -> stringResource(R.string.sending)
+                    else -> null
                 }
-                is Outcome.Failed -> {
-                    Returned(o.reasons, Modifier.padding(top = 12.dp))
-                    if (o.upgrade != null && BuildConfig.PAYMENTS && LocalContext.current.app.plans.offering) {
-                        Btn(upgradeWord(o.why), { buy.start() }, Modifier.fillMaxWidth().padding(top = 10.dp), solid = true, loading = buy.opening != null)
+                line?.let { Txt(it, sans(12.sp), c.dim, Modifier.padding(top = 6.dp)) }
+                when (val o = outcome) {
+                    is Outcome.Sent -> {
+                        Txt(o.line, sans(12.sp, FontWeight.SemiBold), c.navy, Modifier.padding(top = 6.dp))
+                        for (x in o.extra) Txt(x, sans(12.sp, lineHeight = 17.sp), c.dim)
+                        o.near?.let { NearNote(it, momentsNow, go, Modifier.padding(top = 2.dp)) }
                     }
+                    is Outcome.Failed -> {
+                        Returned(o.reasons, Modifier.padding(top = 12.dp))
+                        if (o.upgrade != null && BuildConfig.PAYMENTS && LocalContext.current.app.plans.offering) {
+                            Btn(upgradeWord(o.why), { buy.start(UpgradeFrom.WALL, o.why) }, Modifier.fillMaxWidth().padding(top = 10.dp), solid = true, loading = buy.opening != null)
+                        }
+                    }
+                    null -> {}
                 }
-                null -> {}
             }
+
         }
 
-        val appContext = LocalContext.current
-        var pulling by remember { mutableStateOf(false) }
-        var pullLine by remember { mutableStateOf<String?>(null) }
         if (selecting) {
-            SectionHead(stringResource(R.string.sel_count, picked.size), Modifier.padding(top = 18.dp, bottom = 4.dp)) {
-                if (picked.size < letters.size) LinkAction({ picked = letters.map { it.id }.toSet() }, text = stringResource(R.string.sel_all), color = c.navy)
-                LinkAction({
-                    undo = ctx.app.letters.remove(picked)
-                    picked = emptySet()
-                }, text = stringResource(R.string.sel_clear), icon = Icons.Check, color = c.navy, underline = false)
-            }
-        } else SectionHead(stringResource(R.string.label_received), Modifier.padding(top = 18.dp, bottom = 4.dp), count = letters.size.takeIf { it > 0 }?.toString()) {
-            LinkAction(
-                onClick = {
-                    pulling = true
-                    scope.launch {
-                        val r = ctx.app.receiving.pullNow("manual")
-                        pulling = false
-                        pullLine = when {
-                            r.failed -> appContext.getString(R.string.pull_failed)
-                            r.count == 0 -> appContext.getString(R.string.pull_none)
-                            else -> appContext.getString(R.string.pull_n, r.count)
-                        }
-                        delay(3000)
-                        pullLine = null
-                    }
-                },
-                text = when {
-                    pulling -> stringResource(R.string.pulling)
-                    pullLine != null -> pullLine!!
-                    else -> stringResource(R.string.label_pull)
-                },
-                icon = Icons.Pull,
-                enabled = !pulling,
-                loading = pulling,
-                color = c.navy,
-            )
-        }
-        undo?.let { gone ->
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(3.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(3.dp)).padding(start = 12.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Txt(stringResource(R.string.cleared_n, gone.size), sans(13.5.sp), c.ink, Modifier.weight(1f))
-                LinkAction({ ctx.app.letters.restore(gone); undo = null }, text = stringResource(R.string.undo), color = c.navy)
-            }
-        }
-        if (letters.isEmpty()) {
-            Column(Modifier.fillMaxWidth().dashed(c.line, radius = 3.dp).padding(horizontal = 16.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Txt(stringResource(R.string.empty_title), sans(13.5.sp), c.dim, align = TextAlign.Center)
-                // Alone on the account: say what makes dropit useful (a second device) instead of asking for something to be sent
-                Txt(stringResource(if ((me?.devicesUsed ?: 0) <= 1) R.string.empty_body_alone else R.string.empty_body), sans(13.5.sp), c.dim, align = TextAlign.Center)
-                Txt(
-                    stringResource(R.string.label_add_device), sans(13.5.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
-                    Modifier.clickable(role = Role.Button) { go(Screen.AddDevice) }.padding(vertical = 10.dp),
-                )
-            }
+            SelectHeader(picked.size, picked.size >= shown.size, onExit = { picked = emptySet() }, onAll = { picked = shown.map { it.id }.toSet() })
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (l in letters) LetterCard(
-                    l, resumed, upgrade = if (upgradeOffered) { _ -> buy.start() } else null,
-                    picked = if (selecting) l.id in picked else null,
-                    onPick = { picked = if (l.id in picked) picked - l.id else picked + l.id },
-                )
+            ListTabs(showSent, received.size, sent.size, sentDot, { showSent = it }, Modifier.padding(top = 14.dp))
+            pullLine?.let { Txt(it, sans(12.5.sp), c.dim, Modifier.fillMaxWidth().padding(top = 8.dp), align = TextAlign.Center) }
+        }
+        if (shown.isEmpty()) {
+            ListEmpty(showSent, alone = (me?.devicesUsed ?: 0) <= 1, onAddDevice = { go(Screen.AddDevice) })
+        } else {
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                for (l in shown) key(l.id) {
+                    LetterRow(
+                        l, now, ops, upgrade = if (upgradeOffered) { why -> buy.start(UpgradeFrom.WALL, why) } else null,
+                        keptNote = l.id == keptNoteId,
+                        picked = if (selecting) l.id in picked else null,
+                        peers = peerState.peers, selfId = selfId,
+                        onOpen = { sheetId = l.id },
+                        onPick = { picked = if (l.id in picked) picked - l.id else picked + l.id },
+                        onClear = { clear(setOf(l.id)) },
+                    )
+                }
             }
         }
     }
+    }
+    if (selecting) {
+        SelectDock(
+            canCopy = pickedLetters.any { it.text != null },
+            canSave = pickedLetters.any { l -> !l.mine && l.files.any { it.state(now) == FileState.AVAILABLE } },
+            canShare = pickedLetters.any { l -> l.text != null || (!l.mine && l.files.any { it.state(now) != FileState.EXPIRED }) },
+            onCopy = { ops.copyTexts(pickedLetters); picked = emptySet() },
+            onSave = {
+                pickedLetters.filter { l -> !l.mine && l.files.any { it.state(now) == FileState.AVAILABLE } }.forEach(ops::saveAll)
+                picked = emptySet()
+            },
+            onShare = { ops.share(pickedLetters); picked = emptySet() },
+            onClear = { clear(picked) },
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+        )
+    }
+    undo?.let { gone ->
+        UndoToast(
+            gone.size, gone.sumOf { l -> if (l.mine) 0 else l.files.count { it.state(now) == FileState.AVAILABLE } },
+            onUndo = { ctx.app.letters.restore(gone); undo = null },
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+        )
+    }
+    letters.firstOrNull { it.id == sheetId }?.let { l ->
+        LetterSheet(l, now, ops, resendAvail(l, now, receivers.size), onDismiss = { sheetId = null }, onClear = { clear(setOf(l.id)) })
+    }
+    // Sending a letter again: nothing is ticked, each device says where it stands
+    (sheet as? SheetMode.Resend)?.let { mode ->
+        TargetSheet(
+            mode, peerState, receivers, defaultTo, busy = sheetBusy, error = sheetError, nothingToSend = false,
+            onSubmit = { targets ->
+                sheetBusy = true; sheetError = null
+                scope.launch {
+                    when (val r = Resend(ctx).run(mode.letter, targets)) {
+                        is Resend.Result.Done -> {
+                            sheet = null
+                            // The new letter is at the top of the list of what was sent
+                            showSent = true
+                            flash(ctx.getString(if (r.already) R.string.resend_already else R.string.resend_done, targetText(ctx, targets)))
+                        }
+                        is Resend.Result.Failed -> sheetError = r.text
+                    }
+                    sheetBusy = false
+                    me = ctx.app.account.me()
+                }
+            },
+            onOpenDefault = {},
+            onRetryLoad = { scope.launch { peers.refresh() } },
+            onDismiss = { if (!sheetBusy) sheet = null },
+        )
+    }
+    }
 }
+
 
 /** What the upgrade button says, by what was hit: what the paid plan gives for exactly that */
 @Composable
@@ -456,6 +654,20 @@ internal fun upgradeWord(why: String?): String {
         "kept" -> stringResource(R.string.up_kept, paid.days)
         else -> stringResource(R.string.up_generic)
     }
+}
+
+/** Something about the default devices that the person has not been told yet: some were removed, or all of them were */
+@Composable
+private fun TargetsNote() {
+    val ctx = LocalContext.current
+    val note by ctx.app.peers.note.collectAsState()
+    val n = note ?: return
+    val text = when {
+        n == "reset" -> stringResource(R.string.dt_note_reset)
+        n.startsWith("removed:") -> n.removePrefix("removed:").toIntOrNull().let { k -> pluralStringResource(R.plurals.dt_note_removed, k ?: 1, k ?: 1) }
+        else -> return
+    }
+    Tip(text, Modifier.padding(bottom = 10.dp), onDismiss = { ctx.app.peers.noteRead() })
 }
 
 /**
@@ -498,207 +710,34 @@ private fun SetupTips(resumed: Int) {
     }
 }
 
-private fun relative(ctx: Context, at: Long, now: Long): String {
-    val min = (now - at) / 60_000
-    return when {
-        min < 1 -> ctx.getString(R.string.now)
-        min < 60 -> ctx.getString(R.string.ago_min, min.toInt())
-        min < 1440 -> ctx.getString(R.string.ago_hour, (min / 60).toInt())
-        else -> ctx.getString(R.string.ago_day, (min / 1440).toInt())
-    }
-}
-
-/** One drop as one letter. What arrived carries a postmark; what this phone sent says so instead. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun LetterCard(l: Letter, resumed: Int, upgrade: ((String) -> Unit)? = null, picked: Boolean? = null, onPick: () -> Unit = {}) {
-    val ctx = LocalContext.current
-    val c = ink
-    val now = remember(resumed, l.id) { System.currentTimeMillis() }
-    val kind = when (val s = l.shape) {
-        LetterShape.Text -> stringResource(R.string.label_kind_text)
-        LetterShape.Link -> stringResource(R.string.label_kind_link)
-        LetterShape.Image -> stringResource(R.string.label_kind_image)
-        LetterShape.Video -> stringResource(R.string.label_kind_video)
-        LetterShape.File -> stringResource(R.string.label_kind_file)
-        is LetterShape.Files -> pluralStringResource(R.plurals.label_n_files, s.n, s.n)
-        is LetterShape.TextAndFiles -> pluralStringResource(R.plurals.label_text_n_files, s.n, s.n)
-    }
-    val selecting = picked != null
-    val shape = RoundedCornerShape(3.dp)
-    Box(
-        Modifier.fillMaxWidth()
-            // Long press starts picking (the buttons inside a letter still take their own taps)
-            .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onLongClickLabel = stringResource(R.string.sel_start), onLongClick = onPick, onClick = {}),
-    ) {
-    Row(
-        Modifier.fillMaxWidth().clip(shape).background(if (picked == true) c.navy.copy(alpha = .07f) else c.paper)
-            .border(if (picked == true) 2.dp else 1.dp, if (picked == true) c.navy else c.line, shape)
-            .padding(start = 11.dp, end = 7.dp, top = 9.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        if (selecting) {
-            Box(
-                Modifier.padding(end = 10.dp, top = 2.dp).size(20.dp).clip(RoundedCornerShape(10.dp))
-                    .background(if (picked == true) c.navy else Color.Transparent).border(1.5.dp, if (picked == true) c.navy else c.dim, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center,
-            ) { if (picked == true) Glyph(Icons.Check, c.paper, size = 14.dp) }
-        }
-        Column(Modifier.weight(1f)) {
-            Row(Modifier.padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Txt(kind.uppercase(), label(12.5.sp, tracking = .06.em), c.dim, maxLines = 1)
-                if (l.mine) Tag(stringResource(R.string.label_this_phone), self = true)
-                Txt(
-                    listOf(seqRange(l.seqs), relative(ctx, l.at, now)).filter { it.isNotEmpty() }.joinToString(" · "),
-                    mono(11.sp), c.dim, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val text = l.text
-            if (text != null) {
-                if (l.kind == "url") {
-                    // The title is the link; the address sits under it, short
-                    Txt(
-                        l.title ?: shortUrl(text), sans(14.5.sp, lineHeight = 21.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
-                        Modifier.clickable(role = Role.Button) { ctx.openLink(text) }, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                    )
-                    if (l.title != null) Txt(shortUrl(text), sans(12.5.sp), c.dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                } else {
-                    Txt(text, sans(14.5.sp, lineHeight = 21.5.sp), c.ink, maxLines = 12, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            l.fromTitle?.let { Txt(stringResource(R.string.from_page, it), sans(12.sp), c.dim, Modifier.padding(top = 3.dp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            LetterFiles(l, upgrade)
-            if (l.mine) {
-                val clock = remember(l.at) { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(l.at)) }
-                Txt(stringResource(R.string.sent_mark, clock), mono(12.sp), c.navy, Modifier.padding(top = 4.dp, bottom = 4.dp))
-            } else {
-                Row(Modifier.offset(x = (-6).dp)) {
-                    if (l.kind == "url" && text != null) LinkAction({ ctx.openLink(text) }, text = stringResource(R.string.open), icon = Icons.Open)
-                    if (text != null) {
-                        LinkAction({ ctx.copy(text) }, text = stringResource(if (l.files.isEmpty()) R.string.copy else R.string.copy_text), icon = Icons.Copy)
-                        LinkAction({ ctx.shareText(text) }, text = stringResource(R.string.share), icon = Icons.Share)
-                    }
-                }
-            }
-        }
-        if (!l.mine) {
-            val date = remember(l.at) { SimpleDateFormat("MM-dd", Locale.US).format(Date(l.at)) }
-            val time = remember(l.at) { SimpleDateFormat("HH:mm", Locale.US).format(Date(l.at)) }
-            Postmark(date, time, l.source ?: "dropit", l.seqs.firstOrNull() ?: 0, Modifier.padding(start = 8.dp))
-        }
-    }
-    // While picking, a tap anywhere on the letter picks it (nothing inside it opens or copies by accident)
-    if (selecting) Box(Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Checkbox, onClickLabel = null, onClick = onPick).semantics { selected = picked == true })
-    }
-}
-
-@Composable
-private fun LetterFiles(letter: Letter, upgrade: ((String) -> Unit)? = null) {
-    val files = letter.files
-    if (files.isEmpty()) return
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val c = ink
-    val now = remember(letter) { System.currentTimeMillis() }
-    var saving by remember { mutableStateOf(setOf<Long>()) }     // each file saves on its own: several at once, each its own spinner
-    var note by remember { mutableStateOf<Int?>(null) }
-    val pictures = files.filter { it.thumb != null }
-    if (pictures.isNotEmpty()) {
-        Row(Modifier.padding(top = 6.dp).widthIn(max = if (pictures.size == 1) 120.dp else 200.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (f in pictures.take(3)) {
-                val bitmap = remember(f.thumb) { runCatching { BitmapFactory.decodeFile(f.thumb)?.asImageBitmap() }.getOrNull() }
-                val name = f.name
-                Box(Modifier.weight(1f).aspectRatio(if (pictures.size == 1) 4f / 3f else 1f).clip(RoundedCornerShape(2.dp)).background(c.line).semantics { contentDescription = name }) {
-                    if (bitmap != null) Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                }
-            }
-            // Keeps three columns when there are fewer pictures than that
-            if (pictures.size == 2) Spacer(Modifier.weight(1f))
-        }
-        if (pictures.size > 3) Txt("+${pictures.size - 3}", mono(11.5.sp), c.dim, Modifier.padding(top = 3.dp))
-    }
-    for (f in files) {
-        val state = f.state(now)
-        Column(Modifier.padding(top = 5.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Glyph(Icons.File, c.dim, size = 16.dp)
-                Txt(f.name, sans(13.5.sp), if (state == FileState.EXPIRED) c.dim else c.ink, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
-                Txt(fileSize(f.size), mono(11.5.sp), c.dim)
-            }
-            when (state) {
-                // On the phone: open it, share it, whatever the service has done with its copy
-                FileState.SAVED -> Row(Modifier.offset(x = (-6).dp)) {
-                    LinkAction({
-                        if (ctx.app.downloader.stillThere(f.saved!!)) ctx.openSaved(f) else { ctx.app.letters.update(letter.id, f.seq) { it.copy(saved = null) }; note = R.string.file_gone }
-                    }, text = stringResource(R.string.open), icon = Icons.Open)
-                    LinkAction({
-                        if (ctx.app.downloader.stillThere(f.saved!!)) ctx.shareSaved(f) else { ctx.app.letters.update(letter.id, f.seq) { it.copy(saved = null) }; note = R.string.file_gone }
-                    }, text = stringResource(R.string.share), icon = Icons.Share)
-                    if (f.mime.orEmpty().startsWith("image/")) {
-                        LinkAction({ if (ctx.copyImage(f)) note = R.string.file_image_copied else note = R.string.file_gone }, text = stringResource(R.string.file_copy_image), icon = Icons.Copy)
-                    }
-                }
-                // Gone from the service: dropit delivers, it does not store
-                FileState.EXPIRED -> {
-                    Txt(stringResource(R.string.file_expired), sans(12.sp, lineHeight = 17.sp), c.dim, Modifier.padding(top = 2.dp))
-                    // A free account lost this to the one-day keep; Paid keeps longer, for the next one
-                    if (upgrade != null) LinkAction({ upgrade("kept") }, text = upgradeWord("kept"), color = c.navy, modifier = Modifier.offset(x = (-6).dp))
-                }
-                FileState.AVAILABLE -> {
-                    Row(Modifier.offset(x = (-6).dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (f.seq in saving) {
-                            Row(Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                xyz.smart_kits.dropit.ui.kit.Spinner(c.dim, 14.dp)
-                                Txt(stringResource(R.string.file_saving), sans(13.sp), c.dim)
-                            }
-                        } else {
-                            LinkAction({
-                                saving = saving + (f.seq ?: return@LinkAction); note = null
-                                scope.launch {
-                                    note = when (ctx.app.downloader.save(letter, f)) {
-                                        is Downloader.Result.Saved -> R.string.file_saved
-                                        Downloader.Result.Expired -> R.string.file_expired
-                                        Downloader.Result.LimitToday -> R.string.file_limit
-                                        Downloader.Result.Offline -> R.string.file_offline
-                                        Downloader.Result.Unsupported -> R.string.file_unsupported
-                                        Downloader.Result.Failed -> R.string.file_failed
-                                    }
-                                    saving = saving - (f.seq ?: 0L)
-                                }
-                            }, text = stringResource(R.string.file_save), icon = Icons.Down)
-                        }
-                    }
-                    f.expires?.let { Txt(stringResource(R.string.file_until, untilText(it, now)), sans(11.5.sp, lineHeight = 16.sp), c.dim) }
-                }
-            }
-        }
-    }
-    note?.let { Txt(stringResource(it), sans(12.sp, lineHeight = 17.sp), if (it == R.string.file_saved || it == R.string.file_image_copied) c.navy else c.dim, Modifier.padding(top = 4.dp)) }
-    // The two things Paid fixes, said right where they are met: today's downloads used up, a file that has expired
-    val why = when (note) { R.string.file_limit -> "downloads"; R.string.file_expired -> "kept"; else -> null }
-    if (why != null && upgrade != null) LinkAction({ upgrade(why) }, text = upgradeWord(why), color = c.navy, modifier = Modifier.offset(x = (-6).dp))
-}
-
-/** When the service lets go of a file, in words a person plans by: "14:20" if that is today, else the day too */
-private fun untilText(at: Long, now: Long): String {
-    val dayOf = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
-    val today = dayOf.format(Date(at)) == dayOf.format(Date(now))
-    return SimpleDateFormat(if (today) "HH:mm" else "MM-dd HH:mm", Locale.getDefault()).format(Date(at))
-}
-
 private fun Context.fileUri(f: LetterFile): Uri? = f.saved?.let(Uri::parse)
 
-internal fun Context.openSaved(f: LetterFile) {
-    val uri = fileUri(f) ?: return
-    runCatching {
+/** True when something took it */
+internal fun Context.openSaved(f: LetterFile): Boolean {
+    val uri = fileUri(f) ?: return false
+    return runCatching {
         startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, f.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
+    }.isSuccess
 }
 
-internal fun Context.shareSaved(f: LetterFile) {
-    val uri = fileUri(f) ?: return
-    val send = Intent(Intent.ACTION_SEND).setType(f.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    runCatching { startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+/**
+ * Saved files to another app: one as it is, several as a set (with their words alongside, when the drop had any).
+ * The type is the files' own when they agree, their kind (all pictures) when only the kind does, else anything.
+ */
+internal fun Context.shareFiles(files: List<LetterFile>, text: String? = null): Boolean {
+    val uris = files.mapNotNull(::fileUri)
+    if (uris.isEmpty()) return false
+    val mimes = files.map { it.mime ?: "*/*" }.distinct()
+    val type = when {
+        mimes.size == 1 -> mimes[0]
+        mimes.map { it.substringBefore('/') }.distinct().size == 1 -> mimes[0].substringBefore('/') + "/*"
+        else -> "*/*"
+    }
+    val send = (if (uris.size == 1) Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+    else Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris)))
+        .setType(type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    if (text != null) send.putExtra(Intent.EXTRA_TEXT, text)
+    return runCatching { startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
 }
 
 /** The picture itself on the clipboard, to paste into another app */
@@ -731,30 +770,37 @@ internal fun sensitiveClip(text: String): ClipData = ClipData.newPlainText("drop
 }
 
 /**
- * The plan at the top of the home screen: a pill in the brand blue when it leads to an upgrade, with a small arrow that keeps
- * rising (it is the one thing on this screen that moves, so the way to upgrade is seen without a banner or a dot); a quiet pill
- * when it only says what the account is
+ * The way to upgrade at the top of the home screen: a pill in the brand blue that says what the first step costs, with a small arrow, and
+ * opens the plans. It is still. Only while something is close ([moving]: the trial's card is up, the day's items are nearly used, a limit
+ * was just met) the arrow rises a few times and stops; with the system's animations turned off it never moves. The pill looks 34 dp high
+ * but its touch area is 48.
  */
 @Composable
-private fun PlanChip(text: String, accent: Boolean, moving: Boolean = false, loading: Boolean = false, action: String? = null, onClick: () -> Unit) {
+private fun PlanChip(text: String, moving: Boolean, action: String?, onClick: () -> Unit) {
     val c = ink
     val shape = RoundedCornerShape(17.dp)
-    Row(
-        Modifier.clip(shape).border(1.5.dp, if (accent) c.navy else c.line, shape)
-            .clickable(enabled = !loading, role = Role.Button, onClickLabel = action, onClick = onClick)
-            .defaultMinSize(minHeight = 34.dp).padding(start = 13.dp, end = if (moving) 9.dp else 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    val still = reducedMotion()
+    val rise = remember { Animatable(0f) }
+    LaunchedEffect(moving, still) {
+        if (moving && !still) {
+            repeat(3) {
+                rise.animateTo(-2.5f, tween(325, easing = FastOutSlowInEasing))
+                rise.animateTo(2f, tween(325, easing = FastOutSlowInEasing))
+            }
+        }
+        rise.animateTo(0f, tween(180))
+    }
+    Box(
+        Modifier.defaultMinSize(minHeight = 48.dp).clip(RoundedCornerShape(24.dp)).clickable(role = Role.Button, onClickLabel = action, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Txt(text, sans(13.sp, FontWeight.SemiBold), if (accent) c.navy else c.dim)
-        if (loading) {
-            xyz.smart_kits.dropit.ui.kit.Spinner(c.navy, 14.dp)
-        } else if (moving) {
-            val rise by rememberInfiniteTransition(label = "upgrade").animateFloat(
-                initialValue = 2f, targetValue = -2.5f,
-                animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "rise",
-            )
-            Glyph(Icons.Up, c.navy, Modifier.offset(y = rise.dp), size = 16.dp)
+        Row(
+            Modifier.clip(shape).border(1.5.dp, c.navy, shape).defaultMinSize(minHeight = 34.dp).padding(start = 13.dp, end = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Txt(text, sans(13.sp, FontWeight.SemiBold), c.navy, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Glyph(Icons.Up, c.navy, Modifier.offset(y = rise.value.dp), size = 16.dp)
         }
     }
 }

@@ -12,6 +12,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!-- Receiving when system push does not get through: a connection kept open by a foreground service (type: special use, as it is not
+         a data transfer and has no time limit), put back after the phone starts or dropit is updated; the network permission is to wait for a network
+         instead of asking without one -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- The floating button (an experiment, off until the person turns it on, only in the build from the website: the play build removes this) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Whether Google Play services are on this phone: tells "no system push here" from "no network just now" (Android 11+ hides other apps unless named) -->
     <queries>
         <package android:name="com.google.android.gms" />
@@ -92,6 +102,19 @@
             <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="false" />
         </service>
 
+        <!-- Pull down → "Get latest": the newest text or link from another device goes on the clipboard -->
+        <service
+            android:name=".entry.ReceiveLatestTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_latest"
+            android:label="@string/tile_latest"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="false" />
+        </service>
+
         <receiver android:name=".work.SendActions" android:exported="false" />
         <receiver android:name=".receive.ReceiveActions" android:exported="false" />
 
@@ -101,6 +124,25 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Keeps the connection that says "something new arrived" when push does not get through -->
+        <service
+            android:name=".receive.ReceiveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="keeps a connection open to receive items sent from your other devices" />
+        </service>
+        <receiver android:name=".receive.BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The floating button's window (see Overlay) -->
+        <service android:name=".entry.OverlayBall" android:exported="false" />
 
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

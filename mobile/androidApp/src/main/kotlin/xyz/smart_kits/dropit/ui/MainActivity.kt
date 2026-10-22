@@ -13,17 +13,20 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.shared.UpgradeFrom
 import xyz.smart_kits.dropit.ui.theme.DropitTheme
 
 /** Where the app is. Home is underneath everything; the rest stack on it and go back to it. */
 sealed interface Screen {
     data object Settings : Screen
-    data object Account : Screen
-    data object About : Screen
+    /** Who a send from this phone goes to when nothing is chosen */
+    data object DefaultTargets : Screen
+    /** Bring back what this phone already had: everything, the newest 50, the last three days */
+    data object Repull : Screen
     data object Devices : Screen
     data object AddDevice : Screen
-    /** `why`: what limit was just hit, when that is what brought the person here */
-    data class Plans(val why: String? = null) : Screen
+    /** `why`: what limit was just hit, when that is what brought the person here; `from`: where in the app they came from (counted with the checkout, see UpgradeFrom) */
+    data class Plans(val why: String? = null, val from: String = UpgradeFrom.PLANS) : Screen
     /** The first-run steps; `gesturesOnly` shows just the quick-settings and gesture ones again */
     data class Onboarding(val gesturesOnly: Boolean = false) : Screen
     data object Scan : Screen
@@ -36,6 +39,8 @@ class MainActivity : ComponentActivity() {
     private var signedIn by mutableStateOf(false)
     private var resumed by mutableStateOf(0)
     private var offer by mutableStateOf<ClipOffer?>(null)
+    /** A limit's notification was tapped: the checkout opens from the home screen (the limit that was met is the text, "" when not said) */
+    private var checkoutWhy by mutableStateOf<String?>(null)
     private val stack = mutableStateListOf<Screen>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,14 +62,14 @@ class MainActivity : ComponentActivity() {
                 when {
                     !signedIn && top == Screen.Scan -> ScanScreen(onCode = { incomingCode = it; scanned = true; back() }, onBack = back)
                     !signedIn -> JoinScreen(incomingCode, resumed, joinNow = scanned, onJoined = ::joined, onScan = { scanned = false; go(Screen.Scan) })
-                    top == null || top == Screen.Scan -> HomeScreen(resumed, offer, onOfferDone = ::offerDone, onSignedOut = ::signedOut, go = go)
+                    top == null || top == Screen.Scan -> HomeScreen(resumed, offer, onOfferDone = ::offerDone, onSignedOut = ::signedOut, go = go, checkoutWhy = checkoutWhy, onCheckoutStarted = { checkoutWhy = null })
                     top is Screen.Onboarding -> OnboardingScreen(resumed, top.gesturesOnly, onDone = { app.store.onboarded = true; back() })
-                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back)
-                    top == Screen.Account -> AccountScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
-                    top == Screen.About -> AboutScreen(onBack = back)
+                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
+                    top == Screen.DefaultTargets -> DefaultTargetsScreen(resumed, go = go, onBack = back)
+                    top == Screen.Repull -> RepullScreen(resumed, onBack = back)
                     top == Screen.Devices -> DevicesScreen(resumed, go = go, onBack = back)
                     top == Screen.AddDevice -> AddDeviceScreen(go = go, onBack = back)
-                    top is Screen.Plans -> PlansScreen(resumed, top.why, onBack = back)
+                    top is Screen.Plans -> PlansScreen(resumed, top.why, top.from, onBack = back)
                 }
                 // A newer build: a dialog on any screen; one that must be installed cannot be closed
                 UpdateDialog(update)
@@ -84,6 +89,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun signedOut() {
+        app.peers.reset()      // what was known about this account's devices goes with it
         signedIn = false
         stack.clear()
     }
@@ -91,7 +97,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (signedIn && !app.account.signedIn) signedOut()
-        else if (signedIn) app.scope.launch { app.receiving.pullNow("open") }   // coming back: what came meanwhile (not more than every 30 s)
+        else if (signedIn) {
+            app.warm()   // the connection to send over is opened while the person looks at the screen (not more than every 5 minutes)
+            app.scope.launch { app.receiving.pullNow("open") }   // coming back: what came meanwhile (not more than every 30 s)
+        }
         resumed++
     }
 
@@ -115,11 +124,18 @@ class MainActivity : ComponentActivity() {
     /** A code handed over by the web page (`?pair=`) or another app; or a notification asking for a screen */
     private fun read(i: Intent?) {
         (i?.getStringExtra("code") ?: i?.data?.getQueryParameter("pair"))?.let { incomingCode = it }
-        if (i?.getStringExtra(SHOW) == SHOW_PLANS && signedIn && stack.lastOrNull() !is Screen.Plans) stack += Screen.Plans()
+        if (i?.getStringExtra(SHOW) == SHOW_PLANS && signedIn && stack.lastOrNull() !is Screen.Plans) stack += Screen.Plans(from = UpgradeFrom.SHARE)
+        // A limit's notification: straight to the checkout for what was met (the home screen does it, and says so if it can't)
+        if (i?.getStringExtra(SHOW) == SHOW_CHECKOUT && signedIn) {
+            stack.clear()
+            checkoutWhy = i.getStringExtra(WHY).orEmpty()
+        }
     }
 
     companion object {
         const val SHOW = "show"
         const val SHOW_PLANS = "plans"
+        const val SHOW_CHECKOUT = "checkout"
+        const val WHY = "why"
     }
 }

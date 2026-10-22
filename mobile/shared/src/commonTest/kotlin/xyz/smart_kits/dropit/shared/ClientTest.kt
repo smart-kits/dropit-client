@@ -26,7 +26,7 @@ class ClientTest {
     private val json = headersOf(HttpHeaders.ContentType, "application/json")
     private fun dropped(): Nothing = throw Exception("connection reset")
 
-    @Test fun `a request that goes quiet is given up after the deadline and a read is tried again, a write is not`() = runTest {
+    @Test fun `a request that goes quiet is given up after the deadline and a read is tried again while a write is not`() = runTest {
         var n = 0
         val engine = MockEngine { _ ->
             n++
@@ -47,7 +47,7 @@ class ClientTest {
         assertEquals(1, m)
     }
 
-    @Test fun `asking for a checkout is tried again when no answer comes, creating an account is not`() = runTest {
+    @Test fun `asking for a checkout is tried again when no answer comes while creating an account is not`() = runTest {
         var n = 0
         val engine = MockEngine { _ ->
             n++
@@ -59,7 +59,7 @@ class ClientTest {
         assertTrue(a.str("checkout_url")!!.contains("_ptxn"))
     }
 
-    @Test fun `a connection that never opened is tried again even for creating an account, a dropped one is not`() = runTest {
+    @Test fun `a connection that never opened is tried again even for creating an account while a dropped one is not`() = runTest {
         var n = 0
         val engine = MockEngine { _ ->
             n++

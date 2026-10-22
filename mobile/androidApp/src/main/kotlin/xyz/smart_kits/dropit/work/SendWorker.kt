@@ -10,8 +10,16 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.App
+import xyz.smart_kits.dropit.shared.Answer
+import xyz.smart_kits.dropit.shared.BatchPlan
+import xyz.smart_kits.dropit.shared.SendFailure
+import xyz.smart_kits.dropit.shared.Targets
+import xyz.smart_kits.dropit.shared.targetsIn
+import xyz.smart_kits.dropit.retentionMs
 import xyz.smart_kits.dropit.shared.ApiError
 import xyz.smart_kits.dropit.shared.BatchTooLarge
 import xyz.smart_kits.dropit.shared.Failure
@@ -26,6 +34,7 @@ import xyz.smart_kits.dropit.shared.Requests
 import xyz.smart_kits.dropit.shared.fileSize
 import xyz.smart_kits.dropit.shared.mb
 import xyz.smart_kits.dropit.shared.planBatch
+import xyz.smart_kits.dropit.shared.sendConcurrently
 import xyz.smart_kits.dropit.shared.seqRange
 import java.io.File
 
@@ -53,6 +62,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             return fail(job.id, applicationContext.getString(R.string.join_again), retry = true, rejoin = true)
         }
         val me = app.account.me()
+        // Big photos are made smaller first (a setting; on unless turned off), once: a retry sends the same file, so it is the same size
+        job = Shrink(outbox).apply(job, app.store.imageMode)
         val plan = try {
             planBatch(job.text, job.files.map { FileInfo(it.name, it.mime, it.size) }, job.title, null, me?.itemBytesLimit, job.groupId)
         } catch (e: BatchTooLarge) {
@@ -77,63 +88,94 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
 
         var deduped = false
+        var sentTo: Targets? = null      // who the service says the first item went to
         var shownAt = 0L
         try {
-            plan.items.forEachIndexed { k, item ->
-                if (k in job.done) return@forEachIndexed
-                setProgress(workDataOf(K to k + 1, N to plan.items.size))
+            // A few at a time, started in order; the first failure stops new ones from starting (the ones on their way finish, so
+            // what the service already took is written down). Each is recorded as it finishes, so a retry sends only what is left
+            val sent = sendConcurrently<Answer>(
+                count = plan.items.size, skip = job.done,
+                onDone = { k, answer ->
+                    deduped = deduped || answer.deduped
+                    if (sentTo == null) sentTo = targetsIn(answer)
+                    job = job.copy(
+                        done = job.done + k, seqs = job.seqs + listOfNotNull(answer.seq),
+                        seqAt = job.seqAt + listOfNotNull(answer.seq?.let { k to it }),
+                    )
+                    runCatching { outbox.save(job) }
+                },
+            ) { k ->
+                val shown = minOf(job.done.size + 1, plan.items.size)
+                setProgress(workDataOf(K to shown, N to plan.items.size))
                 // The system drops a package's notifications past a few a second; a fast batch needs no more
                 val now = SystemClock.elapsedRealtime()
                 if (now - shownAt >= 500) {
                     shownAt = now
-                    runCatching { setForeground(foreground(job.id, k + 1, plan.items.size)) }
+                    runCatching { setForeground(foreground(job.id, shown, plan.items.size)) }
                 }
-                val answer = when (item) {
-                    is Item.Text -> app.client.send(Requests.ingestText(item.kind, item.raw, item.meta, job.createdAt))
+                when (val item = plan.items[k]) {
+                    is Item.Text -> app.client.send(Requests.ingestText(item.kind, item.raw, item.meta, job.createdAt, job.to))
                     is Item.File -> {
-                        val f = File(job.files[item.index].path)
                         val held = job.files[item.index]
+                        val f = File(held.path)
                         app.client.send(
-                            Requests.ingestFile(held.name, held.mime, item.group, item.from),
+                            Requests.ingestFile(held.name, held.mime, item.group, item.from, job.to),
                             FileBody(f.length()) { f.inputStream().toByteReadChannel() },
                         )
                     }
                 }
-                deduped = deduped || answer.deduped
-                job = job.copy(done = job.done + k, seqs = job.seqs + listOfNotNull(answer.seq))
-                outbox.save(job)
             }
+            sent.failure?.let { throw it }
         } catch (e: CancellationException) {
             outbox.drop(job.id)            // cancelled: nothing half-sent stays behind, and the copies go
             notes.cancel(job.id)
+            runCatching { app.letters.remove(setOf(job.id)); app.letters.release() }    // and so does the card of an earlier try
             throw e
         } catch (e: ApiError) {
             if (e.failure == Failure.AUTH_LOST) app.store.forget()
+            // The devices it was addressed to are not on the account any more: the default is everyone again (the person is told), and
+            // what was held stays, so one tap sends it to everyone this time
+            if (e.code == "TARGET_UNAVAILABLE") {
+                app.peers.defaultGone()
+                app.scope.launch { app.peers.refresh() }
+                val reason = applicationContext.getString(R.string.target_gone)
+                recordFailure(job, plan, reason, retry = false, target = true)
+                return fail(job.id, reason, retry = false, target = true)
+            }
             // The service says so itself when a paid plan would have let this through
             val upgrade = e.data["upgrade_url"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
             val why = e.data["why"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            val reason = app.strings.render(e.sentence())
+            recordFailure(job, plan, reason, retry = upgrade == null)
             return fail(
-                job.id, app.strings.render(e.sentence()), retry = upgrade == null, rejoin = e.failure == Failure.AUTH_LOST,
+                job.id, reason, retry = upgrade == null, rejoin = e.failure == Failure.AUTH_LOST,
                 upgrade = upgrade, why = why,
             )
         } catch (e: OfflineError) {
-            return fail(job.id, app.strings.render(e.sentence), retry = true)
+            val reason = app.strings.render(e.sentence)
+            recordFailure(job, plan, reason, retry = true)
+            return fail(job.id, reason, retry = true)
         }
 
-        val range = seqRange(job.seqs)
+        val seqs = job.seqsInOrder
+        val range = seqRange(seqs)
         val extra = buildList {
             if (plan.overCount.isNotEmpty()) add(applicationContext.getString(R.string.over_count, plan.overCount.size))
             addAll(unreadable)
             addAll(tooLarge)
         }
-        val said = applicationContext.getString(if (deduped && job.seqs.size <= 1) R.string.sent_again else R.string.sent, range)
+        val said = applicationContext.getString(if (deduped && seqs.size <= 1) R.string.sent_again else R.string.sent, range)
         notes.sent(job.id, said, extra, quiet = OnScreen.has(job.id) || InApp.has(job.id))
         // It joins the app's list as a letter from this phone, before the held copies go
         runCatching {
             val text = plan.items.filterIsInstance<Item.Text>().firstOrNull()
+            val sentAt = System.currentTimeMillis()
+            // Who it went to: as the service says it (it leaves out devices that were not valid), else as asked
+            val to = sentTo ?: Targets(job.to, job.toNames)
             app.letters.add(
                 Letter(
-                    id = job.id, mine = true, at = System.currentTimeMillis(), seqs = job.seqs,
+                    id = job.id, mine = true, at = sentAt, seqs = seqs,
+                    toIds = to.ids, toNames = to.names, until = keptUntil(app, sentAt),
                     kind = text?.kind, text = text?.raw, title = text?.meta?.title,
                     files = plan.items.filterIsInstance<Item.File>().map { f ->
                         val held = job.files[f.index]
@@ -143,13 +185,49 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             )
         }
         outbox.drop(job.id)
-        return Result.success(workDataOf(SEQS to job.seqs.toLongArray(), DONE to (listOf(said) + extra).joinToString("\n")))
+        return Result.success(workDataOf(SEQS to seqs.toLongArray(), DONE to (listOf(said) + extra).joinToString("\n")))
     }
 
-    private fun fail(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false, upgrade: String? = null, why: String? = null): Result {
-        if (InApp.has(jobId)) outbox.drop(jobId) else notes.failed(jobId, reason, retry, rejoin, upgrade)
-        return Result.failure(workDataOf(ERROR to reason, RETRY to retry, UPGRADE to upgrade, WHY to why, REJOIN to rejoin))
+    private fun fail(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false, upgrade: String? = null, why: String? = null, target: Boolean = false): Result {
+        // A limit that a paid plan lifts was just met: the pill at the top of the home screen may move for a day
+        if (upgrade != null) runCatching { applicationContext.app.moments.markWall(System.currentTimeMillis()) }
+        if (InApp.has(jobId)) outbox.drop(jobId) else notes.failed(jobId, reason, retry, rejoin, upgrade, toAll = target, why = why)
+        return Result.failure(workDataOf(ERROR to reason, RETRY to retry, UPGRADE to upgrade, WHY to (if (target) "target" else why), REJOIN to rejoin))
     }
+
+    /**
+     * A drop that stopped part-way becomes a card in the list of what this phone sent, saying which files did not go and why. What was
+     * held stays for the retry, which sends only what is left; when it is sent the card is replaced by the sent letter (same id).
+     * A drop sent from dropit's own screen is not kept: the screen keeps what was written and says why there.
+     */
+    private fun recordFailure(job: Job, plan: BatchPlan, reason: String, retry: Boolean, target: Boolean = false) {
+        if (InApp.has(job.id)) return
+        runCatching {
+            val app = applicationContext.app
+            val text = plan.items.withIndex().firstOrNull { it.value is Item.Text }
+            val fileItems = plan.items.withIndex().filter { it.value is Item.File }
+            app.letters.add(
+                Letter(
+                    id = job.id, mine = true, at = job.createdAt, seqs = job.seqsInOrder,
+                    toIds = job.to, toNames = job.toNames,
+                    kind = (text?.value as? Item.Text)?.kind, text = (text?.value as? Item.Text)?.raw, title = (text?.value as? Item.Text)?.meta?.title,
+                    files = fileItems.map { (_, item) ->
+                        val held = job.files[(item as Item.File).index]
+                        LetterFile(held.name ?: "?", held.size, held.mime, thumb = app.letters.thumb(File(held.path), "${job.id}-${item.index}", held.mime))
+                    },
+                    failure = SendFailure(
+                        reason = reason,
+                        files = fileItems.mapIndexedNotNull { pos, (k, _) -> pos.takeIf { k !in job.done } },
+                        words = text != null && text.index !in job.done,
+                        retry = retry, target = target,
+                    ),
+                ),
+            )
+        }
+    }
+
+    /** When the service stops keeping what was just sent */
+    private suspend fun keptUntil(app: App, from: Long): Long = from + app.retentionMs()
 
     companion object {
         const val JOB = "job"

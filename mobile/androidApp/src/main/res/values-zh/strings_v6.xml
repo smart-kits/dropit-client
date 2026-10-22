@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 投给谁：面板、默认、列表里怎么说 -->
+    <string name="panel_send_title">投给哪些设备</string>
+    <string name="panel_send_sub">只对这一次有效 · 已按默认勾好</string>
+    <string name="panel_resend_title">再投给哪些设备</string>
+    <string name="panel_resend_sub">选要再收一份的设备 · 算一条新的投递</string>
+    <string name="panel_all">全选</string>
+    <string name="panel_keep_one">至少保留 1 台；想投给全部，请全选</string>
+    <plurals name="panel_send_n">
+        <item quantity="other">投给 %1$d 台设备</item>
+    </plurals>
+    <plurals name="panel_resend_n">
+        <item quantity="other">再投给 %1$d 台设备</item>
+    </plurals>
+    <string name="panel_pick">请选择设备</string>
+    <string name="panel_send_note">点下面的按钮才发出，发完回到默认</string>
+    <string name="panel_resend_note">再投算一条新的投递，占一条今天的额度</string>
+    <string name="panel_default">默认：%1$s</string>
+    <string name="panel_twice">它上线后本来就会收到；再投会收到两条</string>
+    <string name="panel_load_failed">没取到设备列表</string>
+    <string name="panel_none">还没有别的设备可以收</string>
+    <string name="panel_nothing">先写点什么或选个文件，再选设备</string>
+    <string name="panel_choose">选择投给哪些设备</string>
+    <string name="state_ticked">已勾选</string>
+    <string name="state_not_ticked">未勾选</string>
+    <string name="row_received">已收</string>
+    <string name="row_pending">还没收 · 上线后会自动收到</string>
+    <string name="row_not_sent">没投给它</string>
+    <string name="seen_now">刚刚</string>
+    <string name="seen_yesterday">昨天</string>
+    <string name="seen_long">很久没上线</string>
+    <string name="target_all">全部</string>
+    <plurals name="target_count">
+        <item quantity="other">%1$d 台</item>
+    </plurals>
+    <string name="target_sep">、</string>
+    <string name="tag_again">再投</string>
+    <string name="again">再投</string>
+    <string name="action_send_all">这次投给全部</string>
+    <string name="target_gone">选的设备已不在这个账号里，默认已改回投给全部。</string>
+    <string name="resend_gone">选的设备已不在这个账号里，设备列表已刷新。</string>
+    <string name="resend_done">已再投给 %1$s</string>
+    <string name="resend_already">刚刚已经投给 %1$s 了</string>
+    <string name="st_resend_expired">已过期，dropit 不再保留，不能再投</string>
+    <string name="sheet_resend_expired">已过期，不能再投。</string>
+    <string name="retry_gone">重试不了：暂存的内容已经清掉了</string>
+    <string name="fail_nth_photo">第 %1$d 张没传完（%2$s）</string>
+    <string name="fail_nth_file">第 %1$d 个没传完（%2$s）</string>
+    <plurals name="fail_n_left">
+        <item quantity="other">有 %1$d 个没传完（%2$s）</item>
+    </plurals>
+    <string name="auto_copied">已放进剪贴板</string>
+
+    <string name="set_default_to">默认投给</string>
+    <string name="dt_intro">这台手机每次投递，默认发给下面勾上的设备。</string>
+    <string name="dt_saved">已保存</string>
+    <string name="dt_none">还没有别的设备可以收。加一台设备后，就能在这里选。</string>
+    <string name="dt_note_all">勾选即保存，只存在这台手机上。全勾上 = 默认投给全部，新加入的设备会自动加入。</string>
+    <string name="dt_note_part">勾选即保存，只存在这台手机上。你选的是一部分：新加入的设备不会自动加入。</string>
+    <string name="dt_note_reset">默认投给的设备都已被移除，已改回投给全部。</string>
+    <plurals name="dt_note_removed">
+        <item quantity="other">默认投给里有 %1$d 台设备已被移除，已经去掉了。</item>
+    </plurals>
+
+    <!-- 设置：一页五组 -->
+    <string name="set_group_send">投递</string>
+    <string name="plan_ends_on">%1$s 到期</string>
+    <string name="plan_free_sub">%1$d 台设备 · 每天 %2$d 条</string>
+    <string name="plan_row">套餐</string>
+    <string name="plan_see">查看套餐</string>
+    <string name="set_receive_connection">正在用常驻连接</string>
+    <string name="set_receive_connection_wait">没有网络：有网后会自动接收</string>
+    <plurals name="set_receive_connection_retry">
+        <item quantity="other">连接中断，%1$d 秒后重试</item>
+    </plurals>
+    <string name="set_receive_still">现在仍可以打开 dropit，或点下拉里的「取最新」。</string>
+    <string name="set_battery_warn">省电策略可能让后台收不到</string>
+    <string name="set_battery_warn_sub">点此改成「无限制」</string>
+    <string name="set_auto_clip">电脑发来的文字放进剪贴板</string>
+    <string name="set_repull">重新拉取</string>
+    <string name="set_repull_sub">全部 · 最近 50 条 · 最近 3 天</string>
+    <string name="set_tile_latest">下拉磁贴「取最新」</string>
+    <string name="set_tile_send">下拉磁贴「发剪贴板」</string>
+    <string name="set_tile_added">已添加</string>
+    <string name="set_tile_not_added">未添加 · 点一下添加</string>
+    <string name="set_tile_declined">没加上 · 点一下再试</string>
+    <string name="set_tile_add">添加</string>
+    <string name="tile_manual_latest">下拉控制中心 → 编辑 → 把「取最新」拖进去。</string>
+    <string name="set_ball">悬浮球</string>
+    <string name="set_ball_sub">复制后点一下就投 · 仅官网版</string>
+    <string name="set_ball_permission">需要允许显示在其他应用上层 · 点开关去授权</string>
+    <string name="set_backtap">背部轻敲投递</string>
+    <string name="set_backtap_sub">怎么设置</string>
+    <string name="set_photo_quality">图片质量</string>
+    <string name="set_photo_quality_sub">大于 2 MB 的照片才压缩，保留拍摄时间</string>
+    <string name="photo_shrink">压缩</string>
+    <string name="photo_original">原图</string>
+    <string name="set_devices_manage">管理已加入的设备</string>
+    <string name="set_devices_count">%1$d / %2$d</string>
+    <string name="set_version_n">版本 %1$s</string>
+    <string name="update_ready_sub">有新版本</string>
+    <string name="update_latest_sub">已是最新</string>
+    <string name="update_check_hint">点「检查更新」看看有没有新版本</string>
+    <string name="update_check">检查更新</string>
+
+    <!-- 重新拉取 -->
+    <string name="repull_intro">把这台手机以前收到过的内容拉回来。只能拉回服务上还保留着的。</string>
+    <string name="repull_all">全部</string>
+    <string name="repull_all_sub">服务上还保留的所有内容</string>
+    <string name="repull_50">最近 50 条</string>
+    <string name="repull_50_sub">最新的 50 条</string>
+    <string name="repull_3d">最近 3 天</string>
+    <string name="repull_3d_sub">只拉最近三天内收到的</string>
+    <string name="repull_none">没有更多可以拉回的</string>
+    <plurals name="repull_n">
+        <item quantity="other">拉回了 %1$d 项</item>
+    </plurals>
+    <string name="repull_wait">一分钟只能拉一次：%1$d 秒后再试</string>
+    <string name="repull_failed">没拉成，再试一次</string>
+    <string name="repull_note">拉回的内容直接进列表，不弹通知。</string>
+
+    <!-- 设备：加一台 -->
+    <string name="add_share_link">分享链接</string>
+    <string name="add_step1">在另一台设备上打开 dropit</string>
+    <string name="add_step2">输入这 6 位码，或扫上面的二维码</string>
+
+    <!-- 引导页的图和步骤 -->
+    <string name="ob_faster_body">在分享面板里选 dropit，用过几次就会排到前面。</string>
+    <string name="ob_bat_optimized">优化（默认）</string>
+    <string name="ob_bat_unrestricted">无限制</string>
+    <string name="ob_bat_restricted">受限</string>
+    <string name="ob_qs_notifications">通知</string>
+    <string name="ob_qs_saver">省电</string>
+    <string name="ob_app_browser">浏览器</string>
+    <string name="ob_app_messages">信息</string>
+    <string name="ob_app_more">更多</string>
+    <string name="ob_start">开始使用</string>
+
+    <!-- 套餐 -->
+    <string name="plan_head">dropit 付费版</string>
+    <string name="plan_tagline">更大、更久、更多设备</string>
+    <string name="plan_chip_first">首月 %1$s</string>
+    <string name="plan_chip_save">省 %1$d%%</string>
+    <string name="plan_buy_once">买一年 · %1$s</string>
+    <string name="plan_buy_life">买终身 · %1$s</string>
+
+    <!-- 更新 -->
+    <string name="update_page_title">有新版本 %1$s</string>
+    <string name="update_note">下载后自动校验，再弹出安装</string>
+
+    <!-- 加入 -->
+    <string name="join_tagline">发到手机、电脑和其他设备</string>
+    <string name="join_existing">加入已有账号</string>
+
+    <!-- 投递时出现的小胶囊 -->
+    <string name="card_sending">正在投递</string>
+    <string name="card_sending_what">正在投递 %1$s</string>
+    <string name="card_progress">%1$d/%2$d</string>
+    <string name="card_done">完成</string>
+    <plurals name="card_n_photos">
+        <item quantity="other">%1$d 张照片</item>
+    </plurals>
+    <plurals name="card_n_files">
+        <item quantity="other">%1$d 个文件</item>
+    </plurals>
+    <string name="card_nth_photo">第 %1$d 张没传完</string>
+    <string name="card_nth_file">第 %1$d 个没传完</string>
+    <string name="progress_k_of_n">%1$d / %2$d</string>
+</resources>

@@ -36,6 +36,11 @@ val RETRY_MS = listOf(400L, 1200L)
  */
 const val ATTEMPT_MS = 10_000L
 
+private val MONOTONIC_ORIGIN = kotlin.time.TimeSource.Monotonic.markNow()
+
+/** The warm-up gives up after this long (it is never waited for) */
+const val WARM_TIMEOUT_MS = 15_000L
+
 /** One try ran out of time: nothing came back */
 class AttemptTimeout : Exception("no answer in time")
 
@@ -56,7 +61,40 @@ class DropitClient(
     private val attemptMs: Long = ATTEMPT_MS,
     /** One line per try (path, which try, how it ended, how long): for finding out where a slow request spends its time. Never a token or a body */
     private val trace: (String) -> Unit = {},
+    /** Milliseconds on a clock that only goes forward: what the warm-up's spacing is measured on */
+    private val clock: () -> Long = { MONOTONIC_ORIGIN.elapsedNow().inWholeMilliseconds },
 ) {
+    private var lastWarmAt: Long? = null
+
+    /**
+     * Open a connection to the service before one is needed (the person is still choosing or writing), by asking for a tiny file
+     * that is just there for this: no key, nothing sent, nothing kept. Quiet: never more than once in [WARM_GAP_MS], only the
+     * first address, no second try, no other address, and any failure is swallowed — this is not a send. True when it connected.
+     */
+    suspend fun warm(): Boolean {
+        val now = clock()
+        if (!warmDue(lastWarmAt, now)) return false
+        lastWarmAt = now
+        val spec = Requests.warm()
+        val url = endpointList(store.endpoints(), defaults).first().trimEnd('/') + spec.target
+        val began = kotlin.time.TimeSource.Monotonic.markNow()
+        return try {
+            val status = withDeadline(true, WARM_TIMEOUT_MS) {
+                val res = http.request(url) { method = HttpMethod.Get }
+                res.bodyAsText()
+                res.status.value
+            }
+            trace("warm: $status in ${began.elapsedNow().inWholeMilliseconds} ms")
+            status in 200..299
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            lastWarmAt = null     // nothing was warmed: the next chance may try
+            trace("warm: ${e::class.simpleName}")
+            false
+        }
+    }
+
     suspend fun send(spec: RequestSpec, file: FileBody? = null): Answer {
         val endpoints = endpointList(store.endpoints(), defaults)
         val token = if (spec.auth) store.token() else null
@@ -82,6 +120,7 @@ class DropitClient(
         while (true) {
             try {
                 val began = kotlin.time.TimeSource.Monotonic.markNow()
+                var serverTime: Long? = null
                 val answer = withDeadline(file == null, attemptMs * (tries + 1)) { val res = http.request(url) {
                     method = HttpMethod.parse(spec.method)
                     if (token != null) header("authorization", "Bearer $token")
@@ -97,9 +136,12 @@ class DropitClient(
                         }
                     }
                 }
+                    serverTime = serverMs(res.headers["server-timing"])
                     res.status.value to res.bodyAsText()
                 }
-                trace("${spec.method} ${spec.path.substringBefore('?')} try ${tries + 1}: ${answer.first} in ${began.elapsedNow().inWholeMilliseconds} ms")
+                // The service's own part of the time, when it says it: what is left is the network and making the connection
+                val inService = serverTime?.let { " (service $it ms)" }.orEmpty()
+                trace("${spec.method} ${spec.path.substringBefore('?')} try ${tries + 1}: ${answer.first} in ${began.elapsedNow().inWholeMilliseconds} ms$inService")
                 return answer
             } catch (e: CancellationException) {
                 throw e

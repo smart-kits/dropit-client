@@ -95,7 +95,7 @@ data class Catalog(
 }
 
 object Plans {
-    val defaultFree = PlanLimits(days = 1, spaceMB = 30, fileMB = 10, devices = 3, perDay = 30, downloads = 300, queue = 100, realtimeTrialDays = 10)
+    val defaultFree = PlanLimits(days = 1, spaceMB = 30, fileMB = 10, devices = 3, perDay = 20, downloads = 300, queue = 100, realtimeTrialDays = 14)
     val defaultPaid = PlanLimits(days = 10, spaceMB = 500, fileMB = 100, devices = 10, perDay = 300, downloads = 3000, queue = 1000, realtimeTrialDays = null)
 
     /** Within an hour of the last answer: no request. After that it is asked for again, and the kept one is drawn until the new one comes */

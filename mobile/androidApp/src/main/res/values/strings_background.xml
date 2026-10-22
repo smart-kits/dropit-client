@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Receiving in the background, the "Get latest" tile, the Download button on a notification, the floating button -->
+    <string name="bg_channel">Receiving in the background</string>
+    <string name="bg_channel_desc">A quiet line that shows while dropit keeps a connection open to hear about new items</string>
+    <string name="bg_receiving">dropit is receiving</string>
+
+    <string name="tile_latest">Get latest</string>
+    <string name="tile_latest_copied">Copied</string>
+    <string name="tile_latest_files">Open to save</string>
+    <string name="tile_latest_none">Nothing yet</string>
+    <string name="tile_latest_offline">No network</string>
+    <string name="tile_latest_failed">Couldn’t get it</string>
+
+    <string name="dl_download">Download</string>
+    <string name="dl_saving">Saving %1$s…</string>
+    <string name="dl_saved">Saved %1$s</string>
+    <string name="dl_expired">No longer available</string>
+    <string name="dl_limit">Today’s downloads are used up</string>
+    <string name="dl_offline">No network</string>
+    <string name="dl_failed">Couldn’t save it</string>
+    <string name="dl_unsupported">Saving needs Android 10 or newer</string>
+
+    <string name="ball_label">Send clipboard</string>
+</resources>

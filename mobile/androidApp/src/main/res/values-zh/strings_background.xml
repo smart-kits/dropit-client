@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bg_channel">后台接收</string>
+    <string name="bg_channel_desc">dropit 保持连接、等新内容时，通知栏里的一行安静提示</string>
+    <string name="bg_receiving">dropit 正在接收</string>
+
+    <string name="tile_latest">取最新</string>
+    <string name="tile_latest_copied">已复制</string>
+    <string name="tile_latest_files">点开保存</string>
+    <string name="tile_latest_none">还没有内容</string>
+    <string name="tile_latest_offline">没有网络</string>
+    <string name="tile_latest_failed">没取到</string>
+
+    <string name="dl_download">下载</string>
+    <string name="dl_saving">正在保存 %1$s…</string>
+    <string name="dl_saved">已保存 %1$s</string>
+    <string name="dl_expired">已经过期，没有了</string>
+    <string name="dl_limit">今天的下载次数用完了</string>
+    <string name="dl_offline">没有网络</string>
+    <string name="dl_failed">没能保存</string>
+    <string name="dl_unsupported">保存需要 Android 10 或更新</string>
+
+    <string name="ball_label">发剪贴板</string>
+</resources>

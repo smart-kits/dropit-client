@@ -5,12 +5,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.work.Inbound
 
 /** Share → dropit · select text → dropit · open with → dropit */
 class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        app.warm()      // the connection opens while what was shared is copied in
         val i = intent
         val streams = buildList<Uri> {
             when (i.action) {

@@ -1,6 +1,7 @@
 package xyz.smart_kits.dropit.shared
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -26,6 +27,26 @@ class ApiTest {
         assertTrue(spec.retriable)
     }
 
+    @Test fun `a checkout says where it was started from and which limit brought the person only when there is something to say`() {
+        val plain = Requests.checkout("year")
+        assertEquals(setOf("plan"), plain.body!!.keys)
+        val wall = Requests.checkout("year", UpgradeFrom.WALL, "per_day").body!!
+        assertEquals("year", wall.getValue("plan").jsonPrimitive.content)
+        assertEquals("wall", wall.getValue("from").jsonPrimitive.content)
+        assertEquals("per_day", wall.getValue("why").jsonPrimitive.content)
+        assertEquals(setOf("plan", "from"), Requests.checkout("year_once", UpgradeFrom.NOTICE, null).body!!.keys)
+        assertEquals(setOf("plan"), Requests.checkout("year", "", " ").body!!.keys)
+        assertEquals("POST", Requests.billing().method)
+        assertEquals("/v1/billing", Requests.billing().path)
+    }
+
+    @Test fun `only the limits a plan can lift are passed on as the reason`() {
+        assertEquals("kept", UpgradeFrom.why("kept"))
+        assertNull(UpgradeFrom.why("target"))     // not a limit of a plan
+        assertNull(UpgradeFrom.why(null))
+        assertNull(UpgradeFrom.why("hour"))       // the hourly pace is never sold
+    }
+
     @Test fun `a file without a name or type`() {
         val spec = Requests.ingestFile(null, null, null, null)
         assertEquals("/v1/ingest/file?source=android", spec.target)
@@ -39,6 +60,38 @@ class ApiTest {
         assertEquals("android", body.getValue("source").jsonPrimitive.content)
         assertEquals("1", body.getValue("meta").jsonObject.getValue("group").jsonObject.getValue("i").jsonPrimitive.content)
         assertFalse("title" in body.getValue("meta").jsonObject)
+    }
+
+    @Test fun `U-T25 text to some devices names them to everyone says nothing`() {
+        val some = Requests.ingestText("text", "hi", null, 5, to = listOf("d_a", "d_b")).body!!
+        assertEquals(listOf("d_a", "d_b"), some.getValue("to").jsonArray.map { it.jsonPrimitive.content })
+        assertFalse("to" in Requests.ingestText("text", "hi", null, 5).body!!)
+        assertFalse("to" in Requests.ingestText("text", "hi", null, 5, to = emptyList()).body!!)
+    }
+
+    @Test fun `U-T26 a file to some devices names them in the address`() {
+        val spec = Requests.ingestFile("a.png", "image/png", null, null, to = listOf("d_a", "d_b"))
+        assertEquals("/v1/ingest/file?source=android&name=a.png&to=d_a%2Cd_b", spec.target)
+        assertEquals("/v1/ingest/file?source=android&name=a.png", Requests.ingestFile("a.png", "image/png", null, null).target)
+        assertEquals("/v1/ingest/file?source=android&name=a.png", Requests.ingestFile("a.png", "image/png", null, null, to = emptyList()).target)
+    }
+
+    @Test fun `U-T27 sending again names the item and the devices and is safe to repeat`() {
+        val spec = Requests.resend(12, listOf("d_a"))
+        assertEquals("POST", spec.method)
+        assertEquals("/v1/items/12/resend", spec.path)
+        assertEquals(listOf("d_a"), spec.body!!.getValue("to").jsonArray.map { it.jsonPrimitive.content })
+        assertTrue(spec.retriable)
+        // everyone is said as "all": the service needs `to` here
+        assertEquals("all", Requests.resend(12, null).body!!.getValue("to").jsonPrimitive.content)
+    }
+
+    @Test fun `U-T28 the new answers read as errors in words`() {
+        val gone = errorMessage("TARGET_UNAVAILABLE", JsonObject(emptyMap()), 400)
+        assertEquals("errors.TARGET_UNAVAILABLE", gone.key)
+        assertEquals("errors.ITEM_EXPIRED", errorMessage("ITEM_EXPIRED", JsonObject(emptyMap()), 410).key)
+        assertTrue(Strings.EN.render(gone).isNotBlank() && Strings.ZH.render(gone) != gone.key)
+        assertEquals(Failure.OTHER, ApiError(400, "TARGET_UNAVAILABLE", JsonObject(emptyMap())).failure)
     }
 
     @Test fun `no empty meta is sent`() {

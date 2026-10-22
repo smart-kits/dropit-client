@@ -23,6 +23,21 @@ class PlansTest {
 
     private fun catalog(text: String = sample) = Catalog.from(Json.parseToJsonElement(text).jsonObject)
 
+    // The sample's own numbers (40 a day, 10 trial days, 2 days kept) are deliberately not the starting ones: what the service says wins
+    @Test
+    fun theStartingLimitsAreTheFreeNumbersOfNow() {
+        assertEquals(20, Plans.defaultFree.perDay)
+        assertEquals(14, Plans.defaultFree.realtimeTrialDays)
+        assertEquals(1, Plans.defaultFree.days)
+        assertEquals(300, Plans.defaultPaid.perDay)
+        assertEquals(10, Plans.defaultPaid.days)
+        assertNull(Plans.defaultPaid.realtimeTrialDays)
+        // an answer that does not say them leaves the starting ones in place
+        val c = assertNotNull(catalog("""{"payments":{"open":true},"plans":[],"limits":{"free":{"days":1}}}"""))
+        assertEquals(20, c.free.perDay)
+        assertEquals(14, c.free.realtimeTrialDays)
+    }
+
     @Test
     fun theThreePlansAndTheirPricesAreReadFromTheAnswer() {
         val c = assertNotNull(catalog())

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Who a send goes to: the panel, the default, how it is said in a list -->
+    <string name="panel_send_title">Send to</string>
+    <string name="panel_send_sub">This time only · your default is ticked</string>
+    <string name="panel_resend_title">Send again to</string>
+    <string name="panel_resend_sub">Pick the devices that should get another copy · counts as a new send</string>
+    <string name="panel_all">All</string>
+    <string name="panel_keep_one">Keep at least 1 device; to send to all, tap All</string>
+    <plurals name="panel_send_n">
+        <item quantity="one">Send to %1$d device</item>
+        <item quantity="other">Send to %1$d devices</item>
+    </plurals>
+    <plurals name="panel_resend_n">
+        <item quantity="one">Send again to %1$d device</item>
+        <item quantity="other">Send again to %1$d devices</item>
+    </plurals>
+    <string name="panel_pick">Pick a device</string>
+    <string name="panel_send_note">Sent when you tap below, then back to default</string>
+    <string name="panel_resend_note">Sending again counts as a new send, and uses one of today\'s</string>
+    <string name="panel_default">Default: %1$s</string>
+    <string name="panel_twice">It gets the original when it is next on; sending again gives it two</string>
+    <string name="panel_load_failed">Couldn\'t get the list of devices</string>
+    <string name="panel_none">No other device can receive yet</string>
+    <string name="panel_nothing">Write something or add a file first</string>
+    <string name="panel_choose">Choose devices</string>
+    <string name="state_ticked">Ticked</string>
+    <string name="state_not_ticked">Not ticked</string>
+    <string name="row_received">Received</string>
+    <string name="row_pending">Not yet · it gets it when it is next on</string>
+    <string name="row_not_sent">Not sent to it</string>
+    <string name="seen_now">just now</string>
+    <string name="seen_yesterday">yesterday</string>
+    <string name="seen_long">long offline</string>
+    <string name="target_all">All</string>
+    <plurals name="target_count">
+        <item quantity="one">%1$d device</item>
+        <item quantity="other">%1$d devices</item>
+    </plurals>
+    <string name="target_sep">, </string>
+    <string name="tag_again">Again</string>
+    <string name="again">Send again</string>
+    <string name="action_send_all">Send to all this time</string>
+    <string name="target_gone">The devices you picked are no longer on the account. Your default is everyone again.</string>
+    <string name="resend_gone">Those devices are no longer on the account. The list was refreshed.</string>
+    <string name="resend_done">Sent again to %1$s</string>
+    <string name="resend_already">Just sent to %1$s a moment ago</string>
+    <string name="st_resend_expired">Expired: dropit no longer keeps it, so it can\'t be sent again</string>
+    <string name="sheet_resend_expired">Expired: it can\'t be sent again.</string>
+    <string name="retry_gone">Can\'t try again: the held copy is gone</string>
+    <string name="fail_nth_photo">Photo %1$d didn\'t finish (%2$s)</string>
+    <string name="fail_nth_file">File %1$d didn\'t finish (%2$s)</string>
+    <plurals name="fail_n_left">
+        <item quantity="one">%1$d didn\'t finish (%2$s)</item>
+        <item quantity="other">%1$d didn\'t finish (%2$s)</item>
+    </plurals>
+    <string name="auto_copied">Put on the clipboard</string>
+
+    <string name="set_default_to">Send to by default</string>
+    <string name="dt_intro">Each time this phone sends, it goes to the devices ticked below.</string>
+    <string name="dt_saved">Saved</string>
+    <string name="dt_none">No other device can receive yet. Add one and you can choose here.</string>
+    <string name="dt_note_all">Ticks are saved at once, on this phone only. All ticked = send to everyone by default, and devices that join later are included.</string>
+    <string name="dt_note_part">Ticks are saved at once, on this phone only. You picked some: devices that join later are not included by themselves.</string>
+    <string name="dt_note_reset">All the devices in your default were removed, so it is everyone again.</string>
+    <plurals name="dt_note_removed">
+        <item quantity="one">%1$d device in your default was removed and has been dropped from it.</item>
+        <item quantity="other">%1$d devices in your default were removed and have been dropped from it.</item>
+    </plurals>
+
+    <!-- Settings, in one page of five groups -->
+    <string name="set_group_send">Send</string>
+    <string name="plan_ends_on">Paid until %1$s</string>
+    <string name="plan_free_sub">%1$d devices · %2$d a day</string>
+    <string name="plan_row">Plans</string>
+    <string name="plan_see">See plans</string>
+    <string name="set_receive_connection">Using a persistent connection</string>
+    <string name="set_receive_connection_wait">No network: it receives again once there is one</string>
+    <plurals name="set_receive_connection_retry">
+        <item quantity="one">Connection lost: trying again in %1$d second</item>
+        <item quantity="other">Connection lost: trying again in %1$d seconds</item>
+    </plurals>
+    <string name="set_receive_still">You can still open dropit, or use the Get latest tile.</string>
+    <string name="set_battery_warn">Battery saver may block receiving</string>
+    <string name="set_battery_warn_sub">Tap to set it to “Unrestricted”</string>
+    <string name="set_auto_clip">Put text from your computer on the clipboard</string>
+    <string name="set_repull">Pull again</string>
+    <string name="set_repull_sub">All · last 50 · last 3 days</string>
+    <string name="set_tile_latest">Quick Settings tile “Get latest”</string>
+    <string name="set_tile_send">Quick Settings tile “Send clipboard”</string>
+    <string name="set_tile_added">Added</string>
+    <string name="set_tile_not_added">Not added · tap to add</string>
+    <string name="set_tile_declined">Not added · tap to try again</string>
+    <string name="set_tile_add">Add</string>
+    <string name="tile_manual_latest">Pull down quick settings → edit → drag “Get latest” in.</string>
+    <string name="set_ball">Floating button</string>
+    <string name="set_ball_sub">Tap once after copying · website build only</string>
+    <string name="set_ball_permission">Needs permission to show over other apps · tap the switch</string>
+    <string name="set_backtap">Back-tap to send</string>
+    <string name="set_backtap_sub">How to set it up</string>
+    <string name="set_photo_quality">Photo quality</string>
+    <string name="set_photo_quality_sub">Only photos over 2 MB are shrunk; capture time is kept</string>
+    <string name="photo_shrink">Shrink</string>
+    <string name="photo_original">Original</string>
+    <string name="set_devices_manage">Manage joined devices</string>
+    <string name="set_devices_count">%1$d / %2$d</string>
+    <string name="set_version_n">Version %1$s</string>
+    <string name="update_ready_sub">An update is ready</string>
+    <string name="update_latest_sub">Up to date</string>
+    <string name="update_check_hint">Tap Check to look for updates</string>
+    <string name="update_check">Check</string>
+
+    <!-- Pull again -->
+    <string name="repull_intro">Bring back what this phone already had. Only what the service still keeps can come back.</string>
+    <string name="repull_all">All</string>
+    <string name="repull_all_sub">Everything the service still keeps</string>
+    <string name="repull_50">Last 50</string>
+    <string name="repull_50_sub">The newest 50 items</string>
+    <string name="repull_3d">Last 3 days</string>
+    <string name="repull_3d_sub">Only what arrived in the last three days</string>
+    <string name="repull_none">Nothing more to bring back</string>
+    <plurals name="repull_n">
+        <item quantity="one">%1$d item came back</item>
+        <item quantity="other">%1$d items came back</item>
+    </plurals>
+    <string name="repull_wait">One at a time: try again in %1$d seconds</string>
+    <string name="repull_failed">Couldn\'t do it — try again</string>
+    <string name="repull_note">They go into the list without a notification.</string>
+
+    <!-- Devices: add one -->
+    <string name="add_share_link">Share link</string>
+    <string name="add_step1">Open dropit on the other device</string>
+    <string name="add_step2">Type these 6 characters, or scan the QR code above</string>
+
+    <!-- First-run pictures and steps -->
+    <string name="ob_faster_body">Pick dropit in the share sheet; after a few uses it moves up to the front.</string>
+    <string name="ob_bat_optimized">Optimized (default)</string>
+    <string name="ob_bat_unrestricted">Unrestricted</string>
+    <string name="ob_bat_restricted">Restricted</string>
+    <string name="ob_qs_notifications">Notifications</string>
+    <string name="ob_qs_saver">Battery saver</string>
+    <string name="ob_app_browser">Browser</string>
+    <string name="ob_app_messages">Messages</string>
+    <string name="ob_app_more">More</string>
+    <string name="ob_start">Get started</string>
+
+    <!-- Plans -->
+    <string name="plan_head">dropit Paid</string>
+    <string name="plan_tagline">Bigger, longer, more devices</string>
+    <string name="plan_chip_first">First month %1$s</string>
+    <string name="plan_chip_save">Save %1$d%%</string>
+    <string name="plan_buy_once">Buy a year · %1$s</string>
+    <string name="plan_buy_life">Buy lifetime · %1$s</string>
+
+    <!-- Update -->
+    <string name="update_page_title">New version %1$s</string>
+    <string name="update_note">Checked automatically after downloading, then the installer opens</string>
+
+    <!-- Join -->
+    <string name="join_tagline">Send to your phone, computer and other devices</string>
+    <string name="join_existing">Join an existing account</string>
+
+    <!-- The pill that shows while something is being sent -->
+    <string name="card_sending">Sending</string>
+    <string name="card_sending_what">Sending %1$s</string>
+    <string name="card_progress">%1$d/%2$d</string>
+    <string name="card_done">Done</string>
+    <plurals name="card_n_photos">
+        <item quantity="one">%1$d photo</item>
+        <item quantity="other">%1$d photos</item>
+    </plurals>
+    <plurals name="card_n_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="card_nth_photo">Photo %1$d didn\'t finish</string>
+    <string name="card_nth_file">File %1$d didn\'t finish</string>
+    <string name="progress_k_of_n">%1$d / %2$d</string>
+</resources>

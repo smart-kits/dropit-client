@@ -42,12 +42,16 @@ android {
             buildConfigField("boolean", "SELF_UPDATE", "true")
             // On: what is on sale and for how much comes from the service (GET /v1/plans), and when it says payments are closed the screens say so
             buildConfigField("boolean", "PAYMENTS", "true")
+            // The floating button (an experiment, off until switched on): only this build has it
+            buildConfigField("boolean", "OVERLAY", "true")
         }
         // From Google Play: Play updates it; prices and payment links stay out whatever the service says (store rules)
         create("play") {
             dimension = "dist"
             buildConfigField("boolean", "SELF_UPDATE", "false")
             buildConfigField("boolean", "PAYMENTS", "false")
+            // No floating button, and no permission for it (src/play/AndroidManifest.xml removes it)
+            buildConfigField("boolean", "OVERLAY", "false")
         }
     }
 

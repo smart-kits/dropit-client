@@ -69,7 +69,7 @@ class Arrivals(private val context: Context) {
         NoticeAction.COPY -> R.string.copy
         NoticeAction.OPEN -> R.string.open
         NoticeAction.SHARE -> R.string.share
-        NoticeAction.DOWNLOAD -> R.string.open
+        NoticeAction.DOWNLOAD -> R.string.dl_download
     })
 
     private fun letterText(notice: Notice): String? = context.app.letters.all.value.firstOrNull { it.id == notice.id }?.text
@@ -83,6 +83,9 @@ class Arrivals(private val context: Context) {
             // the notification would not even be posted. The receiver finds it by the letter's id.
             a == NoticeAction.COPY && text != null -> PendingIntent.getBroadcast(
                 context, code, Intent(context, ReceiveActions::class.java).setAction(ReceiveActions.COPY).putExtra(ReceiveActions.LETTER, notice.id).putExtra(ReceiveActions.NOTE, notice.id.hashCode()), flags)
+            // One file: saved from here, without opening dropit; the result is shown in this notification's place (see DownloadWorker)
+            a == NoticeAction.DOWNLOAD -> PendingIntent.getBroadcast(
+                context, code, Intent(context, ReceiveActions::class.java).setAction(ReceiveActions.DOWNLOAD).putExtra(ReceiveActions.LETTER, notice.id).putExtra(ReceiveActions.NOTE, notice.id.hashCode()), flags)
             a == NoticeAction.OPEN && text != null && text.length <= SHORT_TEXT -> PendingIntent.getActivity(
                 context, code, Intent(Intent.ACTION_VIEW, Uri.parse(text)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
             a == NoticeAction.SHARE && text != null && text.length <= SHORT_TEXT -> PendingIntent.getActivity(
@@ -90,6 +93,34 @@ class Arrivals(private val context: Context) {
                 Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
             else -> openApp()
         }
+    }
+
+    /**
+     * A line about a download in the place of the notice it came from: saved (a tap opens the file), or why it was not. [savedUri] is
+     * where the file is on the phone; without it a tap opens dropit.
+     */
+    @SuppressLint("MissingPermission")
+    fun downloadResult(letterId: String, text: String, savedUri: String? = null, mime: String? = null) {
+        if (!allowed) return
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val tap = if (savedUri != null) PendingIntent.getActivity(
+            context, letterId.hashCode(),
+            Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(savedUri), mime ?: "*/*").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION), flags,
+        ) else openApp()
+        nm.notify(
+            letterId.hashCode(),
+            NotificationCompat.Builder(context, App.CHANNEL_RECEIVE)
+                .setSmallIcon(R.drawable.ic_tile)
+                .setContentTitle(text)
+                .setContentIntent(tap)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_STATUS)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(
+                    NotificationCompat.Builder(context, App.CHANNEL_RECEIVE).setSmallIcon(R.drawable.ic_tile).setContentTitle(context.app.strings.render(LOCKED_NOTICE)).build(),
+                )
+                .build(),
+        )
     }
 
     private fun openApp() = PendingIntent.getActivity(
@@ -104,6 +135,10 @@ private const val SHORT_TEXT = 50_000
 
 class ReceiveActions : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == DOWNLOAD) {
+            intent.getStringExtra(LETTER)?.let { DownloadWorker.enqueue(context, it) }
+            return
+        }
         if (intent.action != COPY) return
         val text = context.app.letters.all.value.firstOrNull { it.id == intent.getStringExtra(LETTER) }?.text ?: return
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(sensitiveClip(text))
@@ -115,6 +150,7 @@ class ReceiveActions : BroadcastReceiver() {
 
     companion object {
         const val COPY = "xyz.smart_kits.dropit.COPY"
+        const val DOWNLOAD = "xyz.smart_kits.dropit.DOWNLOAD"
         const val LETTER = "letter"
         const val NOTE = "note"
     }

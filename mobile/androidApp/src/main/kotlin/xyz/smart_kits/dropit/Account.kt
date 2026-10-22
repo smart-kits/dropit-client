@@ -37,6 +37,27 @@ data class Me(
     val upgradeUrl: String?,
     /** Whether subscribing starts with the first month at its own price: once per account; unless the service says no, yes */
     val trialAvailable: Boolean,
+    /** Whether this account may keep a live connection (a paid plan, or the free trial's days); null when the service did not say */
+    val wsAvailable: Boolean? = null,
+    /** When the free trial of the live connection ends (epoch ms); null on a paid plan, or when not said */
+    val realtimeUntil: Long? = null,
+    /** When the account was made (epoch ms); null when not said */
+    val createdAt: Long? = null,
+    /** How many days the free trial of the live connection lasts, as the service says it now; null when not said */
+    val trialDays: Int? = null,
+    /** How many items this account has sent since it was made (counted by the service; may be a little high, so it is said "has sent N", never "exactly") */
+    val itemsTotal: Int? = null,
+    /** How many items were sent today (a UTC day) and how many a day the plan allows; null when not said */
+    val itemsToday: Int? = null,
+    val itemsPerDay: Int? = null,
+    /** How many days the service keeps what is sent on this account; null when not said */
+    val keptDays: Int? = null,
+    /** A paid plan that just ended keeps its terms for what was already sent until this time (epoch ms); null when there is no such time */
+    val paidGraceUntil: Long? = null,
+    /** Whether the paid plan renews by itself (a subscription); null when not said */
+    val renews: Boolean? = null,
+    /** Whether there is a page to manage the subscription in */
+    val canManage: Boolean = false,
 ) {
     val paid: Boolean get() = plan == "paid"
 
@@ -52,6 +73,17 @@ data class Me(
             paidUntil = o["paid_until"]?.jsonPrimitive?.longOrNull,
             upgradeUrl = o["upgrade_url"]?.jsonPrimitive?.contentOrNull,
             trialAvailable = o["trial_available"]?.jsonPrimitive?.booleanOrNull ?: true,
+            wsAvailable = o["ws_available"]?.jsonPrimitive?.booleanOrNull,
+            realtimeUntil = o["realtime_until"]?.jsonPrimitive?.longOrNull,
+            createdAt = o["created_at"]?.jsonPrimitive?.longOrNull,
+            trialDays = o["trial_days"]?.jsonPrimitive?.intOrNull,
+            itemsTotal = o["items_total"]?.jsonPrimitive?.intOrNull,
+            itemsToday = o["items_today"]?.jsonPrimitive?.intOrNull,
+            itemsPerDay = o["items_per_day"]?.jsonPrimitive?.intOrNull,
+            keptDays = o["kept_days"]?.jsonPrimitive?.intOrNull,
+            paidGraceUntil = o["paid_grace_until"]?.jsonPrimitive?.longOrNull,
+            renews = o["renews"]?.jsonPrimitive?.booleanOrNull,
+            canManage = o["can_manage"]?.jsonPrimitive?.booleanOrNull == true,
         )
     }
 }

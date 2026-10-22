@@ -21,7 +21,8 @@ data class LetterFile(
     val expires: Long? = null,
 )
 
-enum class FileState { SAVED, EXPIRED, AVAILABLE }
+/** [SENT]: a file this phone sent: only its small picture is kept here, so there is nothing to save or open */
+enum class FileState { SAVED, EXPIRED, AVAILABLE, SENT }
 
 /**
  * What can be done with a received file now: it is on the phone (open it, share it, whether or not the service still has it),
@@ -53,6 +54,16 @@ data class Letter(
     val fromTitle: String? = null,
     val fromUrl: String? = null,
     val files: List<LetterFile> = emptyList(),
+    /** Sent from this phone to these devices (ids); empty: to everyone */
+    val toIds: List<String> = emptyList(),
+    /** Their names when it was sent, for saying who it went to */
+    val toNames: List<String> = emptyList(),
+    /** Made by sending an earlier one again */
+    val again: Boolean = false,
+    /** When the service stops having what this phone sent (so it can no longer be sent again); null: not known */
+    val until: Long? = null,
+    /** Set while a send of this letter did not go through: the card says why and offers to try again */
+    val failure: SendFailure? = null,
 ) {
     /** What the letter is, for its heading: a link, text, one picture / video / file, or a count */
     val shape: LetterShape
@@ -65,6 +76,21 @@ data class Letter(
             else -> LetterShape.File
         }
 }
+
+/** A send that stopped part-way, for the card in the list of what this phone sent */
+@Serializable
+data class SendFailure(
+    /** Why, as a sentence in the phone's language (made when it happened) */
+    val reason: String,
+    /** The files that did not go, by their place in the letter */
+    val files: List<Int> = emptyList(),
+    /** The words did not go */
+    val words: Boolean = false,
+    /** Trying again can work. False when only something else (a limit, a paid plan) does */
+    val retry: Boolean = true,
+    /** The devices it was addressed to are gone: the card offers sending it to everyone this time */
+    val target: Boolean = false,
+)
 
 sealed interface LetterShape {
     data object Text : LetterShape

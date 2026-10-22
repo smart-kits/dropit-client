@@ -11,24 +11,14 @@
     <string name="label_send">Send</string>
     <string name="label_sending">Sending</string>
     <string name="label_returned">Returned</string>
-    <string name="label_received">Received</string>
-    <string name="label_pull">Pull new items</string>
     <string name="pulling">Pulling…</string>
     <string name="pull_none">Nothing new</string>
     <string name="pull_n">%1$d new</string>
     <string name="pull_failed">Couldn’t reach the service — try again</string>
     <string name="label_kind_text">Text</string>
-    <string name="label_kind_link">Link</string>
-    <string name="label_kind_image">Image</string>
-    <string name="label_kind_video">Video</string>
-    <string name="label_kind_file">File</string>
     <plurals name="label_n_files">
         <item quantity="one">%1$d file</item>
         <item quantity="other">%1$d files</item>
-    </plurals>
-    <plurals name="label_text_n_files">
-        <item quantity="one">Text + %1$d file</item>
-        <item quantity="other">Text + %1$d files</item>
     </plurals>
     <string name="label_this_phone">This phone</string>
     <string name="label_clip_new">New on your clipboard</string>
@@ -41,7 +31,7 @@
     <string name="label_scan">Scan to join</string>
     <string name="label_gestures">Quick settings and gestures</string>
     <string name="label_group_general">General</string>
-    <string name="label_group_receiving">Receiving</string>
+    <string name="label_group_receiving">Receive</string>
     <string name="label_group_phone">This phone</string>
     <string name="label_group_account">Account</string>
     <string name="label_group_about">About</string>
@@ -63,7 +53,7 @@
     <string name="channel_send_desc">Progress and results of what you send</string>
     <string name="channel_receive">Arrivals</string>
     <string name="channel_receive_desc">What your other devices send to this phone</string>
-    <string name="set_receive">Background receiving</string>
+    <string name="set_receive">Receive in background</string>
     <string name="set_receive_off">Off: new items show when you open dropit</string>
     <string name="set_receive_unknown">Couldn’t check just now — it tries again when you open dropit</string>
     <string name="set_receive_push">On: new items arrive as a notification, even when dropit is closed</string>
@@ -126,10 +116,7 @@
     <string name="settings">Settings</string>
     <string name="pull">Pull new items</string>
     <string name="more">More</string>
-    <string name="empty_title">Nothing here yet.</string>
-    <string name="empty_body">Send something from your computer; it shows up here.</string>
     <string name="empty_body_alone">This is the first device on the account. Phones, computers, browsers and Obsidian all work; add another, and what you drop has somewhere to land.</string>
-    <string name="sent_mark">✓ Sent · %1$s</string>
     <string name="from_page">From %1$s</string>
     <string name="open">Open</string>
     <string name="copy">Copy</string>
@@ -204,7 +191,7 @@
     <string name="set_plan_sub">%1$s · %2$s of %3$s used</string>
     <string name="set_version">Version</string>
     <string name="set_source">Source code</string>
-    <string name="set_sign_out">Sign out on this phone</string>
+    <string name="set_sign_out">Sign out of this phone</string>
     <string name="set_sign_out_sub">Removes this phone from the account; other devices stay</string>
     <string name="sign_out_confirm">Sign out</string>
 
@@ -251,17 +238,14 @@
     <string name="tile_once_note">pay once · no renewal</string>
     <string name="tile_life_note">pay once · yours for good</string>
     <string name="file_save">Save</string>
-    <string name="file_saving">Saving…</string>
-    <string name="file_saved">Saved to Downloads/dropit.</string>
-    <string name="file_until">Save it before %1$s: after that the service no longer has it.</string>
-    <string name="file_expired">Expired: the service no longer has it. dropit delivers, it doesn\'t store.</string>
     <string name="file_limit">Today\'s downloads for this account are used up. They start again tomorrow.</string>
-    <string name="file_offline">No connection. Try again when you\'re online.</string>
+    <string name="file_limit_morning">Today\'s downloads for this account are used up. They start again tomorrow morning at %1$s.</string>
+    <string name="file_limit_tomorrow">Today\'s downloads for this account are used up. They start again tomorrow at %1$s.</string>
+    <string name="file_limit_today">Today\'s downloads for this account are used up. They start again today at %1$s.</string>
     <string name="file_failed">Couldn\'t save it. Try again.</string>
     <string name="file_unsupported">Saving files needs Android 10 or newer.</string>
     <string name="file_gone">It was deleted from this phone. Save it again if it hasn\'t expired.</string>
     <string name="file_copy_image">Copy image</string>
-    <string name="file_image_copied">Image copied.</string>
     <string name="plan_row_downloads">Downloads a day</string>
     <string name="plan_name_free">Free plan</string>
     <string name="plan_name_paid">Paid plan</string>
@@ -290,15 +274,15 @@
     <string name="plan_paid_until">Paid until %1$s</string>
     <string name="plan_paid_life">Paid for life</string>
     <string name="why_per_day">Today\'s %1$d sends are used up</string>
-    <string name="why_per_day_sub">Paid sends %1$d a day.</string>
+    <string name="why_per_day_sub">It resets tomorrow. Paid sends %1$d a day.</string>
     <string name="why_file_size">That file is over the %1$d MB limit</string>
     <string name="why_file_size_sub">Paid takes files up to %1$d MB.</string>
     <string name="why_space">Your %1$s of space is full</string>
-    <string name="why_space_sub">Paid holds %1$s.</string>
+    <string name="why_space_sub">Space frees up as the oldest item expires. Paid holds %1$s.</string>
     <string name="why_queue">Too many items are waiting</string>
-    <string name="why_queue_sub">Paid keeps up to %1$d.</string>
+    <string name="why_queue_sub">Items waiting free up as they expire. Paid keeps up to %1$d.</string>
     <string name="why_devices">All %1$d device slots are in use</string>
-    <string name="why_devices_sub">Paid fits %1$d devices.</string>
+    <string name="why_devices_sub">Remove one you don’t use to add another, or go Paid: %1$d devices.</string>
     <string name="why_realtime">Your %1$d days of real-time delivery are over</string>
     <string name="why_uploads">Today’s file uploads are used up</string>
     <string name="why_uploads_sub">Paid has a much higher daily limit.</string>
@@ -335,9 +319,8 @@
     <string name="update_later">Later</string>
     <string name="sel_count">%d selected</string>
     <string name="sel_all">All</string>
-    <string name="sel_clear">Clear</string>
     <string name="sel_start">Select to clear</string>
-    <string name="cleared_n">Cleared %d from this list</string>
+    <string name="cleared_n">Cleared %d</string>
     <string name="undo">Undo</string>
     <string name="slow_net">The connection is slow — still working…</string>
     <string name="signing_out">Signing out…</string>
@@ -345,5 +328,52 @@
     <string name="slow_net_load">The connection is slow — still loading…</string>
     <string name="other_plans">Other plans</string>
     <string name="no_browser">No app could open the link. Install or enable a browser and try again</string>
-    <string name="chip_upgrade_price">Free %s</string>
+    <string name="tab_received">Received</string>
+    <string name="tab_sent">Sent</string>
+    <string name="pull_hint">Pull to refresh</string>
+    <string name="pull_release">Release to refresh</string>
+    <string name="empty_received_title">Nothing received yet</string>
+    <string name="empty_received_body">Send something from a computer, the web or another phone and it shows up here.</string>
+    <string name="empty_sent_title">Nothing sent yet</string>
+    <string name="empty_sent_body">Write something above or drop files in, then press Send.</string>
+    <string name="meta_sent">Sent</string>
+    <string name="when_yesterday">Yesterday %1$s</string>
+    <plurals name="n_images">
+        <item quantity="one">%1$d image</item>
+        <item quantity="other">%1$d images</item>
+    </plurals>
+    <string name="st_saved">Saved to Downloads/dropit</string>
+    <plurals name="st_saved_n">
+        <item quantity="one">%1$d saved to Downloads/dropit</item>
+        <item quantity="other">%1$d saved to Downloads/dropit</item>
+    </plurals>
+    <string name="st_saved_photo">Saved to Pictures/dropit</string>
+    <plurals name="st_saved_photos_n">
+        <item quantity="one">%1$d saved to Pictures/dropit</item>
+        <item quantity="other">%1$d saved to Pictures/dropit</item>
+    </plurals>
+    <plurals name="st_saved_mixed_n">
+        <item quantity="one">%1$d saved (Pictures and Downloads, in dropit)</item>
+        <item quantity="other">%1$d saved (Pictures and Downloads, in dropit)</item>
+    </plurals>
+    <string name="share_nothing">Nothing to share: this phone has no copy of these files</string>
+    <string name="st_saving">Saving…</string>
+    <string name="st_offline">Not saved: no connection</string>
+    <string name="st_failed">Not saved: phone storage or network problem</string>
+    <string name="st_expired">Expired, no longer kept on the service</string>
+    <string name="expired_short">Expired</string>
+    <string name="save_all">Save all</string>
+    <string name="retry">Retry</string>
+    <string name="clear">Clear</string>
+    <string name="sheet_note">“Clear” only clears the list on this phone and can be undone for 6 seconds; what is on the service and files you saved are not affected.</string>
+    <string name="sheet_sent_note">Sent from this phone: only a small preview is kept here.</string>
+    <string name="sheet_open">Show actions</string>
+    <string name="sel_toggle">Select</string>
+    <string name="sel_exit">Cancel selection</string>
+    <string name="undo_sub">Only this phone’s list · undo within 6 seconds</string>
+    <plurals name="undo_unsaved">
+        <item quantity="one">%1$d file not saved yet</item>
+        <item quantity="other">%1$d files not saved yet</item>
+    </plurals>
+    <string name="no_app_open">No app on this phone can open this file</string>
 </resources>

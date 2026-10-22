@@ -94,13 +94,13 @@ fun Postmark(date: String, time: String, source: String, seq: Long, modifier: Mo
 /** -6° to -18°, by the letter's number: no two land alike, and the same letter always lands the same way */
 fun postmarkTilt(seq: Long): Float = -6f - ((seq * 7) % 13).toFloat()
 
-/** A small caps tag in a hairline box; navy for "this phone" */
+/** A small tag in a rounded outline: navy for "this phone", grey for the rest */
 @Composable
 fun Tag(text: String, modifier: Modifier = Modifier, self: Boolean = false) {
     val c = if (self) ink.navy else ink.dim
     Txt(
-        text.uppercase(), label(11.sp, tracking = .06.em), c,
-        modifier.border(1.dp, if (self) ink.navy else ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 7.dp, vertical = 2.dp),
+        text, sans(12.sp, FontWeight.SemiBold, lineHeight = 15.sp), c,
+        modifier.border(1.dp, if (self) ink.navy else ink.line, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
         maxLines = 1,
     )
 }

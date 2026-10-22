@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The build from the store: the floating button needs a permission that store rules make a build explain and justify, so this build does
+     not have it (nor the window that needs it). The permission is removed whatever the main manifest or a library says. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove" />
+
+    <application>
+        <service android:name=".entry.OverlayBall" tools:node="remove" />
+    </application>
+</manifest>

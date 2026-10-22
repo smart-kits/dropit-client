@@ -17,6 +17,7 @@ class ClipboardActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        app.warm()      // the connection opens while the window gets its focus and the clipboard is read
         setContentView(R.layout.one_pixel)
     }
 

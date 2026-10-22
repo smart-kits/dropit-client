@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -68,7 +69,8 @@ import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.ApiError
 import xyz.smart_kits.dropit.shared.OfflineError
 import xyz.smart_kits.dropit.shared.PRIVACY_URL
-import xyz.smart_kits.dropit.ui.kit.Btn
+import xyz.smart_kits.dropit.ui.kit.Cta
+import xyz.smart_kits.dropit.ui.kit.dashed
 import xyz.smart_kits.dropit.ui.kit.Envelope
 import xyz.smart_kits.dropit.ui.kit.Glyph
 import xyz.smart_kits.dropit.ui.kit.Icons
@@ -142,18 +144,27 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
 
     Column(
         Modifier.fillMaxSize().background(c.ground).safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 24.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 40.dp, bottom = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Brand(Modifier.padding(bottom = 14.dp))
+        // The mark: a striped envelope, the name, and what it is for
+        Envelope(Modifier.size(width = 140.dp, height = 84.dp), stripe = xyz.smart_kits.dropit.ui.kit.Stripe.Card, padding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+            Box(Modifier.fillMaxSize().drawBehind {
+                val w = size.width; val h = size.height
+                val line = androidx.compose.ui.graphics.Path().apply { moveTo(w * .08f, h * .16f); lineTo(w * .5f, h * .66f); lineTo(w * .92f, h * .16f) }
+                drawPath(line, c.line, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            })
+        }
+        Txt("dropit", label(46.sp, tracking = (-.01).em), c.ink, Modifier.padding(top = 26.dp).semantics { heading() })
+        Txt(stringResource(R.string.join_tagline), sans(16.sp, lineHeight = 22.sp), c.dim, Modifier.padding(top = 4.dp, bottom = 30.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
         // Read again each time the screen comes back: a share may have just been held for after joining
         val waiting = remember(resumed) { ctx.app.store.waiting.size }
         if (waiting > 0) {
             Tip(pluralStringResource(R.plurals.join_waiting, waiting, waiting), Modifier.padding(bottom = 12.dp))
         }
-        Envelope(Modifier.fillMaxWidth()) {
-            Txt(stringResource(R.string.label_join_title), label(28.sp, tracking = (-.01).em, lineHeight = 30.sp), c.ink, Modifier.semantics { heading() })
-            Txt(stringResource(R.string.join_help), sans(13.sp, lineHeight = 19.5.sp), c.dim, Modifier.padding(top = 6.dp, bottom = 10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        xyz.smart_kits.dropit.ui.kit.Panel {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Txt(stringResource(R.string.join_existing), sans(15.sp, FontWeight.Bold, lineHeight = 20.sp), c.ink, Modifier.padding(bottom = 12.dp))
                 var focused by remember { mutableStateOf(false) }
                 val scanName = stringResource(R.string.scan)
                 BasicTextField(
@@ -162,9 +173,9 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
                     // a word makes it commit that word again ("vc" became "VVC"). Capitals are only drawn, and the
                     // code is cleaned up when read
                     onValueChange = { input = it; error = null },
-                    modifier = Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused },
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused = it.isFocused },
                     singleLine = true,
-                    textStyle = mono(17.sp, FontWeight.SemiBold).copy(color = c.ink, letterSpacing = .12.em),
+                    textStyle = mono(18.sp, FontWeight.SemiBold).copy(color = c.ink, letterSpacing = .12.em),
                     cursorBrush = SolidColor(c.red),
                     visualTransformation = Capitals,
                     keyboardOptions = KeyboardOptions(
@@ -174,63 +185,54 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
                     keyboardActions = KeyboardActions(onGo = { if (typed.length == 6 && !busy) run { ctx.app.account.join(typed) } }),
                     decorationBox = { field ->
                         Row(
-                            Modifier
-                                .height(44.dp)
-                                .drawBehind {
-                                    // Focus: a navy border with a soft navy halo around it, no outline
-                                    if (focused) drawRoundRect(c.wash, Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(9.dp.toPx()))
-                                }
-                                .clip(RoundedCornerShape(6.dp)).background(c.paper)
-                                .border(1.dp, if (focused) c.navy else c.line, RoundedCornerShape(6.dp)),
+                            Modifier.height(52.dp).dashed(if (focused) c.navy else c.line, radius = 8.dp).padding(start = 14.dp, end = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            // Scanning is the quick way on a phone: it sits inside the field, where the eye already is
-                            Box(
-                                Modifier.padding(start = 2.dp).size(40.dp).clip(RoundedCornerShape(4.dp))
-                                    .clickable(role = Role.Button, onClick = onScan).semantics { contentDescription = scanName },
-                                contentAlignment = Alignment.Center,
-                            ) { Glyph(Icons.Scan, c.ink, size = 20.dp) }
-                            Box(Modifier.weight(1f).padding(end = 10.dp), contentAlignment = Alignment.CenterStart) {
-                                if (input.isEmpty()) Txt(stringResource(R.string.join_code), sans(15.sp), c.dim, maxLines = 1)
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                if (input.isEmpty()) Txt(stringResource(R.string.join_code), sans(16.sp), c.dim, maxLines = 1)
                                 field()
                             }
+                            // Scanning is the quick way on a phone: it sits inside the field, where the eye already is
+                            Box(
+                                Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onScan).semantics { contentDescription = scanName },
+                                contentAlignment = Alignment.Center,
+                            ) { Glyph(Icons.Scan, c.dim, size = 24.dp) }
                         }
                     },
                 )
-                Btn(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, solid = true, enabled = typed.length == 6, loading = busy && errorAt == "join")
+                Cta(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, Modifier.padding(top = 12.dp), enabled = typed.length == 6, loading = busy && errorAt == "join")
+                if (busy && slow && !preparing && errorAt == "join") Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(top = 8.dp))
+                if (errorAt == "join") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 10.dp)) }
             }
-            Row(Modifier.padding(top = 10.dp)) {
-                Txt(stringResource(R.string.consent), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.weight(1f))
-            }
-            Txt(
-                stringResource(R.string.privacy), sans(12.5.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
-                Modifier.padding(top = 2.dp).clickable(role = Role.Button) { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }.padding(vertical = 8.dp),
-            )
-            if (busy && slow && !preparing && errorAt == "join") Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(top = 6.dp))
-            if (errorAt == "join") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 4.dp)) }
         }
         Spacer(Modifier.height(14.dp))
         if (!creating) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Txt(stringResource(R.string.first_device) + " ", sans(12.5.sp), c.dim)
+                Txt(stringResource(R.string.first_device) + " ", sans(14.sp), c.dim)
                 Txt(
-                    stringResource(R.string.create_account), sans(12.5.sp).copy(textDecoration = TextDecoration.Underline), c.dim,
-                    Modifier.clickable(role = Role.Button) { creating = true }.padding(vertical = 12.dp),
+                    stringResource(R.string.create_account), sans(14.sp, FontWeight.Bold).copy(textDecoration = TextDecoration.Underline), c.navy,
+                    Modifier.clickable(role = Role.Button) { creating = true }.heightIn(min = 48.dp).padding(vertical = 14.dp),
                 )
             }
         } else {
             // One more tap, with what it means said first: a second account by mistake is hard to undo
             Txt(stringResource(R.string.create_note), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
-            Btn(stringResource(R.string.create_agree), { run("create") {
+            Cta(stringResource(R.string.create_agree), { run("create") {
                 ctx.app.account.createAccount { preparing = it }
                 val f = ctx.app.plans.free
                 ctx.app.account.assumeFree(f.devices, f.spaceMB * 1_048_576L, f.fileMB * 1_048_576L)
-            } }, Modifier.fillMaxWidth(), loading = busy)
+            } }, ghost = true, loading = busy)
             // The answer to creating is shown here, under the button that was pressed, not up in the join box
             if (busy && slow && !preparing) Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
             if (errorAt == "create") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 8.dp)) }
             // Only while the service wants a moment: a line, not a dialog
             if (preparing) Txt(stringResource(R.string.create_preparing), sans(12.5.sp), c.dim, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
         }
+        // What joining sends, said before the button is pressed (not softened to fit): the name of this phone and a digest of its fingerprint
+        Txt(stringResource(R.string.consent), sans(12.5.sp, lineHeight = 18.5.sp), c.dim, Modifier.padding(start = 6.dp, end = 6.dp, top = 14.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+        Txt(
+            stringResource(R.string.privacy), sans(13.sp).copy(textDecoration = TextDecoration.Underline), c.navy,
+            Modifier.clickable(role = Role.Button) { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }.heightIn(min = 48.dp).padding(vertical = 14.dp),
+        )
     }
 }
