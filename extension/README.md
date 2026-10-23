@@ -52,19 +52,19 @@ reporting a problem, the privacy notice and signing out.
 
 ## Choose which devices a send goes to
 
-In the browser that **created the account**, once the account has another device, the **Send** button gets a second part
-on its right, *Send | devices*. By default everything goes to all your devices, and nothing changes. To pick:
+In the browser that **created the account**, once the account has two or more other devices that can receive, the block on the right of the box gets a second part
+under **Send**: a light strip that says where Send goes (*→ All*, *→ Mac, Pixel*, *→ 3 devices*). By default everything goes to all your devices, and nothing changes. To pick:
 
-- **This one send**: open the right part. One list, *Send to which devices*, with your default already ticked.
+- **This one send**: press that strip. One list, *Send to which devices*, with your default already ticked.
   Untick what you don't want, then press the big button at the bottom, which is the only thing that sends. Afterwards it goes
   back to the default. Close the list without pressing it and nothing changed. At least one device stays ticked.
-  A small number on the button says how many devices the next send reaches, when that is not all of them.
 - **Every send**: menu at the top right › *Send to by default*. Ticking saves at once. The right-click menu and the keyboard
   shortcut send to this default too.
 - **Saved in this browser only.** Ticking every device saves *All*, so devices you add later are included; ticking some
   saves just those. Signing out or reinstalling puts it back to *All*. A device that was removed is taken off the default
   (you are told once); if none is left it is back to *All*.
-- A browser that joined with a pairing code can't read the device list, so it only has **Send**, and sends to all.
+- A browser that joined with a pairing code can't read the device list, so it only has **Send**, and sends to all —
+  until you [turn on receiving](#receive-here-too) there, which gives it a full key like the browser that created the account.
 
 ## Add a device
 
@@ -83,8 +83,32 @@ phone, Obsidian or another computer:
 - **Joining and the slots are full?** The new browser says the device limit was reached and what to do: remove one on a
   device you already use, or (free accounts, when Paid is offered) a link to upgrade.
 
-A browser that joined with a code doesn't show this: its key can only send (see below). Make codes on a device with a
-full key instead — the web inbox, Obsidian, `dropit code`, or the browser that created the account.
+A browser that joined with a code doesn't show this: its key can only send (see below), until you
+[turn on receiving](#receive-here-too) there. Make codes on a device with a full key instead — the web inbox, Obsidian,
+`dropit code`, or the browser that created the account.
+
+## Receive here too
+
+The browser that **created the account** can also list what your other devices sent. It is deliberately plain: **no
+notifications, no connection kept open in the background.** Open the popup and, under *Received*, it fetches what came since
+last time. **Refresh** (the small arrow next to the heading) fetches again.
+
+- **Only what other devices sent**, newest first: up to **50**, kept for **7 days** in this browser's own storage and nowhere else.
+  What this browser sent itself stays under *Recently sent*. Signing out, or a key that stops working, empties the list.
+- **Text** has a copy button. **A link** opens from its title and shows the site's name; only `http` and `https` addresses ever
+  open (anything else a device sent is shown as text, never opened). **A file or image** has a download button: it asks
+  for a fresh download link when you press it (a link lasts only minutes, so none is kept) and opens it in a new tab. A file past its
+  keeping time says it is no longer available; on a free account (when Paid is offered) that line also says how long each plan
+  keeps items and has a link to Paid, as does the line for a day's downloads being used up.
+- **The first time** it lists what is already waiting for this browser (the latest 50 from other devices) instead of starting empty:
+  sending something from your phone and then opening the popup is the usual way to try it. Nothing pops up either way.
+- Each refresh makes a few requests at most; a long backlog is caught up on the next one.
+
+**A browser that joined with a pairing code can't read anything by default** — its key is send-only. To receive there, open the menu
+at the top right › **Receive on this browser** (shown only in such a browser). It says one thing first: *Once on, this browser can
+read what is in your account.* Then enter a code from a device that has full access — the browser that created the account, Obsidian,
+the web inbox, `dropit code` — and press *Agree and turn on*. The browser joins again in its own place: no extra device slot, the
+send-only key stops working and the new full one takes over. A code that is refused changes nothing; it keeps sending as before.
 
 ## Right-click
 
@@ -123,6 +147,7 @@ After updating from an older version Chrome sometimes leaves them blank — set 
   before it counts as failed.
 - **Clicked twice?** The same thing sent twice in a row within a minute is kept once — and still reported as sent.
 - **Too big?** A file over your plan's size limit is turned down *before* it downloads, so you don't wait for nothing.
+  On a free account, when Paid would take it, the note says what Paid allows and links to it.
 
 ## How it arrives
 
@@ -156,8 +181,8 @@ Same folder, same extension — you stay joined.
 |---|---|
 | `activeTab` + `scripting` | Only the tab you act on, at the moment you act: its title, description and selection, and the image or file you right-clicked |
 | `contextMenus` | The **dropit** right-click entry |
-| `storage` | This browser's sign-in, kept on this computer only |
-| `notifications` | Saying how a send went where a page can't show the note (`chrome://` pages, the Web Store) |
+| `storage` | This browser's sign-in, and the short lists of what it sent and received, kept on this computer only |
+| `notifications` | Saying how a send went where a page can't show the note (`chrome://` pages, the Web Store) — nothing else is ever announced |
 | `declarativeNetRequestWithHostAccess` | Only for a site you allowed (below): when the extension has to fetch a file itself, it says which page you were on, as the page would — some image hosts insist |
 | Optional: one site at a time | Asked in a small window with one button, only when a site won't let the page hand over a file |
 
@@ -165,13 +190,15 @@ Same folder, same extension — you stay joined.
 Images and files are fetched **by the page itself**, the way it already loads them, so most sites need nothing more.
 The rare site that refuses gets a one-site question; you can take it back on the extension's details page.
 
-**Your account stays safe.** Each browser is its own device. Joining with a code gives it a **send-only** key:
+**Your account stays safe.** Each browser is its own device. Joining with a code gives it a **send-only** key by default:
 even if it leaked, nobody could read your items, add devices or change settings with it. The browser where you
 *created* the account holds the account's first key, a **full** one — that's what lets it
-[add your other devices](#add-a-device), and like any full key it could read your items if it leaked, so sign that
-browser out on a computer that isn't yours. Either way the key stays in the extension's own storage on this computer
+[add your other devices](#add-a-device) and [list what they sent](#receive-here-too), and like any full key it could read your
+items if it leaked, so sign that browser out on a computer that isn't yours. A browser that joined with a code gets a full key
+only when you choose *Receive on this browser* in it, with a code from a device that already has one — from then on it is
+as trusted as the browser that created the account. Either way the key stays in the extension's own storage on this computer
 and never enters a web page — the page only hands over the bytes. To disconnect this browser, use
-*Sign out on this browser* in the menu at the top right of the popup, or remove it from another device.
+*Sign out* in the menu at the top right of the popup (a screen says what goes with it before it signs out; text you haven’t sent is not kept), or remove it from another device.
 
 ## What isn't possible
 
@@ -181,8 +208,9 @@ and never enters a web page — the page only hands over the bytes. To disconnec
   and suggests *Send image link*.
 - **Dragging a file from the desktop onto the popup** doesn't work — the popup closes the moment you click elsewhere.
   Copy it in Finder and paste it into the popup, or use the paperclip.
-- **Sending only.** The extension doesn't receive: to receive on a computer, use [Obsidian](https://github.com/smart-kits/dropit-obsidian),
-  the [terminal](../cli/) or the web inbox.
+- **No notifications, no live updates.** The extension lists what other devices sent when you open the popup or press
+  *Refresh*; it doesn't watch in the background. To be told as it arrives, or to have it saved to a folder or a note, use
+  [Obsidian](https://github.com/smart-kits/dropit-obsidian), the [terminal](../cli/), the phone app or the web inbox.
 - Desktop Chrome has no system share sheet: the right-click entry, the icon and the two keys are its share buttons.
 
 ## For developers
@@ -193,6 +221,7 @@ extension/
 ├── background.js     Right-click menu, keys, sending, the note on the page, badge and notifications
 ├── popup.html/.js    The popup: joining, the send box, progress, recently sent, the menu, adding a device
 ├── recent.js         The short list of what this browser sent, kept in its own storage
+├── receive.js        What other devices sent: fetching from a saved position, the list (50, 7 days), a fresh link for a file
 ├── targets.js        Pure decisions for choosing devices: the default, checking it against the device list, how a target is written short
 ├── icons.js          The popup's line icons
 ├── pairing.js        Pure decisions for adding a device: which key may, which slot to replace, when to stop watching

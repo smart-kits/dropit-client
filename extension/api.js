@@ -5,7 +5,8 @@
  * users install it more readily, and store review is faster.
  */
 import { t } from './i18n.js';
-import { errorText, endpointList, squash, clip } from './payload.js';
+import { errorText, endpointList, squash, clip, fileSizeWall, paymentsOff } from './payload.js';
+import { RECEIVED_KEY, CURSOR_KEY, RECV_AT_KEY } from './receive.js';
 import { remember } from './recent.js';
 import { DEFAULT_KEY, usable, sameSet } from './targets.js';
 
@@ -32,7 +33,7 @@ export const authLost = (err) => AUTH_LOST.includes(err?.code);
  * knows exactly which device this was and lets the new join take its place instead of using another slot.
  */
 export async function forgetToken(token) {
-  await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'recent', DEFAULT_KEY]);
+  await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'recent', RECEIVED_KEY, CURSOR_KEY, RECV_AT_KEY, DEFAULT_KEY]);
   await chrome.storage.session?.remove('devices_cache').catch(() => {});
   if (token) await chrome.storage.local.set({ previous_token: token });
 }
@@ -61,13 +62,14 @@ export async function api(method, path, body, { auth = true, type } = {}) {
           ...(body ? { 'content-type': blob ? (type || body.type || 'application/octet-stream') : 'application/json' } : {}),
         },
         body: body ? (blob ? body : JSON.stringify(body)) : undefined,
-      }, retriable(method, path));
+      }, retriable(method, path), !blob);
       const data = await res.json().catch(() => ({}));
       if (base !== endpoints[0]) await store.set({ endpoints: [base, ...endpoints.filter((e) => e !== base)] });
       if (!res.ok) {
         const err = new Error(errorText(data.error, data, res.status, t));
         Object.assign(err, { code: data.error, data, status: res.status, handled: true });
-        if (auth && authLost(err)) await forgetToken(cfg.token);
+        // Only when the key that failed is still the one saved: a join that finished meanwhile must not be wiped
+        if (auth && authLost(err) && (await store.get()).token === cfg.token) await forgetToken(cfg.token);
         throw err;
       }
       return data;
@@ -84,10 +86,13 @@ const RETRY_MS = [400, 1200];
 /** Safe to send twice: reads, and sends (the service recognizes a repeat within a minute). Never joining or creating an account. */
 const retriable = (method, path) => method === 'GET' || path.startsWith('/v1/ingest');
 
-async function fetchRetrying(url, init, retry) {
+// A request that carries no file gives up after this long and counts as a network error (retried or tried on the next address)
+const JSON_TIMEOUT_MS = 30_000;
+
+async function fetchRetrying(url, init, retry, timeout = false) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fetch(url, init);
+      return await fetch(url, timeout ? { ...init, signal: AbortSignal.timeout(JSON_TIMEOUT_MS) } : init);
     } catch (err) {
       if (!retry || attempt >= RETRY_MS.length) throw err;
       await new Promise((r) => setTimeout(r, RETRY_MS[attempt]));
@@ -154,6 +159,22 @@ export async function sendFile(blob, { name, mime, from, group, to } = {}) {
   return res;
 }
 
+/**
+ * The public plans (limits, and whether paying is on offer). Read only where a limit card is about to offer Paid, never at start-up;
+ * kept for a few minutes so one card after another asks once. A failed read is null (the card then shows what it did before).
+ */
+const PLANS_FRESH_MS = 300_000;
+let plansRead = null;
+export function readPlans() {
+  if (!plansRead || Date.now() - plansRead.at > PLANS_FRESH_MS) {
+    const at = Date.now();
+    plansRead = { at, p: api('GET', '/v1/plans', undefined, { auth: false }).catch(() => { if (plansRead?.at === at) plansRead = null; return null; }) };
+  }
+  return plansRead.p;
+}
+/** Is the way to Paid on offer now? (true when the plans can't be read: the service's own link stays) */
+export const upgradeOffered = () => readPlans().then((p) => !paymentsOff(p));
+
 /** The account line: cached, refreshed when older than an hour (or when asked) */
 export async function me({ fresh = false } = {}) {
   const { me: cached, token } = await store.get();
@@ -162,4 +183,19 @@ export async function me({ fresh = false } = {}) {
   const data = await api('GET', '/v1/me');
   await store.set({ me: { data, at: Date.now() } });
   return data;
+}
+
+/**
+ * The error for a file over this account's one-file limit, found before sending it (`size`: the file's size when known).
+ * A free account that the Paid plan's limit would suit gets the way to upgrade as the service's own answer would carry it
+ * (`err.data`: the link and `why: 'file_size'`), so every place that shows a limit shows it the same way. Reads the account and
+ * the plans only now, on this one path: nothing is asked while sending goes through.
+ */
+export async function tooLarge(limit, size) {
+  if (!limit) return new Error(t.errors.PAYLOAD_TOO_LARGE);
+  const account = await me({ fresh: true }).catch(() => null);
+  const plans = account?.upgrade_url ? await readPlans() : null;
+  const paidMB = paymentsOff(plans) ? null : plans?.limits?.paid?.fileMB;       // payments off: the plain sentence, no way to Paid
+  const { message, data } = fileSizeWall(account, size, paidMB, limit, t);
+  return Object.assign(new Error(message), data ? { data } : {});
 }

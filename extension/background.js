@@ -1,6 +1,6 @@
-import { store, sendText, sendFile, me, authLost } from './api.js';
+import { store, sendText, sendFile, me, authLost, tooLarge, upgradeOffered } from './api.js';
 import { t } from './i18n.js';
-import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, mb, isPdf, upgradeLink } from './payload.js';
+import { MENUS, fitMeta, pageMeta, fromMeta, fileNameOf, isPdf, upgradeLink } from './payload.js';
 import { readPage, readSelection, fetchStart, fetchChunk, fetchDrop, showToast } from './page.js';
 
 const NAVY = '#1f4e9e';   // arrived
@@ -47,7 +47,7 @@ async function run(fn, tab) {
     flash(false, err.message);
     // A limit the paid plan lifts: the service gave a link (free accounts only) and said which limit it was
     const link0 = upgradeLink(err.data);
-    const up = link0 ? { url: link0, why: err.data.why } : null;
+    const up = link0 && await upgradeOffered() ? { url: link0, why: err.data.why } : null;      // payments not on offer: no way to Paid
     const link = up ? { text: t.upgradeFor(up.why), url: up.url } : null;
     if (!(await inPage(tab, showToast, [t.toastFailed(err.message), true, link]))) notify(t.failedTitle, err.message, up);
   }
@@ -123,7 +123,7 @@ async function fileFromPage(url, tab, frameId) {
       inPage(tab, fetchDrop, [got.id], frameId);
     }
   }
-  if (got?.error === 'large') throw tooLarge(limit);
+  if (got?.error === 'large') throw await tooLarge(limit);
   if (got?.error === 'http') throw new Error(t.hotlinked);
   // Blocked for other sites (or the page can't run scripts): ask for this one site
   if (!/^https?:/i.test(url)) throw new Error(t.fetchFailed);
@@ -142,10 +142,10 @@ async function fileFromHere(job) {
   if (!res.ok) throw new Error(t.hotlinked);
   if (limit && Number(res.headers.get('content-length') || 0) > limit) {
     res.body?.cancel();
-    throw tooLarge(limit);
+    throw await tooLarge(limit, Number(res.headers.get('content-length')));
   }
   const blob = await res.blob();
-  if (limit && blob.size > limit) throw tooLarge(limit);
+  if (limit && blob.size > limit) throw await tooLarge(limit, blob.size);
   const type = (res.headers.get('content-type') || '').split(';')[0].trim();
   return upload(blob, { type, disposition: res.headers.get('content-disposition') }, job);
 }
@@ -224,8 +224,6 @@ async function selectionAnywhere(tab) {
     return '';
   }
 }
-
-const tooLarge = (limit) => new Error(limit ? t.tooLarge(mb(limit)) : t.errors.PAYLOAD_TOO_LARGE);
 
 /** Not set up yet: open the popup on the join form (or the same page in a small window) */
 async function openSetup() {

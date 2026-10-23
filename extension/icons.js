@@ -5,6 +5,7 @@ const PATHS = {
   text: '<path d="M5 7h14M5 12h14M5 17h9"/>',
   image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4.5 3.5"/>',
   file: '<path d="M14 3H8a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V8z"/><path d="M14 3v5h5"/>',
+  plane: '<path d="M21.5 2.5 10.5 13.5M21.5 2.5l-6.5 19-4.5-8.5-8.5-4.5 19.5-6Z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   retry: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.2v.1"/>',
@@ -18,6 +19,7 @@ const PATHS = {
   terminal: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M8 10l3 2.5L8 15M13 15h3.5"/>',
   devices: '<rect x="2.5" y="4.5" width="13" height="9" rx="1.8"/><path d="M6 17.5h6M9 13.5v4"/><rect x="17.5" y="8" width="4" height="9.5" rx="1.2"/>',
   down: '<path d="M6 9l6 6 6-6"/>',
+  download: '<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
   sun: '<circle cx="12" cy="12" r="3.8"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>',
 };

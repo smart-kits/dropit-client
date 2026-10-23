@@ -17,6 +17,19 @@ export function scopeFromProbe(err) {
 /** Only a key that may add devices shows the way to add one */
 export const canAddDevices = (scope) => scope === 'full';
 
+/** Only a full key can read, so only a browser that joined with the send-only key is offered "Receive on this browser" */
+export const canTurnOnReceiving = (scope) => scope === 'ingest_only';
+export const canReceive = (scope) => scope === 'full';
+
+/**
+ * Turning receiving on: this browser joins again, this time asking for a full key. Sent with its own current key as
+ * `previous_token` (and its fingerprint), so the service knows this is the same browser and the new join takes the old one's
+ * place: no second device slot, and the send-only key stops working. `deviceKey` may be undefined (no fingerprint here).
+ */
+export function receiveJoinBody({ code, name, deviceKey, token }) {
+  return { code, device_name: name, scope: 'full', ...(deviceKey ? { device_key: deviceKey } : {}), ...(token ? { previous_token: token } : {}) };
+}
+
 /**
  * Every slot in use: the new device takes the place of another one, picked before the code is made so that
  * joining stays one step on the other device. The pick defaults to the one idle longest (a slot left behind by

@@ -6,11 +6,13 @@
  */
 import {
   META_BUDGET, TITLE_MAX, DESCRIPTION_MAX, FROM_URL_MAX, FILES_MAX, squash, clip, pageMeta, fromMeta, fitMeta, kindOf,
-  fileNameOf, MENUS, FILE_EXT, groupsFor, leftOver, resumeGroups, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, deviceFullHelp, endpointList, isPdf, seqRange,
+  fileNameOf, MENUS, FILE_EXT, groupsFor, leftOver, resumeGroups, intentOf, mb, fileSize, errorText, safeLink, upgradeLink, deviceFullHelp, endpointList, isPdf, seqRange, openableLink, hostOf, fileSizeWall, goneWall, paymentsOff,
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 import * as P from '../extension/pow.js';
-import { reconcile, toValue } from '../extension/targets.js';
+import { reconcile, toValue, canChoose, withDeviceCount, destLine, inListOrder, shortTarget } from '../extension/targets.js';
+import * as R from '../extension/receive.js';
+import { forgetToken, tooLarge } from '../extension/api.js';
 import { pruneRecent, recentList, remember, RECENT_KEY } from '../extension/recent.js';
 import { readFileSync } from 'node:fs';
 
@@ -139,7 +141,8 @@ for (const [lang, t] of Object.entries(STRINGS)) {
   eq(`E12 ${lang} queue full`, errorText('QUOTA_EXCEEDED', { field: 'items' }, 507, t), t.quotaItems);
   if (lang === 'en') {
     const up = 'https://dropit.example/upgrade?u=1&why=per_day&buy=year';
-    eq('E15 upgrade link is tagged with the extension', upgradeLink({ upgrade_url: up, why: 'per_day' }), `${up}&src=ext`);
+    eq('E15 upgrade link is tagged with the extension, and opens the plans page: a buy= the link carried is taken off', upgradeLink({ upgrade_url: up, why: 'per_day' }), 'https://dropit.example/upgrade?u=1&why=per_day&src=ext');
+    eq('E15 buy= first, or before a #fragment, is taken off as well', [upgradeLink({ upgrade_url: 'https://dropit.example/upgrade?buy=year&u=1' }), upgradeLink({ upgrade_url: 'https://dropit.example/upgrade?buy=year#p' }), upgradeLink({ upgrade_url: 'https://dropit.example/upgrade?u=1&buy=year#p' })], ['https://dropit.example/upgrade?u=1&src=ext', 'https://dropit.example/upgrade?src=ext#p', 'https://dropit.example/upgrade?u=1&src=ext#p']);
     eq('E15 a link without a query gets ?src', upgradeLink({ upgrade_url: 'https://dropit.example/upgrade' }), 'https://dropit.example/upgrade?src=ext');
     eq('E15 src goes before a #fragment', [upgradeLink({ upgrade_url: 'https://dropit.example/upgrade#plans' }), upgradeLink({ upgrade_url: 'https://dropit.example/upgrade?a=1#plans' })],
       ['https://dropit.example/upgrade?src=ext#plans', 'https://dropit.example/upgrade?a=1&src=ext#plans']);
@@ -306,6 +309,45 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   try { await api('POST', '/v1/accounts', {}, { auth: false }); } catch (e) { err = e; }
   ok('creating an account is sent once per address, never repeated', err?.code === 'OFFLINE'
     && seen.length === 2 && seen[0] === 'POST https://a.example/v1/accounts', JSON.stringify(seen));
+}
+
+// A request without a file gives up after a while; a file upload is never cut short
+{
+  const { api } = await import('../extension/api.js');
+  const signals = [];
+  globalThis.fetch = async (url, init) => { signals.push(init.signal ?? null); return new Response('{}', { status: 200 }); };
+  await api('GET', '/v1/me');
+  await api('POST', '/v1/ingest/file?x=1', new Blob(['abc'], { type: 'text/plain' }), { type: 'text/plain' });
+  ok('TO1 a JSON request carries a timeout signal', signals[0] instanceof AbortSignal);
+  ok('TO1 a file upload carries none', signals[1] === null);
+  let tries = 0;
+  globalThis.fetch = async () => { tries++; throw new DOMException('timed out', 'TimeoutError'); };
+  let err = null;
+  try { await api('POST', '/v1/accounts', {}, { auth: false }); } catch (e) { err = e; }
+  ok('TO2 a timed-out request is a network error: tried on the next address, then OFFLINE', err?.code === 'OFFLINE' && tries === 2, `${err?.code} ${tries}`);
+}
+
+// A key that was replaced while a request was in flight is not wiped by that request's late rejection
+{
+  const { api } = await import('../extension/api.js');
+  const mem = { token: 'dk_new', endpoints: ['https://a.example'] };
+  const real = globalThis.chrome;
+  let reads = 0;
+  globalThis.chrome = { storage: { local: {
+    get: async () => (reads++ === 0 ? { ...mem, token: 'dk_old' } : { ...mem }),
+    set: async (o) => Object.assign(mem, o), remove: async (ks) => { for (const k of [].concat(ks)) delete mem[k]; },
+  } } };
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: 'INVALID_TOKEN' }), { status: 401 });
+  try { await api('GET', '/v1/me'); } catch { /* expected */ }
+  ok('FT1 a rejection of an older key leaves the newer one saved', mem.token === 'dk_new' && !('previous_token' in mem), JSON.stringify(mem));
+  globalThis.chrome = real;
+}
+
+// Opening the popup again soon does not pull again; Refresh pressed twice quickly pulls once
+{
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  ok('RP1 the open pull is skipped within 20 seconds of the last refresh', /OPEN_PULL_GAP_MS = 20_000/.test(popup) && /RECV_AT_KEY/.test(popup));
+  ok('RP1 the manual refresh has a 3 second cooldown that shows no error', /MANUAL_PULL_GAP_MS = 3_000/.test(popup) && /MANUAL_PULL_GAP_MS\) return;/.test(popup));
 }
 
 // E30 · device fingerprint: the same facts give the same key; another kind of client, or other facts, another key
@@ -554,6 +596,431 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
     const r = await run([other]);
     ok('P another error code is never retried', r.sent.length === 1 && r.err === other);
   }
+}
+
+
+// ── Receiving: what other devices sent, listed when the popup opens or on Refresh (no notifications, no background work) ──
+
+// RV1 · a received link opens only as http(s); an address the service gives is a different, stricter thing (safeLink)
+{
+  for (const [u, want] of [['https://a.com/x?y=1', 'https://a.com/x?y=1'], ['http://a.com/x', 'http://a.com/x'], [' https://a.com ', 'https://a.com/'],
+    ['javascript:alert(1)', null], ['data:text/html,<b>x</b>', null], ['file:///etc/passwd', null], ['chrome://settings', null], ['chrome-extension://abc/x.html', null],
+    ['obsidian://open?vault=x', null], ['blob:https://a.com/1', null], ['ftp://a.com/x', null], ['//a.com/x', null], ['a.com/x', null], ['', null], [null, null], [undefined, null]]) {
+    eq(`RV1 openableLink: ${String(u).slice(0, 36)}`, openableLink(u), want);
+  }
+  eq('RV1 a plain http link a device sent opens, where safeLink (for service addresses) would refuse it', [openableLink('http://example.com/a'), safeLink('http://example.com/a')], ['http://example.com/a', null]);
+  eq('RV1 hostOf shows the domain without www.', [hostOf('https://www.example.com/a/b?c=1'), hostOf('https://news.example.co.uk/'), hostOf('not a link')], ['example.com', 'news.example.co.uk', '']);
+}
+
+// RV2 · one item from the service as a list entry
+{
+  const at = 1_000;
+  const text = R.entryOf({ seq: 7, device_id: 'd_p', kind: 'text', raw: '  hello\n\tworld  ', meta: null }, at);
+  eq('RV2 text: squashed label, whole text kept for copying, who sent it, when it came in', [text.kind, text.label, text.text, text.from, text.at], ['text', 'hello world', '  hello\n\tworld  ', 'd_p', at]);
+  const cjk = R.entryOf({ seq: 8, device_id: 'd_p', kind: 'text', raw: '字'.repeat(300) }, at);
+  eq('RV2 a long text is cut to 120 characters in the list', Array.from(cjk.label).length, 120);
+  const huge = R.entryOf({ seq: 9, device_id: 'd_p', kind: 'text', raw: 'x'.repeat(R.RECEIVED_TEXT_MAX + 1) }, at);
+  ok('RV2 text over the cap is listed but not kept whole for copying', huge.text === undefined && huge.label.length === 120);
+  const link = R.entryOf({ seq: 10, device_id: 'd_p', kind: 'url', raw: 'https://www.example.com/a?b=1', meta: { title: ' A\ntitle ' } }, at);
+  eq('RV2 link: title as label, the domain shown, the address kept to open', [link.kind, link.label, link.host, link.text], ['url', 'A title', 'example.com', 'https://www.example.com/a?b=1']);
+  eq('RV2 link without a title: the domain is the label', R.entryOf({ seq: 11, device_id: 'd', kind: 'url', raw: 'https://example.com/a' }, at).label, 'example.com');
+  for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'chrome://settings', 'not a link']) {
+    const e = R.entryOf({ seq: 12, device_id: 'd', kind: 'url', raw: bad }, at);
+    ok(`RV2 a "url" that is not http(s) is plain text: ${bad.slice(0, 20)}`, e.kind === 'text' && e.host === undefined && openableLink(e.text) === null);
+  }
+  const file = R.entryOf({ seq: 13, device_id: 'd_m', kind: 'file', raw: '', url: 'https://x/v1/files/13?sig=1', bytes: 2048, meta: { filename: 'a b.pdf', mime: 'application/pdf' } }, at);
+  eq('RV2 file: name, type and size; its short-lived download link is not kept', [file.kind, file.label, file.mime, file.bytes, 'url' in file], ['file', 'a b.pdf', 'application/pdf', 2048, false]);
+  const img = R.entryOf({ seq: 14, device_id: 'd_m', kind: 'image', raw: '', meta: { filename: 'p.png', mime: 'image/png' } }, at);
+  eq('RV2 an image is a file with an image type', [img.kind, img.mime], ['file', 'image/png']);
+  eq('RV2 a file with no name has an empty label (the popup says Image / File)', R.entryOf({ seq: 15, device_id: 'd', kind: 'image', raw: '' }, at).label, '');
+  eq('RV2 an unknown kind is shown as text', R.entryOf({ seq: 16, device_id: 'd', kind: 'weird', raw: 'x' }, at).kind, 'text');
+}
+
+// RV3 · the list: other devices only, nothing twice, newest first, 50 at most, a week at most
+{
+  const DAY = 864e5, now = 10 * DAY;
+  const item = (seq, device_id = 'd_other', extra = {}) => ({ seq, device_id, kind: 'text', raw: `t${seq}`, ...extra });
+  const m = R.mergeReceived([], [item(1, 'me'), item(2), item(3, 'me'), item(4)], 'me', now);
+  eq('RV3 what this browser sent itself is never listed', m.list.map((e) => e.seq), [4, 2]);
+  eq('RV3 added counts what was taken in', m.added, 2);
+  eq('RV3 without knowing which device this is, nothing is taken in', R.mergeReceived([], [item(1)], undefined, now), { list: [], added: 0 });
+  const again = R.mergeReceived(m.list, [item(2), item(4), item(5)], 'me', now);
+  eq('RV3 nothing is listed twice; newest first', [again.list.map((e) => e.seq), again.added], [[5, 4, 2], 1]);
+  ok('RV3 an item with no device id is another device’s, not ours', R.mergeReceived([], [{ seq: 1, kind: 'text', raw: 'x' }], 'me', now).list.length === 1);
+  ok('RV3 a malformed item is skipped', R.mergeReceived([], [null, {}, { seq: 'x' }, { seq: 1.5 }, item(3)], 'me', now).list.length === 1);
+  const big = R.mergeReceived([], Array.from({ length: 80 }, (_, k) => item(k + 1)), 'me', now);
+  eq('RV3 at most 50, the newest ones', [big.list.length, big.list[0].seq, big.list.at(-1).seq, big.added], [R.RECEIVED_MAX, 80, 31, 50]);
+  eq('RV3 the cap is 50 and the age 7 days', [R.RECEIVED_MAX, R.RECEIVED_DAYS], [50, 7]);
+  const old = [{ seq: 5, kind: 'text', label: 'old', from: 'd', at: now - 8 * DAY }, { seq: 6, kind: 'text', label: 'ok', from: 'd', at: now - 6 * DAY }];
+  eq('RV3 over 7 days old drops out of the list when the list is next written', R.mergeReceived(old, [], 'me', now).list.map((e) => e.seq), [6]);
+}
+
+// RV4 · fetching: the position moves only after what is before it is in the list; the first time starts from the beginning
+{
+  const mem = {};
+  const local = {
+    get: async (k) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in mem).map((x) => [x, JSON.parse(JSON.stringify(mem[x]))])),
+    set: async (o) => { for (const [k, v] of Object.entries(o)) mem[k] = JSON.parse(JSON.stringify(v)); },
+    remove: async (k) => { delete mem[k]; },
+  };
+  const reset = () => { for (const k of Object.keys(mem)) delete mem[k]; };
+  const it = (seq, device_id = 'd_phone') => ({ seq, device_id, kind: 'text', raw: `t${seq}`, created_at: 1 });
+  const pages = (list) => { const asked = []; let n = 0; return { asked, pull: async (path) => { asked.push(path); const r = list[n++]; if (r instanceof Error) throw r; return r; } }; };
+
+  reset();
+  let p = pages([{ items: [it(1, 'me'), it(2), it(3)], has_more: false, next_after: 3 }]);
+  let r = await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local });
+  eq('RV4 first time: starts at 0, asks with why=open, lists what others sent', [p.asked, r.list.map((e) => e.seq)], [['/v1/pull?after=0&limit=200&why=open'], [3, 2]]);
+  eq('RV4 the list and the position are stored together', [mem[R.RECEIVED_KEY].map((e) => e.seq), mem[R.CURSOR_KEY]], [[3, 2], 3]);
+
+  p = pages([{ items: [it(4)], has_more: false, next_after: 4 }]);
+  r = await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'manual', local });
+  eq('RV4 next time: continues from the position, why=manual for Refresh', [p.asked, r.list.map((e) => e.seq), mem[R.CURSOR_KEY]], [['/v1/pull?after=3&limit=200&why=manual'], [4, 3, 2], 4]);
+
+  p = pages([{ items: [], has_more: false, next_after: 9 }]);
+  await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local });
+  eq('RV4 an empty answer still moves the position to where the service says it has looked up to', mem[R.CURSOR_KEY], 9);
+  p = pages([{ items: [it(5)], has_more: false, next_after: 2 }]);
+  await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local });
+  eq('RV4 the position never moves back', mem[R.CURSOR_KEY], 9);
+
+  reset();
+  p = pages([new Error('offline')]);
+  let threw = null;
+  try { await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local }); } catch (e) { threw = e; }
+  ok('RV4 a failed request throws and writes nothing: no position, no list', threw?.message === 'offline' && !(R.CURSOR_KEY in mem) && !(R.RECEIVED_KEY in mem));
+
+  reset();
+  p = pages([{ items: [it(1), it(2)], has_more: true, next_after: 2 }, new Error('offline')]);
+  threw = null;
+  try { await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local }); } catch (e) { threw = e; }
+  eq('RV4 a page that fails leaves the earlier page kept and the position after it, not past it', [!!threw, mem[R.RECEIVED_KEY].map((e) => e.seq), mem[R.CURSOR_KEY]], [true, [2, 1], 2]);
+  p = pages([{ items: [it(3)], has_more: false, next_after: 3 }]);
+  await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local });
+  eq('RV4 …and the next refresh carries on from there', [p.asked, mem[R.RECEIVED_KEY].map((e) => e.seq)], [['/v1/pull?after=2&limit=200&why=open'], [3, 2, 1]]);
+
+  reset();
+  p = pages(Array.from({ length: 5 }, (_, k) => ({ items: [it(k + 1)], has_more: true, next_after: k + 1 })));
+  r = await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local });
+  eq('RV4 a big backlog: at most 3 requests per refresh, the rest next time', [p.asked.length, r.more, mem[R.CURSOR_KEY]], [R.PAGES_PER_REFRESH, true, 3]);
+  eq('RV4 the pages are asked for from where the last one ended', p.asked.map((a) => a.match(/after=(\d+)/)[1]), ['0', '1', '2']);
+
+  reset();
+  mem[R.RECEIVED_KEY] = [{ seq: 1, kind: 'text', label: 'x', from: 'd', at: Date.now() - 9 * 864e5 }];
+  mem[R.CURSOR_KEY] = 'junk';
+  p = pages([{ items: [], has_more: false, next_after: 1 }]);
+  await R.refreshReceived({ pull: p.pull, selfId: 'me', why: 'open', local });
+  eq('RV4 a position that is not a number starts from 0; what is over a week old is dropped when the list is written', [p.asked[0], mem[R.RECEIVED_KEY]], ['/v1/pull?after=0&limit=200&why=open', []]);
+  ok('RV4 only the two why values the service already knows are used', /pullReceived\('open'\)/.test(readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8'))
+    && /pullReceived\('manual'\)/.test(readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8'))
+    && !/pullReceived\('(?!open|manual)/.test(readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8')));
+}
+
+// RV5 · a file or image: a new download link is asked for when it is opened (the one from the list expired), never kept
+{
+  const asked = [];
+  const answer = (items) => async (path) => { asked.push(path); return { items, has_more: false, next_after: 99 }; };
+  eq('RV5 asks for exactly that one item: after=seq-1, limit 1, why=open', [await R.fileLinkFrom(42, answer([{ seq: 42, url: 'https://x.example/v1/files/42?sig=a' }])), asked], ['https://x.example/v1/files/42?sig=a', ['/v1/pull?after=41&limit=1&why=open']]);
+  eq('RV5 the item is gone (a later one came back): null, said as "no longer available"', await R.fileLinkFrom(42, answer([{ seq: 43, url: 'https://x.example/v1/files/43' }])), null);
+  eq('RV5 nothing came back: null', await R.fileLinkFrom(42, answer([])), null);
+  eq('RV5 only an http(s) link is opened', [await R.fileLinkFrom(1, answer([{ seq: 1, url: 'javascript:alert(1)' }])), await R.fileLinkFrom(1, answer([{ seq: 1, url: 'data:text/html,x' }])), await R.fileLinkFrom(1, answer([{ seq: 1 }]))], [null, null, null]);
+  ok('RV5 an entry stores no download link', !JSON.stringify(R.entryOf({ seq: 1, device_id: 'd', kind: 'file', url: 'https://x/v1/files/1?sig=secret', meta: { filename: 'a' } })).includes('secret'));
+}
+
+// RV6 · the list is kept a week and then it is gone from storage; signing out or a key that stopped working empties it
+{
+  const DAY = 864e5, now = Date.now();
+  const mem = {};
+  const local = {
+    get: async (k) => (k in mem ? { [k]: JSON.parse(JSON.stringify(mem[k])) } : {}),
+    set: async (o) => { for (const [k, v] of Object.entries(o)) mem[k] = JSON.parse(JSON.stringify(v)); },
+    remove: async (k) => { delete mem[k]; },
+  };
+  mem[R.RECEIVED_KEY] = [{ seq: 3, kind: 'text', label: 'new', at: now - DAY }, { seq: 2, kind: 'text', label: 'old', at: now - 8 * DAY }];
+  eq('RV6 the list leaves out what is over a week old', (await R.receivedList(local)).map((e) => e.seq), [3]);
+  eq('RV6 …while storage still holds it until it is pruned', mem[R.RECEIVED_KEY].length, 2);
+  eq('RV6 pruning returns what is left and takes the rest out of storage', [(await R.pruneReceived(local)).map((e) => e.seq), mem[R.RECEIVED_KEY].map((e) => e.seq)], [[3], [3]]);
+  mem[R.RECEIVED_KEY] = [{ seq: 1, kind: 'text', label: 'x', at: now - 9 * DAY }];
+  await R.pruneReceived(local);
+  ok('RV6 when nothing is left the key is removed', !(R.RECEIVED_KEY in mem));
+  mem[R.RECEIVED_KEY] = 'junk';
+  await R.pruneReceived(local);
+  ok('RV6 something that is not a list is cleaned away', !(R.RECEIVED_KEY in mem));
+  mem[R.RECEIVED_KEY] = Array.from({ length: 70 }, (_, k) => ({ seq: k + 1, kind: 'text', label: 'x', at: now }));
+  await R.pruneReceived(local);
+  eq('RV6 more than 50 in storage is cut to 50', mem[R.RECEIVED_KEY].length, 50);
+
+  // Signing out (the key is forgotten) takes the list and the position with it; the old key is kept only to join again in its place
+  const real = globalThis.chrome;
+  const all = { token: 'dk_old', device_id: 'd1', scope: 'full', me: {}, recent: [], [R.RECEIVED_KEY]: [{ seq: 1 }], [R.CURSOR_KEY]: 5, default_to: ['x'], theme: 'dark' };
+  globalThis.chrome = { storage: { local: {
+    get: async () => ({ ...all }), set: async (o) => Object.assign(all, o), remove: async (ks) => { for (const k of [].concat(ks)) delete all[k]; },
+  } } };
+  try {
+    await forgetToken('dk_old');
+    ok('RV6 forgetting the key empties the received list and its position', !(R.RECEIVED_KEY in all) && !(R.CURSOR_KEY in all) && !('token' in all) && !('scope' in all) && all.previous_token === 'dk_old');
+    eq('RV6 …and leaves this browser’s theme alone', all.theme, 'dark');
+  } finally { globalThis.chrome = real; }
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  ok('RV6 signing out on purpose empties them too', /\$\('so-go'\)\.onclick[\s\S]{0,1200}RECEIVED_KEY, CURSOR_KEY/.test(popup));
+}
+
+// RV7 · turning receiving on: the same join control, a full key asked for, this browser's own key sent as the one it replaces
+{
+  const { receiveJoinBody, canTurnOnReceiving, canReceive } = await import('../extension/pairing.js');
+  eq('RV7 the request: the code, a name, scope full, the fingerprint and the key being replaced',
+    receiveJoinBody({ code: 'K7Q4M2', name: 'Browser · MacIntel', deviceKey: 'f'.repeat(64), token: 'dk_current' }),
+    { code: 'K7Q4M2', device_name: 'Browser · MacIntel', scope: 'full', device_key: 'f'.repeat(64), previous_token: 'dk_current' });
+  eq('RV7 no fingerprint available: it is left out, as when joining the first time', Object.keys(receiveJoinBody({ code: 'K', name: 'n', deviceKey: undefined, token: 'dk_c' })).sort(), ['code', 'device_name', 'previous_token', 'scope']);
+  ok('RV7 never asks for anything but full', receiveJoinBody({ code: 'K', name: 'n', token: 't' }).scope === 'full');
+  ok('RV7 only a send-only browser is offered it; a full or unknown one is not', canTurnOnReceiving('ingest_only') && !canTurnOnReceiving('full') && !canTurnOnReceiving(null) && !canTurnOnReceiving(undefined));
+  ok('RV7 only a full key reads', canReceive('full') && !canReceive('ingest_only') && !canReceive(null) && !canReceive(undefined));
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../extension/popup.html', import.meta.url), 'utf8');
+  ok('RV7 the popup sends that request to the join address, with the key this browser holds now', /'\/v1\/pair\/claim',\s*receiveJoinBody\(\{[^}]*token[^}]*\}\)/.test(popup));
+  ok('RV7 success records full (and says so); the old key is replaced by the new one in the same place as joining', /adopt\(res, 'full', \{ receiving: true \}\)/.test(popup) && /async function adopt\(res, scope[^)]*\)\s*\{\s*await store\.set\(\{ token: res\.token, device_id: res\.device_id, scope \}\)/.test(popup));
+  ok('RV7 a code that is refused changes nothing: the join is made before anything is stored', /receiveJoinBody[\s\S]{0,200}receiveClose\(false\);[\s\S]{0,300}await adopt/.test(popup));
+  ok('RV7 the menu item is hidden until the scope says it applies', /id="receive-open"[^>]*hidden/.test(html) && /\$\('receive-open'\)\.hidden = !canTurnOnReceiving\(scope\)/.test(popup));
+  ok('RV7 the code field is the same kind of control as the join screen (an input inside an envelope.join)', /<div class="envelope join">\s*<input type="text" id="rcode"/.test(html));
+  const en = STRINGS.en.html, zh = STRINGS.zh.html;
+  ok('RV7 the warning is said in both languages', /read what is in your account/.test(en.rcvWarn) && /读到你账号里的内容/.test(zh.rcvWarn));
+}
+
+// RV9 · things sent together are one card
+{
+  const t0 = 1_000_000;
+  const items = [
+    { seq: 9, device_id: 'd_w', kind: 'file', meta: { filename: 'a.txt', group: { id: 'g1', n: 2, i: 2 } }, bytes: 5 },
+    { seq: 8, device_id: 'd_w', kind: 'text', raw: 'hello', meta: { group: { id: 'g1', n: 2, i: 1 } } },
+    { seq: 7, device_id: 'd_w', kind: 'text', raw: 'alone' },
+    { seq: 6, device_id: 'd_w', kind: 'text', raw: 'odd', meta: { group: { id: 5, n: 2, i: 1 } } },
+  ];
+  const { list } = R.mergeReceived([], items, 'd_me', t0);
+  eq('RV9 entries keep their letter', list.map((e) => e.group?.id ?? null), ['g1', 'g1', null, null]);
+  const units = R.groupReceived(list);
+  eq('RV9 two items of one letter are one card, the rest stay single', units.map((u) => (u.members ? `letter:${u.members.length}` : `one:${u.one.seq}`)), ['letter:2', 'one:7', 'one:6']);
+  eq('RV9 the card lists its members in the order they were sent', units[0].members.map((m) => m.seq), [8, 9]);
+  eq('RV9 a letter with a malformed group is just an item', list[3].group, undefined);
+  eq('RV9 an empty list is nothing', R.groupReceived(null), []);
+  eq('RV9 the time shown is when it was sent, not when it was taken in', [R.entryOf({ seq: 1, device_id: 'd', kind: 'text', raw: 'x', created_at: 5000 }, 9000).sent, R.entryOf({ seq: 1, device_id: 'd', kind: 'text', raw: 'x' }, 9000).sent], [5000, undefined]);
+}
+
+// RV8 · nothing new is asked of the browser: no notifications, no background work, no new permissions
+{
+  const manifest = JSON.parse(readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'));
+  eq('RV8 permissions are exactly what they were', manifest.permissions, ['contextMenus', 'storage', 'activeTab', 'notifications', 'scripting', 'declarativeNetRequestWithHostAccess']);
+  ok('RV8 no clipboardWrite, alarms, offscreen, tabs, downloads', !manifest.permissions.some((p) => ['clipboardWrite', 'alarms', 'offscreen', 'tabs', 'downloads'].includes(p)));
+  ok('RV8 no minimum_chrome_version and no host_permissions', !('minimum_chrome_version' in manifest) && !('host_permissions' in manifest));
+  eq('RV8 optional host access is what it was', manifest.optional_host_permissions, ['https://*/*', 'http://*/*']);
+  const bg = readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8');
+  ok('RV8 the background code has no WebSocket, no alarms, and does not fetch what others sent', !/WebSocket|chrome\.alarms|\/v1\/pull|receive\.js/.test(bg));
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  ok('RV8 reading happens only from the popup: on open and on Refresh', (popup.match(/pullReceived\(/g) || []).length === 3);   // the definition, open, manual
+}
+
+// F1 · the menu follows the device list: "Send to by default" appears once there are two or more other devices to choose from
+{
+  const dev = (id, scope = 'full') => ({ device_id: id, name: id, scope, last_seen_at: 1 });
+  ok('F1 a full key with two or more other devices can choose', canChoose('full', [dev('a'), dev('b')]));
+  ok('F1 one other device: "all" and "that one" are the same send, so no choice is offered (as on the web page)', !canChoose('full', [dev('a')]));
+  ok('F1 alone (just created the account): nothing to choose', !canChoose('full', []) && !canChoose('full', undefined));
+  ok('F1 a send-only key never chooses', !canChoose('ingest_only', [dev('a'), dev('b')]) && !canChoose(null, [dev('a'), dev('b')]));
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const body = (name) => popup.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{([\\s\\S]*?)\\n\\}\\n`))?.[1] ?? '';
+  ok('F1 a device list arriving sets the list, redraws the menu and the header', /setList\(candidates\(devices/.test(body('applyDevices')) && /drawTargets\(\)/.test(body('applyDevices')) && /drawPlan\(/.test(body('applyDevices')));
+  ok('F1 every place that fetches the device list applies it: opening the panel or menu, showing a code, watching for the new device',
+    /applyDevices\(devices\)/.test(body('refreshTargets')) && /applyDevices\(devices\)/.test(body('makePairCode')) && /applyDevices\(list\)/.test(body('pairWatch')));
+}
+
+// F2 · the header's device count follows the list that just arrived
+{
+  const acct = { plan: 'free', devices_used: 1, devices_limit: 2, item_bytes_limit: 10485760 };
+  eq('F2 a new device: 1/2 becomes 2/2, the rest of the account line is kept', withDeviceCount(acct, [{ device_id: 'a' }, { device_id: 'b' }]), { ...acct, devices_used: 2 });
+  ok('F2 the same count: the same object back (nothing to write)', withDeviceCount(acct, [{ device_id: 'a' }]) === acct);
+  eq('F2 a device removed', withDeviceCount({ ...acct, devices_used: 2 }, [{ device_id: 'a' }]).devices_used, 1);
+  ok('F2 no account line or no list: left as it is', withDeviceCount(null, []) === null && withDeviceCount(acct, undefined) === acct);
+  const t = STRINGS.en;
+  eq('F2 what the header says', [t.planLine(t.plans.free, 1, 2), t.planLine(t.plans.free, 2, 2)], ['Free · 1/2 devices', 'Free · 2/2 devices']);
+}
+
+// F3 · a file over the free one-file limit, found before sending: say what Paid takes, with the way to upgrade (src=ext)
+{
+  const MB = 1048576;
+  const up = 'https://dropit.example/upgrade?u=U1&e=170&s=SIG&why=account&buy=year';
+  const free = { plan: 'free', upgrade_url: up, item_bytes_limit: 10 * MB };
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    const w = fileSizeWall(free, 50 * MB, 100, 10 * MB, t);
+    eq(`F3 ${lang} the sentence names the free limit and what Paid takes`, w.message, t.tooLargeFree('10 MB', '100 MB'));
+    ok(`F3 ${lang} …both numbers are in it`, w.message.includes('10 MB') && w.message.includes('100 MB'));
+    eq(`F3 ${lang} the link is the account's own, marked as a file-size limit like the service's answer`, w.data, { upgrade_url: 'https://dropit.example/upgrade?u=U1&e=170&s=SIG&why=file_size&buy=year', why: 'file_size' });
+    eq(`F3 ${lang} …and opens on the plans page (no buy=), tagged src=ext, the ticket untouched`, upgradeLink(w.data), 'https://dropit.example/upgrade?u=U1&e=170&s=SIG&why=file_size&src=ext');
+    ok(`F3 ${lang} the line next to it is the file-size one`, t.upgradeFor(w.data.why) !== t.upgradeFor('nonsense'));
+  }
+  const t = STRINGS.en;
+  const plain = { message: t.tooLarge('10 MB'), data: null };
+  eq('F3 over what Paid takes too: no link, only the reason', fileSizeWall(free, 150 * MB, 100, 10 * MB, t), plain);
+  eq('F3 exactly the Paid limit still gets the link', !!fileSizeWall(free, 100 * MB, 100, 10 * MB, t).data, true);
+  eq('F3 a paid account (the service gave no link): no link', fileSizeWall({ plan: 'paid' }, 150 * MB, 100, 100 * MB, t), { message: t.tooLarge('100 MB'), data: null });
+  eq('F3 payments off (no link): no link', fileSizeWall({ plan: 'free' }, 50 * MB, 100, 10 * MB, t), plain);
+  eq('F3 the Paid limit is not known: no link, no number written', fileSizeWall(free, 50 * MB, null, 10 * MB, t), plain);
+  eq('F3 the size is not known: no link', fileSizeWall(free, undefined, 100, 10 * MB, t), plain);
+  eq('F3 an unsafe link is never passed on', fileSizeWall({ upgrade_url: 'javascript:alert(1)' }, 50 * MB, 100, 10 * MB, t), plain);
+  eq('F3 a link with no why gets one', fileSizeWall({ upgrade_url: 'https://dropit.example/upgrade?u=1' }, 50 * MB, 100, 10 * MB, t).data.upgrade_url, 'https://dropit.example/upgrade?u=1&why=file_size');
+  ok('F3 no sentence hard-codes a size', !/\d/.test(STRINGS.en.tooLargeFree('X', 'Y').replace(/X|Y/g, '')) && !/\d/.test(STRINGS.zh.tooLargeFree('X', 'Y').replace(/X|Y/g, '')));
+
+  // The whole path, with the service answering: the error carries the link, the popup and the page toast show it as for any limit
+  const real = { chrome: globalThis.chrome, fetch: globalThis.fetch };
+  const mem = { token: 'dk_x', device_id: 'd1', scope: 'full' };
+  globalThis.chrome = { storage: { local: {
+    get: async () => ({ ...mem }), set: async (o) => Object.assign(mem, o), remove: async (ks) => { for (const k of [].concat(ks)) delete mem[k]; },
+  } } };
+  const calls = [];
+  const serve = (acct) => async (url, init) => {
+    const path = new URL(url).pathname;
+    calls.push(path);
+    const body = path === '/v1/me' ? acct : path === '/v1/plans' ? { limits: { free: { fileMB: 10 }, paid: { fileMB: 100 } } } : {};
+    return { ok: true, status: 200, json: async () => body };
+  };
+  try {
+    globalThis.fetch = serve({ plan: 'free', upgrade_url: up, item_bytes_limit: 10 * MB });
+    const err = await tooLarge(10 * MB, 50 * MB);
+    ok('F3 end to end: the error says what Paid takes and carries the link', err.message.includes('100') && err.data?.why === 'file_size' && upgradeLink(err.data)?.endsWith('&src=ext'), JSON.stringify([err.message, err.data]));
+    eq('F3 …asking only for the account and the plans', calls, ['/v1/me', '/v1/plans']);
+    calls.length = 0;
+    globalThis.fetch = serve({ plan: 'paid', item_bytes_limit: 100 * MB });
+    const paid = await tooLarge(100 * MB, 150 * MB);
+    ok('F3 end to end, a paid account: the plain sentence, no link, the plans are not even asked for', !paid.data && !calls.includes('/v1/plans'));
+    globalThis.fetch = async () => { throw new TypeError('offline'); };
+    const off = await tooLarge(10 * MB, 50 * MB);
+    ok('F3 offline: still the plain sentence, never a failure of its own', !off.data && off.message.length > 0);
+    ok('F3 no limit known: the general sentence', (await tooLarge(undefined, 5)).message === (await import('../extension/i18n.js')).t.errors.PAYLOAD_TOO_LARGE);
+  } finally { Object.assign(globalThis, { chrome: real.chrome, fetch: real.fetch }); if (real.chrome === undefined) delete globalThis.chrome; }
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const bg = readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8');
+  ok('F3 the popup uses it for files in a send and for a PDF', (popup.match(/await tooLarge\(/g) || []).length === 3 && !/t\.tooLarge\(/.test(popup));
+  ok('F3 the page and right-click sends use it too', (bg.match(/await tooLarge\(/g) || []).length === 3 && !/t\.tooLarge\(/.test(bg));
+}
+
+// G1 · a received file that can't be fetched any more (expired or removed): a free account hears what Paid keeps and gets the way to upgrade
+{
+  const up = 'https://dropit.example/upgrade?u=U1&e=170&s=SIG&why=account&buy=year';
+  const free = { plan: 'free', upgrade_url: up };
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    const w = goneWall(free, 1, 10, t);
+    eq(`G1 ${lang} the sentence names how long each plan keeps items`, w.message, t.recvGoneKept(1, 10));
+    ok(`G1 ${lang} …both numbers are in it`, w.message.includes('1') && w.message.includes('10'));
+    eq(`G1 ${lang} the link is the account's own, marked as a retention limit`, w.data, { upgrade_url: 'https://dropit.example/upgrade?u=U1&e=170&s=SIG&why=kept&buy=year', why: 'kept' });
+    eq(`G1 ${lang} …and opens tagged src=ext`, upgradeLink(w.data), 'https://dropit.example/upgrade?u=U1&e=170&s=SIG&why=kept&src=ext');
+    ok(`G1 ${lang} the line for it is its own`, t.upgradeFor('kept') !== t.upgradeFor('nonsense'));
+    eq(`G1 ${lang} a paid account (no link): the plain sentence`, goneWall({ plan: 'paid' }, 1, 10, t), { message: t.recvGone, data: null });
+    eq(`G1 ${lang} a number not known: the plain sentence, no link`, goneWall(free, null, 10, t), { message: t.recvGone, data: null });
+    eq(`G1 ${lang} an unsafe link is never passed on`, goneWall({ upgrade_url: 'javascript:alert(1)' }, 1, 10, t).data, null);
+  }
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../extension/popup.html', import.meta.url), 'utf8');
+  ok('G1 the Received note shows the way past a limit: a download limit answer carries its link', /recvNote\(err\.message, err\.data\)/.test(popup) && /id="recv-up"/.test(html));
+  ok('G1 an expired file asks for the link and the plans only now', /else await goneNote\(\)/.test(popup) && /async function goneNote/.test(popup));
+  eq('G1 a day count of one is singular', STRINGS.en.recvGoneKept(1, 10), 'This file is no longer available — Free keeps items 1 day, Paid keeps them 10 days');
+}
+
+// G2 · wording: nothing in what the extension says calls the service storage, and the real-time line uses the one name
+{
+  const words = /storage|backup|cloud|存储|云盘|备份|不保存|doesn.t keep/i;
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    const text = [...Object.values(t.errors), t.tooLarge('X'), t.tooLargeFree('X', 'Y'), t.rateDay('X'), t.quotaBytes, t.quotaBytesIn('X'), t.quotaItems, t.quotaItemsIn('X'),
+      t.rateDayDownloads('X'), t.recvGone, t.recvGoneKept(1, 10), ...['per_day', 'queue', 'space', 'file_size', 'devices', 'realtime', 'uploads', 'downloads', 'kept'].map(t.upgradeFor)].join('\n');
+    ok(`G2 ${lang} no red-line words in the limit sentences`, !words.test(text));
+  }
+  eq('G2 en the real-time link says real-time delivery', STRINGS.en.upgradeFor('realtime'), 'Keep real-time delivery with Paid');
+  ok('G2 zh the real-time link says 实时送达', STRINGS.zh.upgradeFor('realtime').includes('实时送达'));
+}
+
+// I-08..I-12 · fixes from the 10-22 round
+{
+  const now = Date.now();
+  const item = (seq, device_id) => ({ seq, kind: 'text', raw: 'x' + seq, device_id, created_at: now });
+  // I-08: turning receiving on joins again under a new device id; what it sent under the earlier ones is still its own
+  const own = R.ownIds('new', ['old1', 'old2']);
+  eq('I-08 ownIds: the current id and the earlier ones', own, ['new', 'old1', 'old2']);
+  eq('I-08 ownIds: nothing stored, nothing odd', R.ownIds('new', undefined), ['new']);
+  const m = R.mergeReceived([], [item(1, 'old1'), item(2, 'other'), item(3, 'new'), item(4, 'old2')], own, now);
+  eq('I-08 what it sent before joining again is not listed as received', m.list.map((e) => e.seq), [2]);
+  eq('I-08 a single id still works as before', R.mergeReceived([], [item(1, 'me'), item(2)], 'me', now).list.map((e) => e.seq), [2]);
+  eq('I-08 no known ids at all: nothing is taken in', R.mergeReceived([], [item(1, 'x')], [], now), { list: [], added: 0 });
+  eq('I-08 rememberOwn adds the old id once', R.rememberOwn(['a'], 'b'), ['a', 'b']);
+  eq('I-08 rememberOwn: again is no change', R.rememberOwn(['a', 'b'], 'b'), ['a', 'b']);
+  eq('I-08 rememberOwn: no old id (nothing to add)', R.rememberOwn(['a'], undefined), ['a']);
+  eq('I-08 rememberOwn: bounded, newest kept', R.rememberOwn(Array.from({ length: R.OWN_IDS_MAX }, (_, i) => 'i' + i), 'z').at(-1), 'z');
+  ok('I-08 rememberOwn keeps at most OWN_IDS_MAX', R.rememberOwn(Array.from({ length: R.OWN_IDS_MAX }, (_, i) => 'i' + i), 'z').length === R.OWN_IDS_MAX);
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  ok('I-08 the popup records the old id on the receiving join and reads all ids when pulling', /rememberOwn\(before, oldId\)/.test(popup) && /selfId: ownIds\(device_id, before\)/.test(popup));
+  // I-09: the name this browser gives itself is short whatever the platform string is
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    const long = t.deviceName('P'.repeat(300)), cjk = t.deviceName('平台'.repeat(100));
+    ok(`I-09 ${lang} a long platform gives a name of at most 48 characters`, Array.from(long).length <= 48 && Array.from(cjk).length <= 48, `${Array.from(long).length}/${Array.from(cjk).length}`);
+    ok(`I-09 ${lang} a cut name ends in …, a normal one is untouched`, long.endsWith('…') && t.deviceName('MacIntel').endsWith('MacIntel'));
+  }
+  // I-10: signing out asks twice; a removed browser keeps what was typed
+  ok('I-10 sign out: the menu item opens a confirmation screen; only its Sign out button signs out', /\$\('unpair'\)\.onclick = signoutOpen;/.test(popup) && /\$\('so-go'\)\.onclick = async \(\) => \{[\s\S]*?api\('DELETE'/.test(popup) && !/unpairArmed/.test(popup));
+  ok('I-10 sign out: the confirmation is worded in both languages, with the title and the button the other clients use', STRINGS.en.html.soTitle === 'Sign out of this device?' && STRINGS.zh.html.soTitle === '退出这台设备？' && STRINGS.en.html.unpair === 'Sign out' && STRINGS.zh.html.unpair === '退出');
+  ok('N-02 sign out: the text says unsent text is not kept, and the box really is emptied', /Text you haven’t sent is not kept/.test(STRINGS.en.html.soBody) && STRINGS.zh.html.soBody.includes('未发出的文字不会保留') && /state\.text = compose\.value = ''/.test(popup.slice(popup.indexOf("$('so-go')"), popup.indexOf("$('so-go')") + 400)));
+  ok('N-02 sign out: what it says goes with it is what the code removes (recent, received, default)', /RECENT_KEY, RECEIVED_KEY, CURSOR_KEY, RECV_AT_KEY, OWN_IDS_KEY, DEFAULT_KEY/.test(popup) && /recent list/.test(STRINGS.en.html.soBody) && STRINGS.zh.html.soBody.includes('最近投出'));
+  ok('N-xx the default panel is titled "This browser sends to by default" and the menu item keeps its short name', STRINGS.en.html.dfTitle === 'This browser sends to by default' && STRINGS.zh.html.dfTitle === '这台浏览器默认投给' && STRINGS.en.html.menuDefaults === 'Send to by default' && STRINGS.zh.html.menuDefaults === '默认投给');
+  ok('N-xx no old wording for signing out is left in the extension strings', !/在这个浏览器上退出|Sign out on this browser|再点一次确认退出|Tap again to sign out/.test(JSON.stringify(STRINGS)))
+  ok('I-10 a removed browser keeps the typed words for this session and puts them back after joining', /storage\.session\?\.set\(\{ draft: compose\.value \}\)/.test(popup) && /get\('draft'\)/.test(popup));
+  // I-12: the way to Paid is shown only when the plans do not say paying is off
+  ok('I-12 payments open / unknown: the link stays', !paymentsOff({ payments: { open: true } }) && !paymentsOff(null) && !paymentsOff({}) && !paymentsOff(undefined));
+  ok('I-12 payments off: no way to Paid', paymentsOff({ payments: { open: false } }));
+  const wall = (offered) => {
+    const plans = { payments: { open: offered }, limits: { paid: { fileMB: 100 } } };
+    return fileSizeWall({ upgrade_url: 'https://x.example/upgrade' }, 20 * 1048576, paymentsOff(plans) ? null : plans.limits.paid.fileMB, 10 * 1048576, STRINGS.en);
+  };
+  ok('I-12 a too-large file: the plain sentence when payments are off, the offer when on', wall(false).data === null && wall(true).data?.why === 'file_size');
+  ok('I-12 the plans are read only where a limit card offers Paid (not at start-up)', !/readPlans\(\)/.test(readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8').replace(/upgradeOffered/g, '')));
+}
+
+// Send v3 (A): one block right of the box, Send on top, "→ where" below
+{
+  const html = readFileSync(new URL('../extension/popup.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../extension/popup.css', import.meta.url), 'utf8');
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  ok('A: the block stacks Send over the where-to part, in the box\'s row', /\.split \{[^}]*flex-direction: column/.test(css) && /\.line \{ display: flex; align-items: stretch/.test(css));
+  ok('A: Send is the red top (plane + word), the bottom is the tile-coloured where-to', /id="send-lead" data-icon="plane"/.test(html) && /id="dest"/.test(html) && /\.more \{[\s\S]*?border-top: 1\.5px solid rgba\(255, 255, 255, \.75\)[\s\S]*?color-mix\(in srgb, var\(--navy\) 14%/.test(css));
+  ok('A: the old number badge and the right-hand segment are gone', !/targets-badge|\.badge/.test(html + css + popup) && !/border-left: 1px solid rgba\(255, 255, 255, \.35\)/.test(css));
+  ok('A: with one other device the block is just Send (the bottom is hidden)', /\$\('targets-btn'\)\.hidden = !may/.test(popup) && /\.more\[hidden\] \{ display: none; \}/.test(css) && /\.split \.send \{ border-radius: 14px; \}/.test(css));
+  ok('A: the box is at least 92px and scrolls inside after about six lines', /min-height: 92px; max-height: 137px; overflow-y: auto/.test(css));
+  ok('A: pressed / sending / sent each have their look', /\.split:has\(\.send:active/.test(css) && /\.sending \.more \{ opacity: \.45/.test(css) && /\.split\.sent \.send \{ background: linear-gradient\(180deg, #26905e/.test(css));
+  ok('A: the where-to is written with the short target text (→ All · → names · → N devices)', /destLine\(to, targets\.names, t, destFits\)/.test(popup) && /shortTarget\(to, targets\.names, t\)/.test(popup));
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    ok(`A ${lang} the where-to has no arrow of its own, and "send to all this time" is worded`, t.destTo === undefined && !!t.sendAllOnce);
+  }
+  eq('A en: All, 2 devices', [STRINGS.en.targetAll, STRINGS.en.targetN(2)], ['All', '2 devices']);
+  eq('A zh: 全部, 2 台', [STRINGS.zh.targetAll, STRINGS.zh.targetN(2)], ['全部', '2 台']);
+  ok('A: the bottom is the devices icon + the text + a small chevron', /class="ic dv" data-icon="devices"/.test(html) && /id="dest"/.test(html) && /\.more \.dn svg\.i \{ width: 10px; height: 10px/.test(css));
+  ok('A: Send about 60px, where-to 32px in the 92px block, the touch zone does not reach up', /\.send \{\s*flex: 1; min-height: 56px/.test(css) && /\.more \{[^}]*height: 32px/.test(css) && /\.more::before \{ content: ""; position: absolute; inset: 0 0 -4px; \}/.test(css) && /\.split \{[^}]*min-height: 92px/.test(css));
+  ok('A: a failed card has Try again, and "Send to all this time" only when the chosen devices are gone', /\$\('send-all'\)\.hidden = err\?\.code !== 'TARGET_UNAVAILABLE'/.test(popup) && /id="send-all"/.test(html) && /state\.pick = null; \$\('send-form'\)\.requestSubmit\(\)/.test(popup));
+  ok('A: sending shows the ring and "Sending…", sent shows ✓ and goes back after 1.5 s', /sendFace\(on \? 'sending' : ''\)/.test(popup) && /setTimeout\(\(\) => sendFace\(''\), 1500\)/.test(popup));
+}
+
+// V-01..V-05 · look fixes after the first browser pass
+{
+  const css = readFileSync(new URL('../extension/popup.css', import.meta.url), 'utf8');
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const names = new Map([['mac', 'Mac'], ['pixel', 'Pixel'], ['ipad', 'iPad']]);      // the device list's order
+  const fits = (n) => (text) => [...text].length <= n;
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    eq(`V-02 ${lang} everyone`, destLine(null, names, t, fits(1)), t.targetAll);
+    ok(`V-02 ${lang} two names that fit stay names; when they do not it is the count, never a cut name`, destLine(['mac', 'pixel'], names, t, fits(40)) === `Mac${t.targetSep}Pixel` && destLine(['mac', 'pixel'], names, t, fits(lang === 'en' ? 9 : 5)) === t.targetN(2) && !destLine(['mac', 'pixel'], names, t, fits(5)).includes('…'));
+    eq(`V-02 ${lang} one name that does not fit: the count`, destLine(['mac'], names, t, fits(2)), [...t.targetN(1)].length <= 2 ? t.targetN(1) : '1');
+    eq(`V-02 ${lang} three: the count`, destLine(['mac', 'pixel', 'ipad'], names, t, fits(99)), t.targetN(3));
+  }
+  eq('V-03 English joins with ", ", Chinese with 「、」', [destLine(['mac', 'ipad'], names, STRINGS.en, fits(40)), destLine(['mac', 'ipad'], names, STRINGS.zh, fits(40))], ['Mac, iPad', 'Mac、iPad']);
+  eq('V-04 the order is the device list\'s, however it was picked', [destLine(['ipad', 'mac'], names, STRINGS.en, fits(40)), shortTarget(['ipad', 'mac'], names, STRINGS.en)], ['Mac, iPad', 'Mac, iPad']);
+  eq('icon: when even the count does not fit, just the number', destLine(['mac', 'pixel'], names, STRINGS.en, fits(1)), '2');
+  eq('V-04 inListOrder: unknown ids last', inListOrder(['x', 'ipad', 'mac'], ['mac', 'pixel', 'ipad']), ['mac', 'ipad', 'x']);
+  ok('V-02 the popup asks the real room (canvas) before it writes names', /measure\.measureText\(text\)\.width/.test(popup) && /destLine\(to, targets\.names, t, destFits\)/.test(popup));
+  ok('V-01 the ring has a size of its own in a flex holder, 16px', /\.send \.lead \{ display: inline-flex/.test(css) && /\.spin \{ box-sizing: border-box; display: block; width: 16px; height: 16px/.test(css));
+  ok('V-05 the focus ring follows the block\'s corners', /\.send:focus-visible, \.more:focus-visible \{ outline: none; \}/.test(css) && /\.split:has\(> \.send:focus-visible, > \.more:focus-visible\) \{ box-shadow: 0 0 0 2px var\(--paper\), 0 0 0 4px var\(--navy\)/.test(css));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

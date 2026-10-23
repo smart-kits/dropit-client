@@ -25,6 +25,18 @@ export function candidates(devices, selfId) {
     .sort((a, b) => (b.last_seen_at ?? 0) - (a.last_seen_at ?? 0));
 }
 
+/** Choosing needs a key that can read the device list and two or more other devices that can receive (with one, "all" and "that one" are the same send) */
+export const canChoose = (scope, list) => scope === 'full' && (list?.length ?? 0) >= 2;
+
+/**
+ * The account line (plan · devices used / allowed) with the device count from a device list that just arrived, so the
+ * header follows the list instead of waiting for the next hourly refresh of the account. Anything else in it is kept.
+ */
+export function withDeviceCount(account, devices) {
+  if (!account || !Array.isArray(devices) || account.devices_used === devices.length) return account;
+  return { ...account, devices_used: devices.length };
+}
+
 /**
  * Check a saved default against the devices that exist now.
  * `to`: what to use from now on (null = every device); `trimmed`: some saved ids were gone (they are dropped), `gone` says how many;
@@ -61,12 +73,35 @@ const clipName = (name) => {
   return c.length > max ? `${c.slice(0, max).join('')}…` : name;
 };
 
+/** Ids in the order of the device list (`names` is built from it, and the picker shows the same order); unknown ids go last. Every place that writes names uses this order. */
+export function inListOrder(ids, order) {
+  const at = (id) => { const i = order.indexOf(id); return i < 0 ? Infinity : i; };
+  return ids.map((id, k) => [id, k]).sort((a, b) => (at(a[0]) - at(b[0])) || (a[1] - b[1])).map(([id]) => id);
+}
+
+/**
+ * The bottom of the Send block (written next to the devices icon), whole or not at all: "All" · "Mac, Pixel" · "3 devices". Names are never cut: when the
+ * line does not fit (`fits(text)`), it says how many devices instead.
+ */
+export function destLine(to, names, t, fits) {
+  if (!to) return t.targetAll;
+  const ordered = inListOrder(to, [...names.keys()]);
+  const known = ordered.map((id) => names.get(id)).filter(Boolean);
+  if (ordered.length <= 2 && known.length === ordered.length) {
+    const full = known.join(t.targetSep);
+    if (fits(full)) return full;
+  }
+  const count = t.targetN(ordered.length);
+  return fits(count) ? count : String(ordered.length);          // not even "2 devices" fits: just the number, next to the icon
+}
+
 /**
  * Who it went to, short (the arrow is added by the caller): "All" · one name · two names when they fit · "3 devices".
  * Never a long list of names. `names`: Map of id → name; an id it doesn't know counts as a device without a name.
  */
 export function shortTarget(to, names, t) {
   if (!to) return t.targetAll;
+  to = inListOrder(to, [...names.keys()]);
   const known = to.map((id) => names.get(id)).filter(Boolean);
   if (to.length === 1 && known.length === 1) return clipName(known[0]);
   if (to.length === 2 && known.length === 2) {

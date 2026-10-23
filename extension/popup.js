@@ -1,14 +1,15 @@
-import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase, PRIVACY_URL, INSTALL_URL } from './api.js';
+import { api, store, sendText, sendFile, me, authLost, forgetToken, serviceBase, tooLarge, readPlans, upgradeOffered, PRIVACY_URL, INSTALL_URL } from './api.js';
 import { deviceKey } from './device.js';
 import { withPow } from './pow.js';
 import { t, lang } from './i18n.js';
-import { deviceFullHelp, fitMeta, pageMeta, intentOf, groupsFor, leftOver, resumeGroups, mb, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, upgradeLink, squash, clip } from './payload.js';
+import { deviceFullHelp, paymentsOff, fitMeta, pageMeta, intentOf, groupsFor, leftOver, resumeGroups, fileSize, fileNameOf, seqRange, FILES_MAX, safeLink, openableLink, upgradeLink, goneWall, squash, clip } from './payload.js';
 import { icon } from './icons.js';
 import { recentList, pruneRecent, RECENT_KEY } from './recent.js';
+import { refreshReceived, groupReceived, receivedList, pruneReceived, fileLinkFrom, ownIds, rememberOwn, RECEIVED_KEY, CURSOR_KEY, RECV_AT_KEY, OWN_IDS_KEY } from './receive.js';
 import { readPage, readSelection } from './page.js';
-import { scopeFromProbe, canAddDevices, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
+import { scopeFromProbe, canAddDevices, canTurnOnReceiving, canReceive, receiveJoinBody, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
 import { QR } from './qr.js';
-import { DEFAULT_KEY, usable, candidates, reconcile, toValue, shortTarget, deviceIcon, activity } from './targets.js';
+import { DEFAULT_KEY, usable, candidates, reconcile, toValue, shortTarget, destLine, deviceIcon, activity, canChoose, withDeviceCount } from './targets.js';
 
 const $ = (id) => document.getElementById(id);
 // Opened as a small window (setup from a right-click, or picking files where the popup can't stay open)
@@ -53,9 +54,9 @@ function helpDeviceFull(err) {
   box.hidden = !err;
   up.hidden = true;
   if (!err) return;
-  const show = (paidDevices) => {
+  const show = (paidDevices, offered = true) => {
     if ($('setup-help').hidden) return;               // cleared meanwhile
-    const h = deviceFullHelp(err.data, paidDevices, t);
+    const h = deviceFullHelp(offered ? err.data : { ...err.data, upgrade_url: undefined }, paidDevices, t);
     box.querySelector('span').textContent = h.text;
     up.hidden = !h.url;
     if (h.url) {
@@ -65,18 +66,21 @@ function helpDeviceFull(err) {
   };
   show(null);
   // The paid plan's device count is public; a failed read leaves the sentence without a number
-  if (upgradeLink(err.data)) api('GET', '/v1/plans', undefined, { auth: false }).then((p) => show(p?.limits?.paid?.devices)).catch(() => {});
+  // Paying not on offer (the plans say so): only how to free a slot, no way to Paid
+  if (upgradeLink(err.data)) readPlans().then((p) => show(p?.limits?.paid?.devices, !paymentsOff(p))).catch(() => {});
 }
 
 /**
  * A joined browser gets a send-only key: a leaked one can't read anything. Creating the account gives a full one
  * (it can add devices). What the key may do is kept, so the popup knows without asking.
  */
-async function adopt(res, scope) {
+async function adopt(res, scope, { receiving = false } = {}) {
   await store.set({ token: res.token, device_id: res.device_id, scope });
   await chrome.storage.local.remove('previous_token');
   await pairForget();
   await render();                // it ends by saying what Enter will send; the note goes after that
+  // Turning receiving on joins this same browser again: the one thing to say is that it worked
+  if (receiving) return say(`✓ ${t.rcvOn}`, true);
   // Joined in place of this browser's earlier join (reinstalled, signed out): say so, it was one step
   if (res.replaced && res.replaced.how !== 'issuer') say(t.replacedOld(res.replaced.name), true);
 }
@@ -118,11 +122,30 @@ $('claim').onclick = guardSetup(async () => {
 
 // Signing out removes this browser from the account first, so it stops using a device slot. Offline or
 // already removed: forget it here anyway — the kept key lets the next join take its place.
-$('unpair').onclick = async () => {
+// Signing out asks first, on its own screen: it says what goes with it (the lists, the default, text not yet sent)
+function signoutOpen() {
+  closeMenuIfOpen();
+  $('top').hidden = $('main').hidden = true;
+  $('signout').hidden = false;
+  $('so-cancel').focus();
+}
+function signoutClose(focusMenu = true) {
+  $('signout').hidden = true;
+  $('top').hidden = $('main').hidden = false;
+  if (focusMenu) $('menu-btn').focus();
+}
+$('unpair').onclick = signoutOpen;
+$('so-back').onclick = $('so-cancel').onclick = () => signoutClose();
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('signout').hidden) { ev.preventDefault(); signoutClose(); } });
+$('so-go').onclick = async () => {
+  signoutClose(false);
+  state.text = compose.value = '';                // text that was not sent is not kept: it goes with the sign-out
+  state.fromSelection = false;
+  grow();
   const { token, device_id } = await store.get();
   try {
     await api('DELETE', `/v1/devices/${encodeURIComponent(device_id)}`);
-    await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'previous_token', RECENT_KEY, DEFAULT_KEY]);
+    await chrome.storage.local.remove(['token', 'device_id', 'me', 'scope', 'previous_token', RECENT_KEY, RECEIVED_KEY, CURSOR_KEY, RECV_AT_KEY, OWN_IDS_KEY, DEFAULT_KEY]);
     await chrome.storage.session?.remove('devices_cache').catch(() => {});
   } catch {
     await forgetToken(token);
@@ -151,19 +174,24 @@ function returned(message, err = null) {
   $('failed-title').textContent = title;
   $('failed-meta').textContent = clockNow();
   $('failed-why').textContent = message;
-  $('retry').replaceChildren(icon('retry'));
-  $('retry').title = t.retry;
+  $('retry').textContent = t.retry;
   $('retry').setAttribute('aria-label', t.retryLabel(title));
+  // "Send to all this time" only where the cause is the chosen devices being gone from the account
+  $('send-all').hidden = err?.code !== 'TARGET_UNAVAILABLE';
+  $('send-all').textContent = t.sendAllOnce;
   // A limit the paid plan lifts: the service gives a link (to free accounts only) and says which limit it was
   const up = $('returned-up');
   const url = upgradeLink(err?.data);
-  up.hidden = !url;
+  up.hidden = true;
   if (url) {
     up.textContent = t.upgradeFor(err.data.why);
     up.onclick = (ev) => { ev.preventDefault(); chrome.tabs.create({ url }); };
+    // Shown once the plans say paying is on offer (read now, only because a limit card is up)
+    upgradeOffered().then((open) => { if (open && up.onclick) up.hidden = false; });
   }
 }
 $('retry').onclick = () => $('send-form').requestSubmit();
+$('send-all').onclick = () => { state.pick = null; $('send-form').requestSubmit(); };      // null = every device, for this one send
 
 /** The line under the box: what Enter will send, how sending is going, or what was just sent */
 function say(text, done = false) {
@@ -281,6 +309,7 @@ $('send-form').onsubmit = async (ev) => {
     state.pick = undefined;               // a choice made in the panel is for one send
     drawTargets();
     drawRecent();
+    sendFace('sent', deduped ? t.alreadySent(seqs[0]) : t.sent(seqs.at(-1)));
     say(deduped ? `✓ ${t.alreadySent(seqs[0])}`
       : to !== undefined && targets.scope === 'full' ? t.sentTo(seqRange(seqs), shortTarget(to, targets.names, t))
       : t.sentLine(seqRange(seqs), clockNow()), true);
@@ -313,7 +342,11 @@ async function send(intent, to) {
   // Text and files as one batch, one after the other, with progress. Check everything before sending anything.
   const limit = (await me().catch(() => null))?.item_bytes_limit;
   const big = limit && state.files.find((f) => f.size > limit);
-  if (big) throw new Error(`${big.name}: ${t.tooLarge(mb(limit))}`);
+  if (big) {
+    const err = await tooLarge(limit, big.size);        // a free account that Paid would suit gets the way to upgrade with it
+    err.message = `${big.name}: ${err.message}`;
+    throw err;
+  }
   const items = [...(intent.text ? [{ text: intent.text }] : []), ...state.files.map((file) => ({ file }))];
   if (state.files.length > FILES_MAX) throw new Error(t.batchTooLarge(FILES_MAX));
   // Sent again after a failure part way, what is left stays in the batch it was in (the same id, the place each had)
@@ -363,11 +396,27 @@ async function sendPdf(url, to) {
     return { pending: true, host: new URL(url).host };
   }
   if (!res.ok) throw new Error(t.httpFailed(res.status));
-  if (limit && Number(res.headers.get('content-length') || 0) > limit) { res.body?.cancel(); throw new Error(t.tooLarge(mb(limit))); }
+  if (limit && Number(res.headers.get('content-length') || 0) > limit) { res.body?.cancel(); throw await tooLarge(limit, Number(res.headers.get('content-length'))); }
   const blob = await res.blob();
-  if (limit && blob.size > limit) throw new Error(t.tooLarge(mb(limit)));
+  if (limit && blob.size > limit) throw await tooLarge(limit, blob.size);
   const out = await sendFile(blob, { name: fileNameOf(url, res.headers.get('content-disposition')), mime: blob.type || 'application/pdf', to });
   return { seqs: [out.seq], deduped: out.deduped };
+}
+
+/**
+ * The top of the Send block: '' (plane + Send) · 'sending' (a ring and "Sending…") · 'sent' (✓ Sent #N, green; `label` is the words)
+ * Sending and sent are the same block coming back to '' by itself.
+ */
+let sentTimer = 0;
+function sendFace(face, label = '') {
+  const btn = $('send');
+  clearTimeout(sentTimer);
+  btn.classList.toggle('col', face !== '');
+  $('split').classList.toggle('sent', face === 'sent');
+  const lead = face === 'sending' ? Object.assign(document.createElement('span'), { className: 'spin' }) : icon(face === 'sent' ? 'check' : 'plane');
+  $('send-lead').replaceChildren(lead);
+  $('stamp-word').textContent = face === 'sending' ? t.sendingNow : face === 'sent' ? label : t.html.stamp;
+  if (face === 'sent') sentTimer = setTimeout(() => sendFace(''), 1500);
 }
 
 /** Sending: the stamp is pressed, the envelope's stripes run, nothing can be changed until it's done */
@@ -375,7 +424,7 @@ function busy(on) {
   state.busy = on;
   $('send').setAttribute('aria-busy', String(on));
   $('send').disabled = on;
-  $('stamp-word').textContent = on ? t.html.sending : t.html.stamp;
+  sendFace(on ? 'sending' : '');
   $('send-form').classList.toggle('sending', on);
   compose.readOnly = on;
   $('choose').disabled = on;
@@ -445,7 +494,7 @@ const targets = {
   def: null,             // this browser's saved default: ids, or null = every device
 };
 const CACHE_KEY = 'devices_cache', CACHE_MS = 30_000;
-const mayChoose = () => targets.scope === 'full' && targets.list.length > 0;
+const mayChoose = () => canChoose(targets.scope, targets.list);
 
 /** Where the next send goes: the panel's pick, else the default. undefined until the saved default has been read. */
 function currentTo() {
@@ -456,6 +505,24 @@ function currentTo() {
 function setList(list) {
   targets.list = list;
   targets.names = new Map(list.map((d) => [d.device_id, d.name]));
+}
+
+/**
+ * A device list just arrived, from wherever it was asked for: the choice, the menu ("Send to by default" shows once there is
+ * another device to choose) and the header's device count all follow it now, not at the next open
+ */
+let lastDevices = null;                           // the newest device list this popup has seen: { at, devices }
+async function applyDevices(devices) {
+  lastDevices = { at: Date.now(), devices };
+  const cfg = await store.get();
+  setList(candidates(devices, targets.self ?? cfg.device_id));
+  if (cfg.me?.data) {
+    const next = withDeviceCount(cfg.me.data, devices);
+    if (next !== cfg.me.data) await store.set({ me: { data: next, at: cfg.me.at } });
+    drawPlan(next);
+  }
+  drawTargets();
+  drawReceived();
 }
 
 async function initTargets() {
@@ -469,6 +536,7 @@ async function initTargets() {
   if (cached) setList(cache.list);
   drawTargets();
   drawRecent();
+  drawReceived();
   if (!cached || Date.now() - cache.at > CACHE_MS) refreshTargets().then((message) => { if (message && $('tpanel').hidden) noteTarget(message); });
 }
 
@@ -479,7 +547,7 @@ function refreshTargets() {
     let message = '';
     try {
       const { devices } = await api('GET', '/v1/devices');
-      setList(candidates(devices, targets.self));
+      await applyDevices(devices);
       chrome.storage.session?.set({ [CACHE_KEY]: { self: targets.self, at: Date.now(),
         list: targets.list.map((d) => ({ device_id: d.device_id, name: d.name, scope: d.scope, last_seen_at: d.last_seen_at ?? null })) } }).catch(() => {});
       const r = reconcile(targets.def, targets.list);
@@ -500,6 +568,15 @@ function refreshTargets() {
   return targets.loading;
 }
 
+/** Does this line fit the room at the bottom of the Send block? (the block's width less its padding, the devices icon, the chevron and the gaps) */
+let measure;
+function destFits(text) {
+  measure ??= document.createElement('canvas').getContext('2d');
+  const cs = getComputedStyle($('dest'));
+  measure.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  return measure.measureText(text).width <= ($('split').offsetWidth || 92) - 8 - 14 - 10 - 6 - 1;       // less the padding, the icon, the chevron and the gaps
+}
+
 /** What the right part and the menu show */
 function drawTargets() {
   const may = mayChoose();
@@ -508,11 +585,13 @@ function drawTargets() {
   if (!may && !$('tpanel').hidden) panelClose();
   $('defaults-open').hidden = !may;
   $('defaults-val').textContent = t.defaultValue(shortTarget(targets.def, targets.names, t));
-  // The badge says how many devices this send reaches, only when that is not every device
+  // The bottom of the block says where Send goes, in the short form: "→ All" · "→ Mac, Pixel" · "→ 3 devices"
   const to = panel.sel ? toValue(panel.sel, targets.list) : currentTo();
-  const n = may && to ? to.length : 0;
-  $('targets-badge').hidden = !n;
-  $('targets-badge').textContent = n || '';
+  const where = to ? shortTarget(to, targets.names, t) : t.targetAll;
+  const line = may ? destLine(to, targets.names, t, destFits) : '';      // no arrow: the devices icon beside it says it is where the send goes
+  $('dest').textContent = line;
+  $('targets-btn').setAttribute('aria-label', may ? `${t.html.targetsBtn}: ${where}` : t.html.targetsBtn);
+  $('targets-btn').title = line;
   $('tp-default').textContent = t.tpDefault(shortTarget(targets.def, targets.names, t));
 }
 
@@ -676,6 +755,230 @@ function defaultsClose() {
   $('menu-btn').focus();
 }
 
+// ── What other devices sent ───────────────────────────────────────────────
+// Only a browser that can read (a full key) has this. It is fetched when the popup opens and when Refresh is pressed,
+// never in the background. Text: copy. A link: it opens (http and https only), shown by its host. A file or image: its
+// download link lasts minutes, so a fresh one is asked for at the moment it is opened.
+
+const received = { busy: false };
+$('recv-refresh').title = t.recvRefresh;
+$('recv-refresh').setAttribute('aria-label', t.recvRefresh);
+const pull = (path) => api('GET', path);
+/** The note under the Received heading; `data` (a limit answer) adds the way past the limit when the service gave one */
+const recvNote = (text, data) => {
+  $('recv-note').textContent = text;
+  const up = $('recv-up');
+  const url = text ? upgradeLink(data) : null;
+  up.hidden = true;
+  up.onclick = url ? (ev) => { ev.preventDefault(); chrome.tabs.create({ url }); } : null;
+  if (url) {
+    up.textContent = t.upgradeFor(data.why);
+    upgradeOffered().then((open) => { if (open && $('recv-note').textContent === text) up.hidden = false; });
+  }
+};
+
+/** The file is not there any more: say so, and for a free account say what Paid keeps and offer it (the plans are public) */
+async function goneNote() {
+  recvNote(t.recvGone);
+  const account = await me().catch(() => null);
+  if (!safeLink(account?.upgrade_url)) return;
+  const plans = await readPlans();
+  const days = paymentsOff(plans) ? null : plans?.limits;                           // payments off: the plain sentence
+  const w = goneWall(account, days?.free?.days, days?.paid?.days, t);
+  if ($('recv-note').textContent === t.recvGone) recvNote(w.message, w.data);     // not if something else was said meanwhile
+}
+
+async function drawReceived() {
+  const on = canReceive(targets.scope);
+  $('received').hidden = !on;
+  if (!on) return;
+  const list = await receivedList(chrome.storage.local);
+  $('recv-empty').hidden = !!list.length;
+  $('received-list').replaceChildren(...groupReceived(list).map((u) => (u.members ? receivedLetter(u) : receivedRow(u.one))));
+}
+
+/** Several things sent together: one card, the text first (copy it here), each file below it with its own download */
+function receivedLetter(u) {
+  const texts = u.members.filter((m) => m.kind !== 'file');
+  const files = u.members.filter((m) => m.kind === 'file');
+  const first = texts[0];
+  const li = document.createElement('li');
+  li.className = 'letter';
+  const tile = Object.assign(document.createElement('span'), { className: 'tile' });
+  tile.append(icon(first ? (first.kind === 'url' ? 'link' : 'text') : 'file'), Object.assign(document.createElement('b'), { className: 'cnt', textContent: String(u.members.length) }));
+  const body = Object.assign(document.createElement('div'), { className: 'body' });
+  const label = first ? (first.label || '') : t.recvBatch(0, files.length);
+  const title = Object.assign(document.createElement('p'), { className: 'tt', textContent: label, title: label });
+  const newest = u.members.reduce((a, m) => ((m.sent ?? m.at) > (a.sent ?? a.at) ? m : a), u.members[0]);
+  const who = targets.names.get(newest.from);
+  const meta = [t.recvBatch(texts.length, files.length), who ? t.recvFrom(who) : '', when(newest.sent ?? newest.at)].filter(Boolean).join(' · ');
+  body.append(title, Object.assign(document.createElement('p'), { className: 'mt', textContent: meta }));
+  li.append(tile, body);
+  if (first?.text) {
+    const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'act', title: t.copy });
+    copy.setAttribute('aria-label', t.copyLabel(label));
+    copy.append(icon('copy'));
+    copy.onclick = () => copyOut(copy, first.text);
+    li.append(copy);
+  }
+  if (files.length) {
+    const sub = Object.assign(document.createElement('ul'), { className: 'files' });
+    for (const f of files) {
+      const row = document.createElement('li');
+      const name = f.label || (f.mime?.startsWith('image/') ? t.recentImage : t.recentFile);
+      row.append(icon('file'), Object.assign(document.createElement('span'), { className: 'fn', textContent: name, title: name }),
+        Object.assign(document.createElement('span'), { className: 'sz', textContent: Number.isFinite(f.bytes) ? fileSize(f.bytes) : '' }));
+      const get = Object.assign(document.createElement('button'), { type: 'button', className: 'act sm', title: t.recvDownload });
+      get.setAttribute('aria-label', t.recvDownloadLabel(name));
+      get.append(icon('download'));
+      get.onclick = () => openReceivedFile(f, get);
+      row.append(get);
+      sub.append(row);
+    }
+    li.append(sub);
+  }
+  return li;
+}
+
+function receivedRow(e) {
+  const li = document.createElement('li');
+  const label = e.label || (e.mime?.startsWith('image/') ? t.recentImage : t.recentFile);
+  const tile = Object.assign(document.createElement('span'), { className: 'tile' });
+  tile.append(icon(e.kind === 'url' ? 'link' : e.kind === 'file' ? (e.mime?.startsWith('image/') ? 'image' : 'file') : 'text'));
+  const body = Object.assign(document.createElement('div'), { className: 'body' });
+  const href = e.kind === 'url' ? openableLink(e.text) : null;
+  const title = href
+    ? Object.assign(document.createElement('a'), { className: 'tt', href, target: '_blank', rel: 'noopener' })
+    : Object.assign(document.createElement('p'), { className: 'tt' });
+  title.textContent = label;
+  title.title = label;
+  const who = targets.names.get(e.from);
+  const meta = [e.kind === 'url' ? e.host : '', e.kind === 'file' && Number.isFinite(e.bytes) ? fileSize(e.bytes) : '', who ? t.recvFrom(who) : '', when(e.sent ?? e.at)].filter(Boolean).join(' · ');
+  body.append(title, Object.assign(document.createElement('p'), { className: 'mt', textContent: meta, title: `#${e.seq}` }));
+  li.append(tile, body);
+  if (e.kind === 'file') {
+    const get = Object.assign(document.createElement('button'), { type: 'button', className: 'act', title: t.recvDownload });
+    get.setAttribute('aria-label', t.recvDownloadLabel(label));
+    get.append(icon('download'));
+    get.onclick = () => openReceivedFile(e, get);
+    li.append(get);
+  } else if (e.text) {
+    const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'act', title: t.copy });
+    copy.setAttribute('aria-label', t.copyLabel(label));
+    copy.append(icon('copy'));
+    copy.onclick = () => copyOut(copy, e.text);
+    li.append(copy);
+  }
+  return li;
+}
+
+/** Ask for a new download link for this one file now (the old one has expired), and open it */
+async function openReceivedFile(e, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  recvNote('');
+  try {
+    const url = await fileLinkFrom(e.seq, pull);
+    if (url) await chrome.tabs.create({ url }); else await goneNote();
+  } catch (err) {
+    if (authLost(err)) return render(err.message);
+    recvNote(err.message, err.data);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** Fetch what is new. `why`: 'open' (the popup was opened) or 'manual' (Refresh was pressed). One at a time. */
+const OPEN_PULL_GAP_MS = 20_000;     // opening the popup again within this long shows the list as it is
+const MANUAL_PULL_GAP_MS = 3_000;    // Refresh pressed again within this long does nothing
+async function pullReceived(why) {
+  if (received.busy || !canReceive(targets.scope)) return;
+  if (why === 'manual') {
+    if (Date.now() - (received.manualAt ?? 0) < MANUAL_PULL_GAP_MS) return;
+    received.manualAt = Date.now();
+  } else {
+    const { [RECV_AT_KEY]: at } = await chrome.storage.local.get(RECV_AT_KEY);
+    if (Number.isInteger(at) && Date.now() - at >= 0 && Date.now() - at < OPEN_PULL_GAP_MS) return;
+    if (received.busy) return;
+  }
+  received.busy = true;
+  const button = $('recv-refresh');
+  button.setAttribute('aria-busy', 'true');
+  button.disabled = true;
+  recvNote('');
+  try {
+    const { device_id, [OWN_IDS_KEY]: before } = await store.get();
+    await refreshReceived({ pull, selfId: ownIds(device_id, before), why, local: chrome.storage.local });
+    await chrome.storage.local.set({ [RECV_AT_KEY]: Date.now() });
+  } catch (err) {
+    if (authLost(err)) return render(err.message);
+    if (err.code === 'SCOPE_INSUFFICIENT') {            // the key can't read after all: back to a send-only browser
+      await store.set({ scope: 'ingest_only' });
+      return offerAdding();
+    }
+    recvNote(err.message, err.data);
+  } finally {
+    received.busy = false;
+    button.setAttribute('aria-busy', 'false');
+    button.disabled = false;
+    drawReceived();
+  }
+}
+$('recv-refresh').onclick = () => pullReceived('manual');
+chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && RECEIVED_KEY in changes) drawReceived(); });
+
+// ── Turning receiving on in a browser that joined with a code ─────────────
+// That browser's key can only send. Reading needs a full key, so it joins once more — with a code from a device that has
+// full access, asking for full — and takes the place of its earlier join: one device slot, as before.
+
+$('rcode').placeholder = t.html.codeExample;
+$('rcode').setAttribute('aria-label', t.html.codePlaceholder);
+
+function receiveOpen() {
+  closeMenuIfOpen();
+  $('top').hidden = $('main').hidden = true;
+  $('receive').hidden = false;
+  $('rcv-returned').hidden = true;
+  $('rcode').value = '';
+  $('rcode').focus();
+}
+
+function receiveClose(focusMenu = true) {
+  $('receive').hidden = true;
+  $('top').hidden = $('main').hidden = false;
+  if (focusMenu) $('menu-btn').focus();
+}
+
+$('receive-open').onclick = receiveOpen;
+$('rcv-back').onclick = () => receiveClose();
+$('rcode').oninput = () => { $('rcv-returned').hidden = true; };
+$('rcode').onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.isComposing) $('rcv-go').click(); };
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('receive').hidden) { ev.preventDefault(); receiveClose(); } });
+$('rcv-go').onclick = async () => {
+  const code = $('rcode').value.trim().toUpperCase();
+  if (!code) return $('rcode').focus();
+  const button = $('rcv-go'), label = button.textContent;
+  button.disabled = true;
+  button.textContent = t.rcvBusy;
+  $('rcv-returned').hidden = true;
+  try {
+    const { token, device_id: oldId, [OWN_IDS_KEY]: before } = await store.get();
+    // This browser's own key goes along as the one it is replacing; if the code is wrong, nothing changes and it keeps sending
+    const res = await api('POST', '/v1/pair/claim',
+      receiveJoinBody({ code, name: t.deviceName(navigator.platform), deviceKey: await deviceKey('extension'), token }), { auth: false });
+    receiveClose(false);
+    // Joining again gives this browser a new device id; what it sent under the old one is still its own, not something received
+    await store.set({ [OWN_IDS_KEY]: rememberOwn(before, oldId) });
+    await adopt(res, 'full', { receiving: true });
+  } catch (err) {
+    $('rcv-returned').hidden = false;
+    $('rcv-returned').querySelector('span').textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+};
+
 // ── The menu at the top right ────────────────────────────────────────────
 
 const menu = $('menu');
@@ -748,7 +1051,13 @@ async function offerAdding() {
   const may = canAddDevices(scope);
   $('add-device').hidden = !may || !$('pair').hidden;
   targets.scope = scope;
+  $('receive-open').hidden = !canTurnOnReceiving(scope);
   initTargets();
+  if (canReceive(scope)) {
+    drawReceived();
+    pruneReceived(chrome.storage.local).then(drawReceived);       // what is over a week old is removed from storage as the list is opened
+    pullReceived('open');
+  } else drawReceived();
   if (may) await pairResume();
 }
 
@@ -792,9 +1101,38 @@ function pairFailed(message) {
  * A fresh code. All slots in use: the new device takes the place of the one picked here (by default the one idle
  * longest); picking another makes a new code for it. `first`: right after creating the account.
  */
+const KNOWN_FRESH_MS = 60_000;                    // a device list and account line this young are used as they are
+
+let makingTimer = 0;
 async function showPairCode(chosen, first) {
   pairStop();
-  const [account, { devices }] = await Promise.all([me({ fresh: true }), api('GET', '/v1/devices')]);
+  // The panel opens at once with a small spinner. On a slow connection the code takes a few round trips, and the menu
+  // that was pressed has already closed: without this, nothing on screen moves and it looks like a dead click
+  $('pair').hidden = false;
+  $('add-device').hidden = true;
+  $('pair-title').textContent = first ? t.pairTitleFirst : t.pairTitle;
+  $('pair-body').hidden = $('pair-replace').hidden = $('pair-hint').hidden = $('pair-install').hidden = $('pair-returned').hidden = true;
+  $('pair-making-text').textContent = t.pairMaking;
+  $('pair-making').hidden = false;
+  clearTimeout(makingTimer);
+  makingTimer = setTimeout(() => { $('pair-making-text').textContent = t.pairSlow; }, 6000);
+  try {
+    await makePairCode(chosen, first);
+  } finally {
+    clearTimeout(makingTimer);
+    $('pair-making').hidden = true;
+  }
+}
+
+async function makePairCode(chosen, first) {
+  // The list and the account line were read when the popup opened. Taking them as they are saves a whole round trip
+  // before the code is asked for; they are read again right after, so a change still shows
+  const cfg = await store.get();
+  const known = !chosen && lastDevices && cfg.me?.data && Date.now() - lastDevices.at < KNOWN_FRESH_MS && Date.now() - cfg.me.at < KNOWN_FRESH_MS;
+  const [account, devices] = known
+    ? [cfg.me.data, lastDevices.devices]
+    : await Promise.all([me({ fresh: true }), api('GET', '/v1/devices')]).then(([a, d]) => [a, d.devices]);
+  if (!known) applyDevices(devices).catch(() => {});
   const { device_id } = await store.get();
   const { others, pick } = slotPlan(account, devices, device_id, chosen);
   const res = await api('POST', '/v1/pair', pick ? { replace: pick.device_id } : undefined);
@@ -808,6 +1146,7 @@ async function showPairCode(chosen, first) {
   if (!state.busy) explain();                                  // an earlier "joined" line is old news now
   drawPair(p);
   pairWatch(p, false);
+  if (known) Promise.all([me({ fresh: true }), api('GET', '/v1/devices')]).then(([, d]) => applyDevices(d.devices)).catch(() => {});
 }
 
 /** A code still valid from the last time the popup was open, for this same key */
@@ -874,6 +1213,7 @@ function pairWatch(p, now) {
     } finally {
       pairing.checking = false;
     }
+    if (list && run === pairing.run) applyDevices(list).catch(() => {});      // the menu and the header follow the list as it changes
     const hit = list && run === pairing.run && newcomer(p.before, list);
     if (hit) pairJoined(hit);
   };
@@ -926,13 +1266,15 @@ async function readTab(tab) {
   return { page, selection };
 }
 
+/** The header: plan and how many devices are in use */
+function drawPlan(m) {
+  $('plan').textContent = m ? t.planLine(t.plans[m.plan] ?? m.plan, m.devices_used, m.devices_limit) : '';
+}
+
 async function showPlan(fresh = false) {
   const { me: cached } = await store.get();
-  const draw = (m) => {
-    $('plan').textContent = m ? t.planLine(t.plans[m.plan] ?? m.plan, m.devices_used, m.devices_limit) : '';
-  };
-  draw(cached?.data);
-  try { draw(await me({ fresh })); } catch (err) { if (authLost(err)) render(err.message); }
+  drawPlan(cached?.data);
+  try { drawPlan(await me({ fresh })); } catch (err) { if (authLost(err)) render(err.message); }
 }
 
 async function render(message) {
@@ -943,7 +1285,10 @@ async function render(message) {
   $('unpair').hidden = !token;
   $('plan').textContent = '';
   if (!token) {
+    // Removed from the account while something was typed: keep the words for when this browser joins again (this session only)
+    if (message && compose.value.trim()) chrome.storage.session?.set({ draft: compose.value }).catch(() => {});
     pairStop();
+    $('receive').hidden = true;
     $('pair').hidden = $('add-device').hidden = true;
     setupFailed(message ?? null);
     $('code').focus();
@@ -953,6 +1298,11 @@ async function render(message) {
   offerAdding();
   pruneRecent().then(drawRecent);                // what is over a week old is removed from storage as the list is opened
   compose.focus();
+  const { draft } = await chrome.storage.session?.get('draft').catch(() => ({})) ?? {};
+  if (draft) {
+    chrome.storage.session.remove('draft').catch(() => {});
+    if (!compose.value) { compose.value = state.text = draft; grow(); }
+  }
   const tab = await currentTab();
   const { page, selection } = await readTab(tab);
   Object.assign(state, { tab, page });

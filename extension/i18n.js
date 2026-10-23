@@ -2,6 +2,13 @@
  * Interface text. English by default; Simplified Chinese when the browser's UI language is Chinese.
  * The manifest's name, description and shortcut descriptions are localized separately, in _locales/.
  */
+/** The name this browser gives itself: the platform text is cut so the whole name stays short (48 characters, Chinese or Latin alike) */
+const NAME_MAX = 48;
+const clipDeviceName = (platform) => {
+  const chars = Array.from(String(platform ?? '').replace(/\s+/g, ' ').trim());
+  return chars.length > NAME_MAX - 12 ? `${chars.slice(0, NAME_MAX - 13).join('')}…` : chars.join('');
+};
+
 const EN = {
   errors: {                                   // keyed by the API error code
     INVALID_TOKEN: 'Invalid token — pair again',
@@ -14,7 +21,7 @@ const EN = {
     SIGNUP_LIMITED: 'Too many accounts were created on this network today. Join an existing account with a pairing code, or try again tomorrow',
     PAIRING_LIMITED: 'Too many wrong pairing codes from this network today. Check the code on the other device and try again tomorrow',
     TURNSTILE_REQUIRED: 'Quite a few accounts were created on this network today. Create this one in the browser at dropit.smart-kits.xyz, then join it here with a pairing code',
-    QUOTA_EXCEEDED: 'Storage is full — wait for old items to expire',
+    QUOTA_EXCEEDED: 'Your space is full — wait for old items to expire',
     PAYLOAD_TOO_LARGE: 'Too large to send',
     GLOBAL_CIRCUIT_OPEN: 'dropit is not taking new items right now — try again later',
     BLOB_UNAVAILABLE: "Files can't be sent right now — try again later",
@@ -23,17 +30,19 @@ const EN = {
   httpFailed: (status) => `Request failed: HTTP ${status}`,
   offline: 'Network unavailable',
   preparing: 'Preparing the account…',
-  tooLarge: (size) => `Larger than ${size}, the most one item can be`,
+  tooLarge: (size) => `Over the ${size} limit for one item`,
+  // A file over a free account's limit that Paid would take: said before anything is sent, with the way to upgrade next to it
+  tooLargeFree: (size, paid) => `Over the ${size} limit for one item on Free. Paid takes files up to ${paid}`,
   rateHour: 'Sending too fast — try again within the hour',
-  rateDay: (time) => `Today's sends are used up — back at ${time}`,
+  rateDay: (time) => `Today's sends are all in — sending picks up again at ${time}`,
   signupLimitedAt: (time, n) => `This network has made its ${n} accounts for today. Join an existing account with a pairing code, or try again after ${time}`,
   quotaItems: 'Too many items waiting — wait for old ones to expire',
-  quotaBytes: 'Storage is full — wait for old items to expire',
+  quotaBytes: 'Your space is full — wait for old items to expire',
   // The same, when the service says when the oldest item expires and frees room (a span from `span`)
   quotaItemsIn: (span) => `Too many items waiting — the oldest expires in ${span} and frees up room`,
-  quotaBytesIn: (span) => `Storage is full — the oldest item expires in ${span} and frees up room`,
+  quotaBytesIn: (span) => `Your space is full — the oldest item expires in ${span} and frees up room`,
   rateDayUploads: (time) => `Today's file uploads are used up — back at ${time}`,
-  rateDayDownloads: (time) => `Today's downloads are used up — back at ${time}`,
+  rateDayDownloads: (time) => `Today's downloads are all used — they pick up again at ${time}`,
   span: (sec) => (sec < 3600 ? 'under an hour' : Math.ceil(sec / 3600) < 48 ? `about ${Math.ceil(sec / 3600)} hour${Math.ceil(sec / 3600) === 1 ? '' : 's'}` : `about ${Math.ceil(sec / 86400)} days`),
   // The way past a limit the paid plan lifts: shown with the limit, never on its own. No numbers: the plan's are the service's to say
   upgradeFor: (why) => ({
@@ -73,7 +82,7 @@ const EN = {
   noFile: 'This plays as a stream with no file to send — send the page instead',
   accessDenied: 'Not allowed to read files from this site',
 
-  deviceName: (platform) => `Browser · ${platform}`,
+  deviceName: (platform) => `Browser · ${clipDeviceName(platform)}`,
   consent: 'Joining sends this browser’s name and a fingerprint hash, used only to manage your device slots. What you send is kept on the service for a short while (1 day on the free plan) so your other devices can receive it.',
   privacyLink: 'Privacy',
   replacedOld: (name) => `Took the place of this browser's earlier “${name}” — it no longer uses a device slot`,
@@ -111,6 +120,7 @@ const EN = {
   targetAll: 'All',
   targetN: (n) => (n === 1 ? '1 device' : `${n} devices`),
   targetSep: ', ',
+  sendAllOnce: 'Send to all this time',
   tpSend: (n) => `Send to ${n} device${n === 1 ? '' : 's'}`,
   tpDefault: (to) => `Default: ${to} ›`,
   keepOne: 'Keep at least 1 device. To pick every device, tap ',
@@ -123,6 +133,8 @@ const EN = {
 
   // Adding a device: only a browser whose key may (the one that created the account). Worded as the web inbox.
   pairTitle: 'Add a device',
+  pairMaking: 'Making a code…',
+  pairSlow: 'Still working — the connection is slow…',
   pairTitleFirst: 'Next: add your phone or Obsidian',
   pairHint: 'Scan this with your phone, or type the 6 characters. Single use.',
   pairInstall: ['Not installed on the new device yet? Scan the QR code with it, or open ', ' to install, then enter these 6 characters.'],
@@ -137,6 +149,19 @@ const EN = {
   minsAgo: (n) => `${n} min ago`,
   hoursAgo: (n) => `${n} h ago`,
   daysAgo: (n) => `${n} d ago`,
+
+  // What other devices sent: listed when the popup opens or on Refresh, and turned on per browser (see rcvWarn)
+  recvDownload: 'Download',
+  // Things sent together: "Text + 2 files", "3 files"
+  recvBatch: (texts, files) => (!files ? 'Text' : texts ? `Text + ${files} file${files === 1 ? '' : 's'}` : `${files} file${files === 1 ? '' : 's'}`),
+  recvDownloadLabel: (what) => `Download: ${what}`,
+  recvRefresh: 'Refresh',
+  recvGone: 'This file is no longer available',
+  // The same, for a free account that Paid would suit: how long each plan keeps items (days from the service; none known, none written)
+  recvGoneKept: (free, paid) => `This file is no longer available — Free keeps items ${free} day${free === 1 ? '' : 's'}, Paid keeps them ${paid} days`,
+  recvFrom: (name) => `from ${name}`,
+  rcvOn: 'This browser can now receive',
+  rcvBusy: 'Turning on…',
 
   // The window that asks for access to one site
   grantTitle: (host) => `Let dropit read files from ${host}?`,
@@ -164,7 +189,10 @@ const EN = {
     recentTitle: 'Recently sent',
     settings: 'Settings',
     hint: 'Or right-click an image, link or selection on any page',
-    unpair: 'Sign out on this browser',
+    unpair: 'Sign out',
+    soTitle: 'Sign out of this device?',
+    soBody: 'After signing out, this browser no longer sends or receives. Its recent list, what it received here and its default-send setting are cleared, and its slot on the account is freed. Text you haven’t sent is not kept. To use it again, join again with a code.',
+    soCancel: 'Cancel',
     source: 'Source code',
     issue: 'Report a problem or idea',
     grantNote: 'This site doesn’t let other pages read its files directly. Allowing it only covers this one site, and you can take it back in the extension’s settings.',
@@ -179,10 +207,17 @@ const EN = {
     tpSub: 'This send only · ticked by your default',
     tpNote: 'Only the button below sends; afterwards it goes back to the default',
     menuDefaults: 'Send to by default',
-    dfTitle: 'Send to by default',
+    dfTitle: 'This browser sends to by default',
     dfBack: 'Back',
     dfSub: 'Each send from this browser goes to the ticked devices by default.',
     dfSaved: 'Saved',
+    recvTitle: 'Received',
+    recvEmpty: 'Nothing from your other devices yet. It shows up here when you open this window or press Refresh.',
+    menuReceive: 'Receive on this browser',
+    rcvTitle: 'Receive on this browser',
+    rcvWarn: 'Once on, this browser can read what is in your account.',
+    rcvHow: 'Get a code on a device that has full access (the one where you created the account, Obsidian, the web inbox…) and enter it here. This browser joins again in its own place, so no extra device slot is used.',
+    rcvGo: 'Agree and turn on',
   },
   issueBody: (env) => `What happened, or what you'd like:\n\n\n---\n${env}\n\nPlease don't paste a token (dk_…) or anything private: issues are public.`,
 };
@@ -209,19 +244,20 @@ const ZH = {
   offline: '网络不可用',
   preparing: '正在准备账号…',
   tooLarge: (size) => `超过了单条上限 ${size}`,
+  tooLargeFree: (size, paid) => `超过了免费版的单条上限 ${size}。付费版最大可到 ${paid}`,
   rateHour: '投得太快了，这一小时内再试',
   rateDay: (time) => `今天的投递次数用完了，${time} 恢复`,
   signupLimitedAt: (time, n) => `这个网络今天已经建了 ${n} 个账号，到上限了。可以用配对码加入已有账号，或者 ${time} 以后再试`,
-  quotaItems: '积压的内容太多了，等旧内容过期',
+  quotaItems: '排队等收的内容太多了，等旧内容过期',
   quotaBytes: '空间已满，等旧内容过期',
-  quotaItemsIn: (span) => `积压的内容太多了，最早的一条${span}后到期，到时自动腾出位置`,
+  quotaItemsIn: (span) => `排队等收的内容太多了，最早的一条${span}后到期，到时自动腾出位置`,
   quotaBytesIn: (span) => `空间已满，最早的一条${span}后到期，到时自动腾出位置`,
   rateDayUploads: (time) => `今天的文件上传次数用完了，${time} 恢复`,
   rateDayDownloads: (time) => `今天的下载次数用完了，${time} 恢复`,
   span: (sec) => (sec < 3600 ? '不到 1 小时' : Math.ceil(sec / 3600) < 48 ? `约 ${Math.ceil(sec / 3600)} 小时` : `约 ${Math.ceil(sec / 86400)} 天`),
   upgradeFor: (why) => ({
-    per_day: '升级接着发', queue: '升级后可以积压更多', space: '升级获得更多空间', file_size: '升级后发送',
-    devices: '升级后放得下更多设备', realtime: '升级后实时一直有', uploads: '升级接着传文件',
+    per_day: '升级接着发', queue: '升级后可以排更多条', space: '升级获得更多空间', file_size: '升级后发送',
+    devices: '升级后放得下更多设备', realtime: '升级后保留实时送达', uploads: '升级接着传文件',
     downloads: '升级接着下载', kept: '升级后内容留得更久',
   }[why] || '看看付费版'),
   batchTooLarge: (max) => `一次最多 ${max} 个文件`,
@@ -254,7 +290,7 @@ const ZH = {
   noFile: '这是分段播放的流媒体，没有文件可投，可以投这个页面',
   accessDenied: '没有读取这个网站文件的权限',
 
-  deviceName: (platform) => `浏览器 · ${platform}`,
+  deviceName: (platform) => `浏览器 · ${clipDeviceName(platform)}`,
   consent: '加入时会发送这个浏览器的名称和一个设备指纹摘要，只用来管理你的设备名额。你投递的内容会在服务上暂存一段时间（免费版 1 天），供你的其他设备接收。',
   privacyLink: '隐私说明',
   replacedOld: (name) => `已替换这个浏览器之前的「${name}」，不再多占一台设备的名额`,
@@ -289,6 +325,7 @@ const ZH = {
   targetAll: '全部',
   targetN: (n) => `${n} 台`,
   targetSep: '、',
+  sendAllOnce: '这次投给全部',
   tpSend: (n) => `投给 ${n} 台设备`,
   tpDefault: (to) => `默认：${to} ›`,
   keepOne: '至少保留 1 台；想投给全部，请',
@@ -300,6 +337,8 @@ const ZH = {
   defaultValue: (to) => `${to} ›`,
 
   pairTitle: '加一台设备',
+  pairMaking: '正在生成配对码…',
+  pairSlow: '还在进行，网络有点慢……',
   pairTitleFirst: '下一步：把手机或 Obsidian 加进来',
   pairHint: '手机扫这个码，或手敲这 6 位。用一次就作废。',
   pairInstall: ['新设备还没装 dropit？用它扫上面的二维码，或打开 ', ' 去安装，装好后输入这 6 位。'],
@@ -314,6 +353,16 @@ const ZH = {
   minsAgo: (n) => `${n} 分钟前`,
   hoursAgo: (n) => `${n} 小时前`,
   daysAgo: (n) => `${n} 天前`,
+
+  recvDownload: '下载',
+  recvBatch: (texts, files) => (!files ? '文字' : texts ? `文字 + ${files} 个文件` : `${files} 个文件`),
+  recvDownloadLabel: (what) => `下载：${what}`,
+  recvRefresh: '刷新',
+  recvGone: '这个文件已经取不到了',
+  recvGoneKept: (free, paid) => `这个文件已经取不到了 —— 免费版内容保留 ${free} 天，付费版保留 ${paid} 天`,
+  recvFrom: (name) => `来自 ${name}`,
+  rcvOn: '这个浏览器现在可以接收了',
+  rcvBusy: '正在开启…',
 
   grantTitle: (host) => `允许 dropit 读取 ${host} 的文件？`,
 
@@ -340,7 +389,10 @@ const ZH = {
     recentTitle: '最近投出',
     settings: '设置',
     hint: '也可以在任意网页上右键图片、链接、选中的字',
-    unpair: '在这个浏览器上退出',
+    unpair: '退出',
+    soTitle: '退出这台设备？',
+    soBody: '退出后，这个浏览器不再收发。最近投出、这里已收到的列表和默认投给的设置会清掉，它在账号里占的名额也会释放。未发出的文字不会保留。想再用，需要用配对码重新加入。',
+    soCancel: '取消',
     source: '源代码',
     issue: '反馈问题或建议',
     grantNote: '这个网站不让别的页面直接读它的文件。允许只对这一个网站有效，可以在扩展设置里随时收回。',
@@ -355,10 +407,17 @@ const ZH = {
     tpSub: '只对这一次有效 · 已按默认勾好',
     tpNote: '点下面的按钮才发出，发完回到默认',
     menuDefaults: '默认投给',
-    dfTitle: '默认投给',
+    dfTitle: '这台浏览器默认投给',
     dfBack: '返回',
     dfSub: '这个浏览器每次投递，默认发给勾上的设备。',
     dfSaved: '已保存',
+    recvTitle: '最近收到',
+    recvEmpty: '你的其他设备还没有投来内容。打开这个窗口或点「刷新」时会出现在这里。',
+    menuReceive: '在这台浏览器上接收',
+    rcvTitle: '在这台浏览器上接收',
+    rcvWarn: '开启后，这台浏览器能读到你账号里的内容。',
+    rcvHow: '在有完整权限的设备上（建号的那台、Obsidian、网页收件箱……）拿一个配对码，填在这里。这台浏览器会在原来的位置重新加入一次，不会多占一台设备的名额。',
+    rcvGo: '同意并开启',
   },
   issueBody: (env) => `发生了什么，或者你希望怎样：\n\n\n---\n${env}\n\n请不要贴 token（dk_ 开头）或私人内容：issue 是公开的。`,
 };

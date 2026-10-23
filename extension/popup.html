@@ -9,13 +9,15 @@
   <!-- One button at the top right holds everything that is not sending: adding a device, theme, links, signing out -->
   <div class="menu-wrap">
     <button class="icon-btn" id="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" data-i18n-label="settings">
-      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg>
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
     <div class="menu" id="menu" role="menu" hidden>
       <!-- Only a browser whose key may add devices (it created the account) shows it -->
       <button role="menuitem" id="add-device" type="button" hidden data-i18n="addDevice"></button>
       <!-- Only a browser whose key can read the device list, and only when there is another device to choose -->
       <button role="menuitem" id="defaults-open" class="has-value" type="button" hidden><span data-i18n="menuDefaults"></span><span class="val" id="defaults-val"></span></button>
+      <!-- Only a browser that joined with the send-only key (it cannot read anything yet) shows it -->
+      <button role="menuitem" id="receive-open" type="button" hidden data-i18n="menuReceive"></button>
       <button role="menuitem" id="theme" type="button"></button>
       <a role="menuitem" href="https://github.com/smart-kits/dropit-client" target="_blank" rel="noopener" data-i18n="source"></a>
       <a role="menuitem" id="issue" target="_blank" rel="noopener" data-i18n="issue"></a>
@@ -66,6 +68,32 @@
   <p class="df-note" id="df-note"></p>
 </section>
 
+<!-- Turning receiving on in a browser that joined with a code: join again, this time with a full key -->
+<section class="defaults receive" id="receive" hidden>
+  <div class="df-head">
+    <button class="icon-btn" id="rcv-back" type="button" data-i18n-label="dfBack"><span data-icon="back"></span></button>
+    <h1 data-i18n="rcvTitle"></h1>
+  </div>
+  <p class="df-sub rcv-warn" data-i18n="rcvWarn"></p>
+  <div class="envelope join">
+    <input type="text" id="rcode" maxlength="10" autocomplete="off" spellcheck="false">
+    <button class="primary" id="rcv-go" type="button" data-i18n="rcvGo"></button>
+  </div>
+  <div class="notice" id="rcv-returned" role="alert" hidden><b aria-hidden="true">!</b><span></span></div>
+  <p class="df-note" data-i18n="rcvHow"></p>
+</section>
+
+<!-- Signing out asks first: what goes with it is said here, in full -->
+<section class="defaults signout" id="signout" hidden>
+  <div class="df-head">
+    <button class="icon-btn" id="so-back" type="button" data-i18n-label="dfBack"><span data-icon="back"></span></button>
+    <h1 data-i18n="soTitle"></h1>
+  </div>
+  <p class="df-sub rcv-warn" data-i18n="soBody"></p>
+  <button class="primary" id="so-go" type="button" data-i18n="unpair"></button>
+  <button class="secondary" id="so-cancel" type="button" data-i18n="soCancel"></button>
+</section>
+
 <section id="main" hidden>
   <!-- Enter sends; what it will send is said under the box, so there is never a choice to make -->
   <form class="envelope" id="send-form">
@@ -77,14 +105,15 @@
         </button>
         <input type="file" id="files" multiple hidden>
       </div>
-      <!-- "Send | devices": the right part (only for a key that can read the device list, with another device to
-           choose) opens the one list of devices for this send; nothing is sent until its bottom button is pressed -->
+      <!-- One block to the right of the box: the red top is Send (straight to the default devices, nothing to choose); the
+           light bottom says where that goes ("→ All") and opens the list of devices for this one send. With one other
+           device there is no bottom: Send is the whole block. -->
       <div class="split" id="split">
-        <button class="send" id="send" type="submit"><span id="stamp-word" data-i18n="stamp"></span></button>
+        <button class="send" id="send" type="submit"><span class="lead" id="send-lead" data-icon="plane"></span><b id="stamp-word" data-i18n="stamp"></b></button>
         <button class="more" id="targets-btn" type="button" hidden aria-haspopup="dialog" aria-expanded="false" aria-controls="tpanel" data-i18n-label="targetsBtn">
-          <span class="ic" data-icon="devices"></span><span class="ic dn" data-icon="down"></span>
-          <b class="badge" id="targets-badge" hidden></b>
+          <span class="ic dv" data-icon="devices"></span><span class="dest" id="dest"></span><span class="ic dn" data-icon="down"></span>
         </button>
+        <i class="prog" aria-hidden="true"></i>
         <div class="tpanel" id="tpanel" role="dialog" aria-labelledby="tp-title" hidden>
           <div class="tp-head"><h2 id="tp-title" data-i18n="tpTitle"></h2><button class="link all" id="tp-all" type="button" data-i18n="tpAll"></button></div>
           <p class="tp-sub" id="tp-sub" aria-live="polite"></p>
@@ -107,6 +136,7 @@
     <h2 id="pair-title"></h2>
     <button class="link x" id="pair-close" type="button">×</button>
   </div>
+  <p class="making" id="pair-making" role="status" hidden><span class="spin" aria-hidden="true"></span><span id="pair-making-text"></span></p>
   <div class="pair-body" id="pair-body">
     <div class="qr" id="pair-qr"></div>
     <div class="pair-side">
@@ -126,11 +156,23 @@
     <div class="row">
       <span class="tile" id="failed-tile"></span>
       <div class="body"><p class="tt" id="failed-title"></p><p class="mt" id="failed-meta"></p></div>
-      <button class="act bad" id="retry" type="button"></button>
     </div>
     <p class="why"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.2v.1"/></svg><span id="failed-why"></span></p>
     <a class="up" id="returned-up" href="#" hidden></a>
+    <div class="svb2"><button class="kbtn solid" id="send-all" type="button" hidden></button><button class="kbtn" id="retry" type="button"></button></div>
   </div>
+
+  <!-- What other devices sent: only for a browser that can read (full key). Fetched when this opens, or on Refresh -->
+  <section id="received" hidden>
+    <div class="sec-head">
+      <h2 data-i18n="recvTitle"></h2>
+      <button class="icon-btn sm" id="recv-refresh" type="button" aria-busy="false"><span data-icon="retry"></span></button>
+    </div>
+    <p class="recv-note" id="recv-note" aria-live="polite"></p>
+    <a class="recv-up" id="recv-up" href="#" hidden></a>
+    <ul class="letters" id="received-list"></ul>
+    <p class="empty" id="recv-empty" data-i18n="recvEmpty" hidden></p>
+  </section>
 
   <section id="recent" hidden>
     <h2 data-i18n="recentTitle"></h2>

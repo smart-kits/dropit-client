@@ -223,7 +223,27 @@ export const safeLink = (u) => {
 };
 
 /**
- * The upgrade link of a limit error, ready to open: a safe link, tagged with where it was opened (`src=ext`).
+ * A web address worth opening for something another of this person's devices sent: http or https, any host. Looser than
+ * `safeLink` on purpose (that one is for addresses the service gives, which are https); what a device sent is only ever
+ * a page to open, so `javascript:`, `data:`, `file:`, `chrome:`, an app's own scheme and anything that isn't an address are dropped.
+ */
+export const openableLink = (u) => {
+  try {
+    const x = new URL(String(u).trim());
+    return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : null;
+  } catch { return null; }
+};
+
+/** The host of a web address, without "www." — what is shown instead of a long link; '' when it is not an address */
+export const hostOf = (u) => {
+  try { return new URL(String(u)).hostname.replace(/^www\./, ''); } catch { return ''; }
+};
+
+/** The public plans answer says paying is not on offer right now: no way to Paid is shown. Unknown (no answer) is not "off". */
+export const paymentsOff = (plans) => plans?.payments?.open === false;
+
+/**
+ * The upgrade link of a limit error, ready to open (the plans page): a safe link, tagged with where it was opened (`src=ext`).
  * Null when there is none to open — no link was given, or the limit is the hourly one (waiting is the way past it).
  */
 export const upgradeLink = (data) => {
@@ -231,7 +251,9 @@ export const upgradeLink = (data) => {
   const url = safeLink(data?.upgrade_url);
   if (!url) return null;
   const h = url.indexOf('#');                     // src goes before a #fragment: after it, it would be part of the fragment
-  const base = h < 0 ? url : url.slice(0, h);
+  let base = h < 0 ? url : url.slice(0, h);
+  // Always the plans page, never straight to a checkout: a `buy=` the link carried is taken off
+  base = base.replace(/&buy=[^&]*/, '').replace(/\?buy=[^&]*&?/, '?').replace(/\?$/, '');
   return `${base}${base.includes('?') ? '&' : '?'}src=ext${h < 0 ? '' : url.slice(h)}`;
 };
 
@@ -263,4 +285,41 @@ export function errorText(code, data = {}, status, t, now = Date.now()) {
   if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return frees ? t.quotaBytesIn(frees) : t.quotaBytes;
   if (code === 'DEVICE_REVOKED' && data.reason === 'replaced') return t.revokedReplaced;
   return t.errors[code] ?? t.httpFailed(status);
+}
+
+/** A link the service gave, tagged with the limit it stands for (`why`): the one already in it is replaced */
+const withWhy = (url, why) => (/[?&]why=/.test(url) ? url.replace(/([?&]why=)[^&#]*/, `$1${why}`) : `${url}${url.includes('?') ? '&' : '?'}why=${why}`);
+
+/**
+ * What to say when a received file can't be fetched any more (it expired, or was removed), and the way past it.
+ * A free account that the service gave an upgrade link (so Paid is on offer) hears how long each plan keeps items, with
+ * the link tagged as a retention limit exactly as a limit answer from the service would carry it; any other account, and
+ * any account when a number is not known, gets the plain sentence and no link. Nothing is written that was not given.
+ * `account`: the account line (`upgrade_url`); `freeDays` / `paidDays`: each plan's retention in days, null when not known.
+ * @returns {{ message: string, data: { upgrade_url: string, why: 'kept' } | null }}
+ */
+export function goneWall(account, freeDays, paidDays, t) {
+  const plain = { message: t.recvGone, data: null };
+  const given = safeLink(account?.upgrade_url);
+  if (!given || !(freeDays > 0) || !(paidDays > freeDays)) return plain;
+  const link = withWhy(given, 'kept');
+  if (!upgradeLink({ upgrade_url: link })) return plain;
+  return { message: t.recvGoneKept(freeDays, paidDays), data: { upgrade_url: link, why: 'kept' } };
+}
+
+/**
+ * A file over this account's one-file limit, found before sending anything. When the Paid plan's limit would take it
+ * (and the service gave this account an upgrade link — free accounts only), the sentence says so and the error carries
+ * that link tagged as a file-size limit, exactly as the service's own answer would. Otherwise it is the plain sentence:
+ * no link, no number the service did not give.
+ * `account`: the account line (`upgrade_url`); `paidMB`: the Paid plan's one-file limit in MB, null when not known.
+ * @returns {{ message: string, data: { upgrade_url: string, why: 'file_size' } | null }}
+ */
+export function fileSizeWall(account, size, paidMB, limit, t) {
+  const plain = { message: t.tooLarge(mb(limit)), data: null };
+  const given = safeLink(account?.upgrade_url);
+  if (!given || !Number.isFinite(size) || !(paidMB > 0) || size > paidMB * 1048576) return plain;
+  const link = withWhy(given, 'file_size');
+  if (!upgradeLink({ upgrade_url: link })) return plain;
+  return { message: t.tooLargeFree(mb(limit), `${paidMB} MB`), data: { upgrade_url: link, why: 'file_size' } };
 }
