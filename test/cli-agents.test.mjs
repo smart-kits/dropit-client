@@ -391,6 +391,11 @@ const sumRule = () => ({ ...C.newRule('claude', null, ['sum'], false), id: 'summ
   is('writeItem: a text item is a new file', [path.basename(w1.file), w1.fresh], ['2026-10-17-5.md', true]);
   const w2 = await C.writeItem(dir, item(5));
   is('writeItem: the same again is not new', [w2.file === w1.file, w2.fresh], [true, false]);
+  const x3 = await C.writeItem(dir, item(5, { created_at: Date.parse('2026-10-17T09:30:00Z'), raw: 'another account, same seq' }));
+  is('writeItem: another item with the same day and seq is not taken as written — it gets its own file', [path.basename(x3.file), x3.fresh], ['2026-10-17-5-2.md', true]);
+  is('…and the first stays as it was', fs.readFileSync(w1.file, 'utf8').includes('note 5'), true);
+  const x4 = await C.writeItem(dir, item(5, { created_at: Date.parse('2026-10-17T09:30:00Z'), raw: 'another account, same seq' }));
+  is('…and that one again is not new either', [x4.file === x3.file, x4.fresh], [true, false]);
   const original = fs.readFileSync(w1.file, 'utf8');
   const kc = (o) => custom({ keepSource: true, ...o });   // the source is kept: the answer is a separate file
 

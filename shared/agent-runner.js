@@ -245,6 +245,8 @@ function composeInput(handler, item, fileNames) {
  */
 function sanitizeAnswer(text, max = RUN_DEFAULTS.maxAnswerChars) {
   let s = String(text ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g, '');
+  // Bound the work first: the patterns below are quadratic on a long run of unclosed brackets, and the answer is cut to `max` anyway
+  if (s.length > max * 2) s = s.slice(0, max * 2);
   // Every Markdown image goes, whatever it points at: ![alt](anything) and ![alt][ref]. A result has no use for one
   s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt) => `[image removed${alt ? ': ' + alt : ''}]`);
   s = s.replace(/!\[([^\]]*)\]\[[^\]]*\]/g, (_, alt) => `[image removed${alt ? ': ' + alt : ''}]`);

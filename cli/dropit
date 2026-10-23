@@ -5,7 +5,7 @@
  * Single file, zero dependencies. Both a producer (send / send -f) and a consumer (watch).
  * The macOS Services menu, Raycast and Alfred integrations are thin wrappers around it — see README.
  *
- * Requires Node >= 18. Real-time push in `watch` needs Node >= 22 (global WebSocket);
+ * Requires Node >= 18. Real-time delivery in `watch` needs Node >= 22 (global WebSocket);
  * older versions fall back to catching up on start.
  */
 'use strict';
@@ -42,6 +42,16 @@ const VERSION = '1.2.0';                     // released as cli-<VERSION> on Git
 // English by default; Simplified Chinese when the environment asks for it.
 // Override with DROPIT_LANG=en or DROPIT_LANG=zh.
 
+/** An account id as shown on screen: its first six characters, never the whole thing */
+const idShort = (id) => `${String(id ?? '').slice(0, 6)}…`;
+
+/** Name this machine goes by: `CLI · <host name>`, cut to what the service accepts (48 characters, 64 bytes at most) */
+function deviceNameOf(host) {
+  let chars = Array.from(`CLI · ${host}`).slice(0, 48);
+  while (chars.length > 1 && Buffer.byteLength(chars.join('')) > 64) chars.pop();
+  return chars.join('');
+}
+
 const T = {
   en: {
     errors: {                                   // keyed by the API error code
@@ -55,8 +65,10 @@ const T = {
       SIGNUP_LIMITED: 'Too many accounts were created on this network today. Join an existing account with a pairing code, or try again tomorrow',
       PAIRING_LIMITED: 'Too many wrong pairing codes from this network today. Check the code on the other device and try again tomorrow',
       TURNSTILE_REQUIRED: 'Quite a few accounts were created on this network today. Create this one in the browser at dropit.smart-kits.xyz, then join it here with a pairing code',
-      QUOTA_EXCEEDED: 'Storage is full — wait for old items to expire',
+      QUOTA_EXCEEDED: 'Space is full — wait for old items to expire',
       PAYLOAD_TOO_LARGE: 'Too large to send',
+      PAYMENTS_UNAVAILABLE: 'Paying is not open right now — try again later',
+      ALREADY_PAID: 'This account already has Paid',
       GLOBAL_CIRCUIT_OPEN: 'dropit is not taking new items right now — try again later',
       BLOB_UNAVAILABLE: "Files can't be sent right now — try again later",
       TARGET_UNAVAILABLE: 'None of the chosen devices can receive this — see: dropit devices',
@@ -67,14 +79,17 @@ const T = {
       not_receiver: 'The chosen devices can only send, not receive',
       self_only: 'Only this machine was chosen — it already has what it sends',
     },
-    tooLarge: (size) => `Larger than ${size}, the most one item can be`,
+    tooLarge: (size) => `Over the ${size} limit for one item`,
     rateHour: 'Sending too fast — try again within the hour',
     rateDay: (time) => `Today's sends are used up — back at ${time}`,
+    ratePairings: (time) => `This account has added as many devices as it can today — try again after ${time}`,
+    rateTickets: (time) => `Today's real-time delivery connections are used up — back at ${time}`,
+    rateCheckouts: (time) => `Too many upgrade links asked for today — try again after ${time}`,
     signupLimitedAt: (time, n) => `This network has made its ${n} accounts for today. Join an existing account with a pairing code, or try again after ${time}`,
     quotaItems: 'Too many items waiting — wait for old ones to expire',
-    quotaBytes: 'Storage is full — wait for old items to expire',
+    quotaBytes: 'Space is full — wait for old items to expire',
     quotaItemsIn: (span) => `Too many items waiting — the oldest expires in ${span} and frees up room`,
-    quotaBytesIn: (span) => `Storage is full — the oldest item expires in ${span} and frees up room`,
+    quotaBytesIn: (span) => `Space is full — the oldest item expires in ${span} and frees up room`,
     rateDayUploads: (time) => `Today's file uploads are used up — back at ${time}`,
     rateDayDownloads: (time) => `Today's downloads are used up — back at ${time}`,
     span: (sec) => (sec < 3600 ? 'under an hour' : Math.ceil(sec / 3600) < 48 ? `about ${Math.ceil(sec / 3600)} hour${Math.ceil(sec / 3600) === 1 ? '' : 's'}` : `about ${Math.ceil(sec / 86400)} days`),
@@ -87,7 +102,22 @@ const T = {
     httpFailed: (status) => `Request failed: HTTP ${status}`,
     offline: (n, msg) => `Network unavailable (tried ${n} address${n === 1 ? '' : 'es'}): ${msg}`,
     joined: 'Joined your account',
-    created: (id) => `Account created: ${id}`,
+    created: (id) => `Account created: ${idShort(id)}`,
+    consent: (url) => `Joining sends this machine's name and a fingerprint hash, used only to manage your device slots. What you send is kept for a short while so your other devices can receive it. Privacy: ${url}`,
+    replacedByCode: (name) => `  replaced "${name}" — that device's slot now belongs to this machine`,
+    revokeUsage: 'Which device to remove? dropit revoke <device_id> — the ids are listed by: dropit devices. To sign out of this machine: dropit logout',
+    revokeUnknown: (id) => `No device with the id "${id}" — see the ids: dropit devices`,
+    revokedSelf: 'Signed out of this machine: its token is cleared here, so it no longer sends or receives. Files already received and your handler rules stay. To join again: dropit pair',
+    confirmSelf: 'Sign out of this machine? It stops sending and receiving; files already received and your handler rules stay. (y/N) ',
+    confirmOther: (name) => `Remove "${name}" from the account? (y/N) `,
+    revokeNeedsYes: 'This asks for confirmation, and there is no terminal to ask in. To go ahead, add --yes',
+    revokeAborted: 'Nothing was changed.',
+    devDefaultTag: '→ default',
+    devDefaultLine: (what) => `Sends to by default: ${what}  (change: dropit target …)`,
+    devDefaultAll: 'all (including ones added later)',
+    rtPaidEnded: 'real-time delivery: Paid has ended',
+    serverDown: 'The service is temporarily unavailable — try again later',
+    tooLargeText: (size) => `Text is over the ${size} limit for one item`,
     replacedOld: (name) => `  took the place of this machine's earlier "${name}" — it no longer uses a device slot`,
     revokedReplaced: 'dropit was paired again on this machine, so this copy was signed out — pair again: dropit pair',
     codeValid: (time) => `Valid for 5 minutes (expires at ${time})`,
@@ -139,50 +169,78 @@ const T = {
     codeFull: (limit, name) => `All ${limit} device slots are in use — the new device will replace “${name}” when it joins (to replace another one: dropit code --replace <name or id>)`,
     codeFullNone: (id) => `All device slots are in use. Remove one first: dropit revoke ${id}`,
     codeFullNoOthers: 'All device slots are in use, and there is no other device to replace. Remove one from another device first',
-    codeUpgrade: (url) => `Or upgrade: ${url}`,
+    codeUpgrade: (url) => `Or add more devices with Paid:\n${url}`,
     ago: (sec) => (sec < 60 ? 'now' : sec < 3600 ? `${Math.floor(sec / 60)} min ago` : sec < 86400 ? `${Math.floor(sec / 3600)} h ago` : `${Math.floor(sec / 86400)} d ago`),
     folder: (dir) => `Receiving into ${dir}`,
-    noWebSocket: 'Node.js < 22 has no global WebSocket — caught up, but real-time push is unavailable.',
+    noWebSocket: 'Node.js < 22 has no global WebSocket — caught up, but real-time delivery is unavailable.',
     pullFailed: (msg) => `Pull failed: ${msg}`,
     downloadFailed: (seq, why) => `Download failed #${seq}: ${why}`,
     missingFile: (name) => `This file is no longer available (it expired or was removed): ${name}`,
     retryHint: (seq) => `To fetch it again: dropit watch --from ${seq}`,
     badFlag: (flag) => `${flag} needs a positive number`,
-    wsConnected: 'Real-time push connected',
-    wsConnectedTrial: (left) => `Real-time push connected · trial: ${left}`,
+    wsConnected: 'Real-time delivery connected',
+    wsConnectedTrial: (left) => `Real-time delivery connected · trial: ${left}`,
     daysLeft: (n) => (n < 1 ? 'less than a day left' : `${n} day${n === 1 ? '' : 's'} left`),
-    // The trial's length (n) is the service's to say: without it these lines carry no number. `enjoyed` is the
-    // "what you had" sentence (or '').
-    wsTrialEnding: (n, enjoyed = '') => `Real-time push ends in less than a day${n ? ` (new accounts get it for ${n} days)` : ''}. ${enjoyed}After that, watch catches up and exits.`,
-    wsTrialSoon: (left, n, enjoyed = '') => `Real-time push has ${left}${n ? ` (new accounts get it for ${n} days)` : ''}. ${enjoyed}After that, watch catches up and exits.`,
-    wsTrialOver: (n, enjoyed = '') => `Caught up. The ${n ? `${n}-day ` : ''}real-time trial has ended. ${enjoyed}Watch exits here; run it again to catch up on new items.`,
-    enjoyed: ({ days, items, devices }) => {
-      const parts = [items > 0 ? `${items} item${items === 1 ? '' : 's'} sent` : null, devices > 1 ? `${devices} devices receiving` : null].filter(Boolean);
-      return `You've had real-time push${days ? ` for ${days} day${days === 1 ? '' : 's'}` : ''}${parts.length ? `: ${parts.join(', ')}` : ''}. `;
+    // The real-time delivery trial, said from the service's own numbers: a number it did not give is left out, never made up.
+    // kind: soon (days left) · ending (under a day) · over (ended) · plan (not part of this plan). `f.rich`: there is enough use to say so.
+    moment: (kind, f) => {
+      const day = (n) => `${n} day${n === 1 ? '' : 's'}`;
+      const going = kind === 'soon' || kind === 'ending';
+      const lead = kind === 'soon' ? `Real-time delivery has ${f.left}.` : kind === 'ending' ? 'Real-time delivery ends in less than a day.'
+        : kind === 'over' ? 'Caught up. The real-time delivery trial has ended.' : 'Caught up. Real-time delivery is not part of this plan.';
+      const kept = f.freeDays ? `, and items are kept ${day(f.freeDays)}` : '';
+      if (!f.rich) {
+        return [lead, going ? 'After that, new items reach this machine only when you run watch.'
+          : `From now on new items reach this machine only when you run watch again${kept}.`].join('\n');
+      }
+      const had = f.items > 0 && f.devices > 1 ? `This account has sent ${f.items} item${f.items === 1 ? '' : 's'}, and its ${f.devices} devices ${going ? 'get' : 'got'} them right away.`
+        : f.items > 0 ? `This account has sent ${f.items} item${f.items === 1 ? '' : 's'}.`
+          : f.devices > 1 ? `Its ${f.devices} devices ${going ? 'get' : 'got'} items right away.` : null;
+      const p = f.paid ?? {};
+      const more = [p.perDay && `${p.perDay} items a day`, p.fileMB && `files up to ${p.fileMB} MB`, p.devices && `up to ${p.devices} devices`, p.days && `items kept ${day(p.days)}`].filter(Boolean);
+      return [lead, had,
+        going ? 'After that, devices get new items only when you open dropit or run watch.' : `Now devices get new items only when you open dropit or run watch${kept}.`,
+        more.length ? `With Paid you also get: ${more.join(', ')}.` : null].filter(Boolean).join('\n');
     },
-    // `dropit me`: what this account has done so far (each half only when the service said it), and Paid ending or ended
+    // The line before the link, with what keeping it costs when the service said (the link goes on the next line)
+    momentCta: (f) => (f.trial && f.year ? `Keep real-time delivery · first month ${f.trial}, then ${f.year}/year, cancel anytime:`
+      : f.trial ? `Keep real-time delivery · first month ${f.trial}, cancel anytime:`
+        : f.year ? `Keep real-time delivery · ${f.year}/year, cancel anytime:` : 'Keep real-time delivery with Paid:'),
+    linkExpired: 'Link expired? Run: dropit upgrade',
+    // `dropit me`, and what it adds under its line
     meUsage: (days, items) => [days ? `${days} day${days === 1 ? '' : 's'} in use` : null, items > 0 ? `${items} item${items === 1 ? '' : 's'} sent` : null].filter(Boolean).join(' / '),
-    paidEnding: (date) => `Paid runs until ${date}. After that the free limits apply and real-time push stops. You can renew on the dropit website.`,
-    paidEnded: (items, date) => `Paid has ended.${items > 0 ? ` This account has sent ${items} item${items === 1 ? '' : 's'} in total.` : ''} `
-      + `The free limits apply now and real-time push stops.${date ? ` Items already sent keep their Paid retention, and until ${date} space and backlog still count as Paid.` : ''}`,
-    renew: 'Renew Paid',
-    wsTrialFull: 'Caught up. Today\'s real-time spots are full — watch waits and reconnects a little after midnight UTC.',
-    wsNotIncluded: (n, enjoyed = '') => `Caught up. Real-time push is not in your plan${n ? ` (new accounts get it for ${n} days)` : ''}. ${enjoyed}`
-      + 'Watch stops here; run it again to pick up new items.',
+    paidEnding: (date, f = {}) => {
+      const keep = [f.perDay && `${f.perDay} items a day`, f.fileMB && `${f.fileMB} MB files`, f.devices && `${f.devices} devices`].filter(Boolean);
+      return `Paid ends on ${date}. ${keep.length ? `To keep ${keep.join(', ')}, renew before then.` : 'Renew before then to keep it.'}\nTo renew for a year, run: dropit upgrade`;
+    },
+    paidEnded: (date, f = {}) => {
+      const free = [f.perDay && `${f.perDay} items a day`, f.fileMB && `${f.fileMB} MB files`, f.devices && `${f.devices} devices`].filter(Boolean);
+      return `Paid has ended; this account is back on Free${free.length ? ` (${free.join(', ')})` : ''}, and real-time delivery stops.${date ? ` What you already sent stays as it was until ${date}.` : ''}`;
+    },
+    paidAgain: 'Get Paid again:',
+    wsTrialFull: 'Caught up. Today\'s real-time delivery spots are full — watch waits and reconnects a little after midnight UTC.',
+    // `dropit upgrade`
+    upgradePlans: 'Plans and checkout for this account:',
+    upgradeRenew: 'Renew Paid for another year:',
+    upgradeKeepFresh: 'The link works for a short while; for a fresh one, run dropit upgrade again.',
+    upgradeClosed: 'Paying is not open right now — try again later',
+    upgradeForGood: 'This account has Paid for good — nothing to renew',
+    upgradeRenews: 'This account\'s Paid renews by itself — nothing to do here',
+    textWithBatch: 'A text can not go into --batch: it is for putting files back into a batch that already went out',
     wsFailed: (msg) => `Real-time connection failed: ${msg}`,
-    wsTooMany: (n) => `Real-time push is paused: this account already has ${n} live connections `
+    wsTooMany: (n) => `Real-time delivery is paused: this account already has ${n} live connections `
       + '(another watch, or Obsidian on several machines). Trying again in about 15 minutes, and catching up then.',
     stopped: (msg) => `watch stopped: ${msg}`,
     accountChanged: 'This machine joined another account — receiving from that one now',
     notDropit: (status) => `the answer (HTTP ${status}) isn't from dropit — a sign-in page or proxy on this network?`,
     meDevices: (used, limit) => `${used}/${limit} devices`,
     meFiles: (size) => `files up to ${size}`,
-    rtOn: 'real-time available',
-    rtOff: 'real-time unavailable',
-    rtTrial: (left) => `real-time trial: ${left}`,
-    rtTrialOver: 'real-time trial ended',
+    rtOn: 'real-time delivery on',
+    rtOff: 'real-time delivery not included',
+    rtTrial: (left) => `real-time delivery: trial, ${left}`,
+    rtTrialOver: 'real-time delivery: trial ended',
     cursor: 'cursor',
-    revoked: 'Revoked — the device slot is free again',
+    revoked: (name) => `Removed${name ? ` "${name}"` : ''} — the device slot is free again`,
     preparing: 'Preparing the account…',
     alreadyJoined: 'This machine is already joined to an account. To join another account: dropit pair <code>. '
       + 'To start a separate new account anyway: dropit pair --new',
@@ -346,8 +404,9 @@ Items sent together (up to 16) are handed to the rule once, when all have arrive
       --replace <device>    …when every slot is in use: the device the new one takes the place of (default: idle longest)
   dropit send <text|link>   Or pipe it in: pbpaste | dropit send
   dropit send -f <file…>    Send files — images, PDFs, videos and more; up to 10 go as one batch
+  dropit send <text> -f <file…>  …with a text: it goes first, in the same batch
       --to <devices>        …to these devices this once: names or ids, separated by commas, or "all"
-  dropit watch [folder]     Receive into a local folder, in real time (default ~/dropit)
+  dropit watch [folder]     Receive into a local folder, with real-time delivery (default ~/dropit)
       --from <#>            …pulling again from item #<#>
       --days <n>            …pulling again the last <n> days
       --no-handlers         …without running your agent rules on what arrives
@@ -359,10 +418,12 @@ Items sent together (up to 16) are handed to the rule once, when all have arrive
                             remove · set · edit · test · pause · resume   (dropit handlers help)
   dropit run <rule> [file|-]  Run one rule on a file, or on text from standard input
   dropit me                 Show plan and usage
+  dropit upgrade            Print the link to this account's plans page (a fresh one when an earlier link has expired)
   dropit devices            List devices
   dropit target             Show which devices a send goes to by default
   dropit target <devices…>  Set the default: names or ids, or "all" (also: target set · target clear). Kept on this computer only
-  dropit revoke <device_id> Revoke a device
+  dropit revoke <device_id> Remove a device (add --yes to skip the question); with this machine's id it signs this machine out
+  dropit logout             Sign out of this machine (same as revoke with its own id; --yes skips the question)
   dropit version            Show the version
 
 What arrives is untrusted input: anyone holding a send-only key for your account can put content in front
@@ -387,6 +448,8 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
       TURNSTILE_REQUIRED: '这个网络今天建的账号较多。请在浏览器里打开 dropit.smart-kits.xyz 建号，再在这里用配对码加入',
       QUOTA_EXCEEDED: '空间已满，等旧内容过期',
       PAYLOAD_TOO_LARGE: '内容太大，投不了',
+      PAYMENTS_UNAVAILABLE: '现在不能付款，稍后再试',
+      ALREADY_PAID: '这个账号已经是付费版',
       GLOBAL_CIRCUIT_OPEN: 'dropit 暂时不收新内容，稍后再试',
       BLOB_UNAVAILABLE: '文件暂时投不了，稍后再试',
       TARGET_UNAVAILABLE: '选的设备都收不了这次的内容 —— 看看：dropit devices',
@@ -399,6 +462,9 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     tooLarge: (size) => `超过了单条上限 ${size}`,
     rateHour: '投得太快了，这一小时内再试',
     rateDay: (time) => `今天的投递次数用完了，${time} 恢复`,
+    ratePairings: (time) => `这个账号今天加入的设备已经够多了，${time} 以后再试`,
+    rateTickets: (time) => `今天的实时送达连接次数用完了，${time} 恢复`,
+    rateCheckouts: (time) => `今天取升级链接的次数太多了，${time} 以后再试`,
     signupLimitedAt: (time, n) => `这个网络今天已经建了 ${n} 个账号，到上限了。可以用配对码加入已有账号，或者 ${time} 以后再试`,
     quotaItems: '积压的内容太多了，等旧内容过期',
     quotaBytes: '空间已满，等旧内容过期',
@@ -415,7 +481,22 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     httpFailed: (status) => `请求失败 HTTP ${status}`,
     offline: (n, msg) => `网络不可用（试过 ${n} 个地址）：${msg}`,
     joined: '已加入账号',
-    created: (id) => `已创建账号 ${id}`,
+    created: (id) => `已创建账号 ${idShort(id)}`,
+    consent: (url) => `加入时会发送这台机器的名称和一个设备指纹摘要，只用来管理你的设备名额。你投递的内容会暂存一段时间，供你的其他设备接收。隐私说明：${url}`,
+    replacedByCode: (name) => `  替换了「${name}」，那台设备的名额现在属于这台机器`,
+    revokeUsage: '要移除哪一台？dropit revoke <设备编号> —— 编号见：dropit devices。要退出这台机器：dropit logout',
+    revokeUnknown: (id) => `没有编号为「${id}」的设备 —— 编号见：dropit devices`,
+    revokedSelf: '已退出这台机器：本机的令牌已清除，不再收发。已收到的文件和你的处理规则都保留。要重新加入：dropit pair',
+    confirmSelf: '确定退出这台机器？退出后不再收发；已收到的文件和处理规则都保留。(y/N) ',
+    confirmOther: (name) => `确定移除「${name}」？(y/N) `,
+    revokeNeedsYes: '这一步需要确认，而这里没有终端可以问。确定要做，请加 --yes',
+    revokeAborted: '什么都没改。',
+    devDefaultTag: '→ 默认',
+    devDefaultLine: (what) => `默认投给：${what}  （改：dropit target …）`,
+    devDefaultAll: '全部（含以后新加的）',
+    rtPaidEnded: '实时送达：付费版已结束',
+    serverDown: '服务暂时不可用，稍后再试',
+    tooLargeText: (size) => `文字超过了单条 ${size} 的上限`,
     replacedOld: (name) => `  替换了这台机器之前的「${name}」，不再多占一台设备的名额`,
     revokedReplaced: '这台机器上重新配对过 dropit，这一份已退出 —— 重新配对：dropit pair',
     codeValid: (time) => `5 分钟内有效（${time} 过期）`,
@@ -466,46 +547,69 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     codeFull: (limit, name) => `${limit} 台设备的名额已满，新设备加入时将替换「${name}」（要换一台：dropit code --replace <名字或编号>）`,
     codeFullNone: (id) => `名额已满，先移除一台：dropit revoke ${id}`,
     codeFullNoOthers: '名额已满，而且没有别的设备可替换。先在另一台设备上移除一台',
-    codeUpgrade: (url) => `或升级：${url}`,
+    codeUpgrade: (url) => `或升级付费版放更多设备：\n${url}`,
     ago: (sec) => (sec < 60 ? '刚刚' : sec < 3600 ? `${Math.floor(sec / 60)} 分钟前` : sec < 86400 ? `${Math.floor(sec / 3600)} 小时前` : sec < 172800 ? '昨天' : `${Math.floor(sec / 86400)} 天前`),
     folder: (dir) => `落地目录 ${dir}`,
-    noWebSocket: 'Node.js < 22，没有全局 WebSocket —— 已补齐，实时推送不可用。',
+    noWebSocket: 'Node.js < 22，没有全局 WebSocket —— 已补齐，实时送达不可用。',
     pullFailed: (msg) => `拉取失败：${msg}`,
     downloadFailed: (seq, why) => `下载失败 #${seq}：${why}`,
     missingFile: (name) => `这个文件已经取不到了（过期或已删除）：${name}`,
     retryHint: (seq) => `重新拉取：dropit watch --from ${seq}`,
     badFlag: (flag) => `${flag} 后面要跟一个正整数`,
-    wsConnected: '实时推送已连接',
-    wsConnectedTrial: (left) => `实时推送已连接 · 体验${left}`,
+    wsConnected: '实时送达已连接',
+    wsConnectedTrial: (left) => `实时送达已连接 · 体验${left}`,
     daysLeft: (n) => (n < 1 ? '不到 1 天' : `还剩 ${n} 天`),
-    wsTrialEnding: (n, enjoyed = '') => `实时推送体验不到 1 天就结束了${n ? `（新账号有 ${n} 天）` : ''}。${enjoyed}之后 watch 补齐一次就退出。`,
-    wsTrialSoon: (left, n, enjoyed = '') => `实时推送体验${left}${n ? `（新账号有 ${n} 天）` : ''}。${enjoyed}之后 watch 补齐一次就退出。`,
-    wsTrialOver: (n, enjoyed = '') => `已补齐。${n ? `${n} 天的` : ''}实时推送体验已结束。${enjoyed}watch 就此退出；再运行一次即可接着收新内容。`,
-    enjoyed: ({ days, items, devices }) => {
-      const parts = [items > 0 ? `投了 ${items} 条` : null, devices > 1 ? `${devices} 台设备在收` : null].filter(Boolean);
-      return `你已经享受了${days ? ` ${days} 天的` : ''}实时推送${parts.length ? `：${parts.join('，')}` : ''}。`;
+    // 实时送达的体验期：数字只用服务端给的，没给的那半句就省略，不编。kind：soon（还剩几天）· ending（不到 1 天）· over（已结束）· plan（套餐不含）。f.rich：用得够多，可以说一说
+    moment: (kind, f) => {
+      const going = kind === 'soon' || kind === 'ending';
+      const lead = kind === 'soon' ? `实时送达${f.left}。` : kind === 'ending' ? '实时送达不到 1 天就结束了。'
+        : kind === 'over' ? '已补齐。实时送达的体验结束了。' : '已补齐。当前套餐不含实时送达。';
+      const kept = f.freeDays ? `，内容保留 ${f.freeDays} 天` : '';
+      if (!f.rich) return [lead, going ? '之后，这台机器要等你运行 watch 才会收到新内容。' : `现在起，这台机器要等你再运行 watch 才会收到新内容${kept}。`].join('\n');
+      const had = f.items > 0 && f.devices > 1 ? `这个账号已经投了 ${f.items} 条，${f.devices} 台设备都是立刻收到。`
+        : f.items > 0 ? `这个账号已经投了 ${f.items} 条。` : f.devices > 1 ? `${f.devices} 台设备都是立刻收到。` : null;
+      const p = f.paid ?? {};
+      const more = [p.perDay && `每天 ${p.perDay} 条`, p.fileMB && `单个文件 ${p.fileMB} MB`, p.devices && `最多 ${p.devices} 台设备`, p.days && `内容保留 ${p.days} 天`].filter(Boolean);
+      return [lead, had,
+        going ? '之后，各设备要打开 dropit 或运行 watch，才会收到新内容。' : `现在起，各设备要打开 dropit 或运行 watch，才会收到新内容${kept}。`,
+        more.length ? `付费版还有：${more.join('、')}。` : null].filter(Boolean).join('\n');
     },
+    momentCta: (f) => (f.trial && f.year ? `保留实时送达 · 首月 ${f.trial}，之后 ${f.year}/年，可随时取消：`
+      : f.trial ? `保留实时送达 · 首月 ${f.trial}，可随时取消：`
+        : f.year ? `保留实时送达 · ${f.year}/年，可随时取消：` : '保留实时送达（付费版）：'),
+    linkExpired: '链接过期了？运行：dropit upgrade',
     meUsage: (days, items) => [days ? `已用 ${days} 天` : null, items > 0 ? `已投 ${items} 条` : null].filter(Boolean).join(' / '),
-    paidEnding: (date) => `付费版有效到 ${date}。到期后回到免费版的额度，实时推送停止。可以在 dropit 网站上续费。`,
-    paidEnded: (items, date) => `付费版已到期。${items > 0 ? `这个账号累计投了 ${items} 条。` : ''}`
-      + `现在起按免费版的额度，实时推送停止。${date ? `已经投的内容照付费版保留；到 ${date} 前空间和积压仍按付费版算。` : ''}`,
-    renew: '续费',
-    wsTrialFull: '已补齐。今天的实时名额满了 —— watch 等到 UTC 零点过后自动重连。',
-    wsNotIncluded: (n, enjoyed = '') => `已补齐。当前套餐不含实时推送${n ? `（新账号有 ${n} 天体验期）` : ''}。${enjoyed}watch 就此退出；再运行一次即可接着收新内容。`,
+    paidEnding: (date, f = {}) => {
+      const keep = [f.perDay && `每天 ${f.perDay} 条`, f.fileMB && `单个文件 ${f.fileMB} MB`, f.devices && `${f.devices} 台设备`].filter(Boolean);
+      return `付费版到 ${date} 结束。${keep.length ? `想继续保持${keep.join('、')}，到期前续一年就行。` : '到期前续一年就能继续保持。'}\n续一年，运行：dropit upgrade`;
+    },
+    paidEnded: (date, f = {}) => {
+      const free = [f.perDay && `每天 ${f.perDay} 条`, f.fileMB && `单个文件 ${f.fileMB} MB`, f.devices && `${f.devices} 台设备`].filter(Boolean);
+      return `付费版已结束，账号回到免费版${free.length ? `（${free.join('、')}）` : ''}，实时送达也随之停止。${date ? `之前投的内容仍按付费版保留到 ${date}。` : ''}`;
+    },
+    paidAgain: '再开通付费版：',
+    wsTrialFull: '已补齐。今天的实时送达名额满了 —— watch 等到 UTC 零点过后自动重连。',
+    upgradePlans: '这个账号的套餐和结账：',
+    upgradeRenew: '再续一年付费版：',
+    upgradeKeepFresh: '链接只在一小段时间内有效；过期了再运行一次 dropit upgrade 取新的。',
+    upgradeClosed: '现在不能付款，稍后再试',
+    upgradeForGood: '这个账号的付费版是终身的，不用续',
+    upgradeRenews: '这个账号的付费版会自动续费，这里没有要做的事',
+    textWithBatch: '文字不能和 --batch 一起用：--batch 是把文件放回已经发出的那一批',
     wsFailed: (msg) => `实时连接失败：${msg}`,
-    wsTooMany: (n) => `实时推送暂停：这个账号已经有 ${n} 条实时连接（另一个 watch，或多台机器上的 Obsidian）。`
+    wsTooMany: (n) => `实时送达暂停：这个账号已经有 ${n} 条实时连接（另一个 watch，或多台机器上的 Obsidian）。`
       + '大约 15 分钟后再试，连上时补齐这期间的内容。',
     stopped: (msg) => `watch 已停止：${msg}`,
     accountChanged: '这台机器加入了另一个账号 —— 改为接收那个账号的内容',
     notDropit: (status) => `收到的回应（HTTP ${status}）不是 dropit 的 —— 这个网络需要登录，或者有代理？`,
     meDevices: (used, limit) => `${used}/${limit} 台设备`,
     meFiles: (size) => `单个文件最大 ${size}`,
-    rtOn: '实时推送可用',
-    rtOff: '实时推送不可用',
-    rtTrial: (left) => `实时推送体验期：${left}`,
-    rtTrialOver: '实时推送体验已结束',
+    rtOn: '实时送达可用',
+    rtOff: '实时送达不含在套餐里',
+    rtTrial: (left) => `实时送达体验：${left}`,
+    rtTrialOver: '实时送达体验已结束',
     cursor: '游标',
-    revoked: '已吊销，名额已释放',
+    revoked: (name) => `已移除${name ? `「${name}」` : ''}，名额已释放`,
     preparing: '正在准备账号…',
     alreadyJoined: '这台机器已经加入了一个账号。要加入另一个账号：dropit pair <配对码>。'
       + '确实要另建一个新账号：dropit pair --new',
@@ -669,8 +773,9 @@ parts：ocr = 图片 / PDF 抽文字 · audio = 语音和视频 · link = 链接
       --replace <设备>       …名额已满时：新设备替换哪一台（默认：闲置最久的）
   dropit send <文本|链接>    也可以从管道读：pbpaste | dropit send
   dropit send -f <文件…>     投文件 —— 图片、PDF、视频等；最多 10 个，作为一批
+  dropit send <文字> -f <文件…>  …带一段文字：文字排在最前，同一批
       --to <设备>            …这一次只投给这些设备：设备名或编号，用逗号隔开，或 all
-  dropit watch [目录]        实时收到本地文件夹（默认 ~/dropit）
+  dropit watch [目录]        实时送达到本地文件夹（默认 ~/dropit）
       --from <序号>          …并从第 <序号> 条起重新拉取
       --days <天数>          …并重新拉取最近 <天数> 天
       --no-handlers          …不对收到的内容运行 agent 规则
@@ -682,10 +787,12 @@ parts：ocr = 图片 / PDF 抽文字 · audio = 语音和视频 · link = 链接
                             remove · set · edit · test · pause · resume   （dropit handlers help）
   dropit run <规则> [文件|-]  对一个文件、或标准输入里的文字运行一条规则
   dropit me                 查看套餐和用量
+  dropit upgrade            打印这个账号的套餐页链接（之前的链接过期了，就用它取新的）
   dropit devices            列出设备
   dropit target             显示投递默认发给哪些设备
   dropit target <设备…>      设置默认：设备名或编号，或 all（也可以 target set · target clear）。只存在这台电脑
-  dropit revoke <device_id> 吊销一台设备
+  dropit revoke <device_id> 移除一台设备（加 --yes 跳过确认）；填本机编号就是退出这台机器
+  dropit logout             退出这台机器（等同于用本机编号 revoke；--yes 跳过确认）
   dropit version            显示版本号
 
 收到的内容是不可信输入：持有你账号「只投递」密钥的人，也能把内容送到命令或 agent 面前。
@@ -756,7 +863,7 @@ async function api(cfg, method, path_, body, auth = true, opts = {}) {
         save({ ...load(), endpoints: cfg.endpoints });   // only the list: the rest of the file may have changed meanwhile
       }
       if (!res.ok) {
-        const err = new Error(withUpgrade(errorText(data.error, data, res.status), data));
+        const err = new Error(withUpgrade(errorText(data.error, data, res.status, t, Date.now(), path_), data));
         Object.assign(err, { code: data.error, status: res.status, data });
         throw err;
       }
@@ -786,7 +893,8 @@ async function pair(args) {
   const cfg = load();
   const { action, code } = pairAction(args, Boolean(cfg.token));
   if (action === 'refuse') die(t.alreadyJoined);
-  const name = `CLI · ${os.hostname()}`;
+  const name = deviceNameOf(os.hostname());
+  console.log(t.consent(`${endpointsOf(cfg.endpoints)[0].replace(/\/$/, '')}/privacy`));
   // The key this machine had (still working, or already removed) and its fingerprint: pairing again takes
   // the earlier one's place instead of using up another device slot
   const same = { device_key: deviceKey('cli', machineFacts()), ...(cfg.token ? { previous_token: cfg.token } : {}) };
@@ -798,6 +906,7 @@ async function pair(args) {
   save({ ...rest, token: res.token, device_id: res.device_id, cursor: 0 });
   console.log(code ? t.joined : t.created(res.user_id));
   if (res.replaced && res.replaced.how !== 'issuer') console.log(t.replacedOld(shown(res.replaced.name)));
+  else if (res.replaced && res.replaced.name) console.log(t.replacedByCode(shown(res.replaced.name)));
   await refreshEndpoints(load());
 }
 
@@ -896,7 +1005,7 @@ async function newCode(args = []) {
   // Every slot in use: the new device takes the place of one, chosen now so that joining stays one step there
   const [me, list] = await Promise.all([api(cfg, 'GET', '/v1/me').catch(() => null), fetchDevices(cfg).catch(() => null)]);
   const plan = me && list ? slotPlan(me, list, cfg.device_id, word) : { full: false, pick: null, others: [] };
-  const up = plan.full ? upgradeLink({ upgrade_url: me.upgrade_url }) : null;
+  const up = plan.full ? upgradeLink({ upgrade_url: me.upgrade_url }, 'devices') : null;
   if (plan.error) throw new Error(plan.error);
   if (plan.full && !plan.pick) throw new Error([plan.others.length ? t.codeFullNone(shown(plan.others[0].device_id)) : t.codeFullNoOthers, ...(up ? [t.codeUpgrade(up)] : [])].join('\n'));
   const { code, expires_at } = await api(cfg, 'POST', '/v1/pair', plan.pick ? { replace: plan.pick.device_id } : undefined);
@@ -1169,18 +1278,48 @@ async function send(args) {
     const problem = filesProblem(files);
     if (problem) die(problem);
     if (batch && batch.at.length !== files.length) die(t.batchPlaces(files.length, batch.at.length));
-    return sendFiles(cfg, files, await targetFor(cfg, typed), batch);
+    // Words typed before -f go with the files, as the first of one batch (they used to be dropped without a word)
+    const text = args.slice(0, args.indexOf('-f')).join(' ').trim();
+    if (text && batch) die(t.textWithBatch);
+    const target = await targetFor(cfg, typed);
+    return text ? sendTextWithFiles(cfg, text, files, target) : sendFiles(cfg, files, target, batch);
   }
   const raw = args.length ? args.join(' ') : await readStdin();
   if (!raw.trim()) die(t.nothingToSend);
   const target = await targetFor(cfg, typed);
-  const kind = /^https?:\/\/\S+$/.test(raw.trim()) ? 'url' : 'text';
-  const res = await api(cfg, 'POST', '/v1/ingest', { kind, raw: raw.trim(), source: 'cli', client_ts: Date.now(), ...(target.to ? { to: target.to } : {}) })
+  await sendText(cfg, raw.trim(), target);
+}
+
+/** One text (or link) as an item of its own, or as the first of a batch (`group`), with its receipt line */
+async function sendText(cfg, raw, target, group = null) {
+  const kind = /^https?:\/\/\S+$/.test(raw) ? 'url' : 'text';
+  const res = await api(cfg, 'POST', '/v1/ingest', { kind, raw, source: 'cli', client_ts: Date.now(), ...(group ? { meta: { group } } : {}), ...(target.to ? { to: target.to } : {}) })
     .catch((err) => (err.code === 'DEDUPED' ? { ...err.data, deduped: true } : Promise.reject(refused(err, target))));
   if (res.deduped === true) return console.log(t.alreadySent(res.seq));
   console.log(receiptLine(res.seq, labelOf(res, target), target.once));
   const note = droppedLine(res, target);
   if (note) console.error(note);
+}
+
+/**
+ * `dropit send "text" -f a.png b.pdf`: the text and the files go out as one batch, the text first (one card on the receiving side).
+ * Sizes are checked before anything is sent, so a file that is too big does not leave the text alone out there.
+ */
+async function sendTextWithFiles(cfg, text, files, target) {
+  const big = await bigFile(cfg, files);
+  if (big) die(big);
+  const id = crypto.randomBytes(12).toString('base64url');
+  const n = files.length + 1;
+  await sendText(cfg, text, target, { id, i: 1, n });
+  return sendFiles(cfg, files, target, { id, n, at: files.map((_, k) => k + 2) }, true);
+}
+
+/** The first file over what one item may be (with the way to Paid when the service gave one), as the sentence; null when none is */
+async function bigFile(cfg, files) {
+  const me = await api(cfg, 'GET', '/v1/me').catch(() => null);
+  const limit = me?.item_bytes_limit;
+  const big = limit && files.find((f) => fs.statSync(f).size > limit);
+  return big ? withUpgrade(`${shown(path.basename(big))}: ${t.tooLarge(mb(limit))}`, { upgrade_url: me.upgrade_url && withWhy(me.upgrade_url, 'file_size'), why: 'file_size' }) : null;
 }
 
 /** An error from a send, as the one that is thrown: the default that can't receive any more is set back (and that is said) */
@@ -1220,14 +1359,13 @@ function groupsFor(n, id = crypto.randomBytes(12).toString('base64url')) {
  * the batch: the ones already running finish and count, the ones not started are left. Then comes what did not go
  * (each file, how many, to whom) and the command that sends just those again to the same devices; the exit code is 1.
  */
-async function sendFiles(cfg, files, target = EVERY_DEVICE, batch = null) {
+async function sendFiles(cfg, files, target = EVERY_DEVICE, batch = null, checked = false) {
   const problem = filesProblem(files);
   if (problem) die(problem);
   // Several files: check the sizes first, so a file that's too big doesn't stop the batch halfway
-  if (files.length > 1) {
-    const limit = (await api(cfg, 'GET', '/v1/me').catch(() => null))?.item_bytes_limit;
-    const big = limit && files.find((f) => fs.statSync(f).size > limit);
-    if (big) die(`${shown(path.basename(big))}: ${t.tooLarge(mb(limit))}`);
+  if (files.length > 1 && !checked) {
+    const big = await bigFile(cfg, files);
+    if (big) die(big);
   }
   const many = files.length > 1;
   // Sent again after a failure, the files keep the batch they were in and the place each had (`batch`); otherwise a new batch
@@ -1531,13 +1669,29 @@ function prefetch(dir, items, from, ahead) {
   }
 }
 
+/**
+ * The file `name` in `dir` when nothing is there; the one there when `same(file)` says it is this item;
+ * otherwise the first of `name-2`, `name-3`… (before the extension) that is free or is this item.
+ */
+function freeName(dir, name, same) {
+  const ext = path.extname(name);
+  const stem = name.slice(0, name.length - ext.length);
+  for (let n = 1; ; n++) {
+    const file = path.join(dir, n === 1 ? name : `${stem}-${n}${ext}`);
+    if (!fs.existsSync(file)) return { file, same: false };
+    if (same(file)) return { file, same: true };
+  }
+}
+
 /** `ahead`: this item's download if it was started early (see prefetch) */
 async function writeItem(dir, item, ahead) {
   const stamp = stampOf(item);
   if (item.url) {                                  // binary item: fetch from its signed download URL
-    const name = fileNameOf(item);
-    const target = path.join(dir, name);
-    if (fs.existsSync(target)) return { file: target, fresh: false };
+    // The same name can belong to another account's file (their numbering overlaps): a file of another size is not this one
+    const slot = freeName(dir, fileNameOf(item), (f) => !(item.bytes > 0) || fs.statSync(f).size === item.bytes);
+    const name = path.basename(slot.file);
+    const target = slot.file;
+    if (slot.same) return { file: target, fresh: false };
     // A failed download leaves a note in its place and moves on: stopping would hold back everything
     // after it, and a network that can't reach the file store never recovers on its own. The note says
     // how to fetch it again; when a later pull succeeds, the note goes.
@@ -1559,8 +1713,13 @@ async function writeItem(dir, item, ahead) {
     console.error(reason);
     return null;
   }
-  const target = path.join(dir, `${stamp}-${item.seq}.md`);
-  if (fs.existsSync(target)) return { file: target, fresh: false };
+  // The same name can belong to another account's item (their numbering overlaps): only the same item, by its time, counts as written
+  const made = new Date(item.created_at).toISOString();
+  const slot = freeName(dir, `${stamp}-${item.seq}.md`, (f) => {
+    try { return fs.readFileSync(f, 'utf8').slice(0, 2048).split(/\r?\n/).includes(`created: ${made}`); } catch { return false; }
+  });
+  const target = slot.file;
+  if (slot.same) return { file: target, fresh: false };
   fs.writeFileSync(target, `---\ndropit_seq: ${item.seq}\nkind: ${yamlValue(item.kind)}\nsource: ${yamlValue(item.source)}\n`
     + `created: ${new Date(item.created_at).toISOString()}\n---\n\n${markdownOf(item)}\n`);
   console.log(`↓ ${path.basename(target)}`);
@@ -1696,9 +1855,11 @@ function stopRealtime(state, sync, why, data = null) {
   dropSocket(state);
   if (why !== 'trial_full') {
     // The service gives a free account the way past this (Paid is real-time for good); nobody else gets a link
-    const enjoyed = state.me ? t.enjoyed(trialFacts(state.me, state.trialDays)) : '';
-    const link = { upgrade_url: data?.upgrade_url ?? state.me?.upgrade_url, why: data?.why ?? 'realtime', window: data?.window };
-    console.log(withUpgrade((why === 'trial_over' ? t.wsTrialOver : t.wsNotIncluded)(state.trialDays ?? null, enjoyed), link));
+    // Not the wall of a limit: a reader at the end of a trial gets the plans page, not the checkout
+    const link = upgradeLink({ upgrade_url: data?.upgrade_url ?? state.me?.upgrade_url, window: data?.window }, 'realtime', { plans: true });
+    const endedPaid = paidEndedOf(state.me);
+    if (endedPaid) console.log(paidAgainText({ text: t.paidEnded(localDate(state.me.paid_grace_until), state.plans?.limits?.free ?? {}), link: upgradeLink({ upgrade_url: data?.upgrade_url ?? state.me?.upgrade_url }, undefined, { plans: true }) }));
+    else console.log(momentText(why === 'trial_over' ? 'over' : 'plan', state, link));
     // An agent still working on something that arrived gets to finish first, and a batch that waits for items that will not come
     // now (there is no real-time to bring them) is handled with what it has
     if (state.queue?.pending || waitingBatches(state)) { finishBatches(state).then(() => process.exit(0), () => process.exit(0)); return 'plan'; }
@@ -1765,14 +1926,26 @@ function heartbeat(state, sync) {
   try { state.socket.send('ping'); } catch { dropSocket(state); reconnect(state, sync); }
 }
 
+/** The text of Paid that just ended, then the plans page on its own line */
+const paidAgainText = (p2, tt = t) => (p2.link ? `${p2.text}\n${tt.paidAgain}\n${p2.link}\n${dim(tt.linkExpired)}` : p2.text);
+
+const indent = (text) => text.split('\n').map((l) => `  ${l}`).join('\n');
+
 async function me() {
   const cfg = needToken();
   const m = await api(cfg, 'GET', '/v1/me');
   console.log(meLine(m));
-  const notes = accountNotes(m, cfg);
+  // Numbers for the lines below come from the plans, asked for only when one of them is about to be said
+  const first = accountNotes(m, cfg);
+  const trialNear = m.plan !== 'paid' && Number.isFinite(m.realtime_until) && m.realtime_until - Date.now() <= 3 * DAY_MS;
+  const plans = first.p1 || first.p2 || trialNear ? await api(cfg, 'GET', '/v1/plans', undefined, false).catch(() => null) : null;
+  const notes = accountNotes(m, cfg, Date.now(), t, plans);
   if (notes.usage) console.log(`  ${dim(notes.usage)}`);
-  if (notes.p1) console.log(`  ${notes.p1.text}`);
-  if (notes.p2 && !momentTaken('P2', notes.p2.period)) console.log(`  ${notes.p2.text}${notes.p2.link ? ` ${t.renew}: ${notes.p2.link}` : ''}`);
+  if (notes.p1) console.log(indent(notes.p1.text));
+  if (notes.p2 && !momentTaken('P2', notes.p2.period)) console.log(indent(paidAgainText(notes.p2)));
+  // The trial's row has its way on: asked for, so said every time (the plans page, not the checkout)
+  const link = trialNear ? upgradeLink({ upgrade_url: m.upgrade_url }, 'realtime', { plans: true }) : null;
+  if (link) console.log(indent(`${t.momentCta(momentFacts({ me: m, plans }))}\n${link}`));
   rememberPlan(m);
 }
 
@@ -1801,21 +1974,25 @@ function trialFacts(m, trialDays, now = Date.now()) {
   };
 }
 
+/** Paid that ran out on an account now on Free (the service gives both dates): said before anything about a trial, which is long over by then */
+const paidEndedOf = (m, now = Date.now()) => m?.plan === 'free' && Number.isFinite(m.paid_until) && m.paid_until <= now && Number.isFinite(m.paid_grace_until);
+
 /**
  * What `dropit me` adds under its line, all from the account's own answer: how long and how much it has been used
  * (each half only when the service said it), Paid ending within a week (a plan that renews itself says nothing),
  * and Paid that just ended — known because this machine saw the plan as Paid last time (`cfg.lastPlan`).
  */
-function accountNotes(m, cfg = {}, now = Date.now(), tt = t) {
+function accountNotes(m, cfg = {}, now = Date.now(), tt = t, plans = null) {
   const days = Number.isFinite(m?.created_at) ? Math.max(1, Math.floor((now - m.created_at) / DAY_MS) + 1) : 0;
   const items = Number.isFinite(m?.items_total) ? m.items_total : 0;
   const left = Number(m?.paid_until) - now;
   const ending = m?.plan === 'paid' && m.renews === false && left > 0 && left <= 7 * DAY_MS;
-  const ended = cfg.lastPlan === 'paid' && m?.plan === 'free' && Number.isFinite(m.paid_until) && m.paid_until <= now && Number.isFinite(m.paid_grace_until);
+  const ended = paidEndedOf(m, now);
   return {
     usage: days || items > 0 ? tt.meUsage(days, items) : null,
-    p1: ending ? { text: tt.paidEnding(localDate(m.paid_until)), period: m.paid_until } : null,
-    p2: ended ? { text: tt.paidEnded(items, localDate(m.paid_grace_until)), period: cfg.lastPaidUntil || m.paid_until, link: upgradeLink({ upgrade_url: m.upgrade_url }) } : null,
+    // The plans page for the account that just lost Paid; the one still on Paid gets the way to renew by command (the link is made when asked for)
+    p1: ending ? { text: tt.paidEnding(localDate(m.paid_until), plans?.limits?.paid ?? {}), period: m.paid_until } : null,
+    p2: ended ? { text: tt.paidEnded(localDate(m.paid_grace_until), plans?.limits?.free ?? {}), period: cfg.lastPaidUntil || m.paid_until, link: upgradeLink({ upgrade_url: m.upgrade_url }, undefined, { plans: true }) } : null,
   };
 }
 
@@ -1848,12 +2025,45 @@ function momentTaken(id, period) {
   } catch { return true; }
 }
 
-/** The line for the trial ending: T1 (days left) or T2 (under a day), with what the account has had and the way to Paid when the service gave one */
+/** A price as the service gave it, "$19.90" (cents and currency); null when it gave none */
+function moneyText(price) {
+  if (!price || !Number.isFinite(price.cents) || price.cents <= 0) return null;
+  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: price.currency || 'USD' }).format(price.cents / 100); } catch { return null; }
+}
+
+const pos = (n) => (Number.isFinite(n) && n > 0 ? n : null);
+
+/**
+ * What the real-time delivery lines say, from the account (`/v1/me`) and the plans (`/v1/plans`): only numbers the service gave.
+ * `rich`: the account has sent enough (10 items) or has several devices, so the line can say what it has had and what Paid adds.
+ */
+function momentFacts(state, left = null) {
+  const m = state.me ?? {};
+  const plans = state.plans ?? null;
+  const { items, devices } = trialFacts(m, state.trialDays);
+  const year = plans?.plans?.find?.((x) => x?.id === 'year');
+  const paid = plans?.limits?.paid ?? {};
+  return {
+    left: left == null ? null : trialLeft(m.realtime_until ?? Date.now() + left),
+    items, devices, rich: items >= 10 || devices > 1,
+    freeDays: pos(plans?.limits?.free?.days),
+    paid: { perDay: pos(paid.perDay), fileMB: pos(paid.fileMB), devices: pos(paid.devices), days: pos(paid.days) },
+    trial: m.trial_available === true && !paidEndedOf(m) ? moneyText({ cents: year?.trial?.cents, currency: year?.price?.currency }) : null,
+    year: moneyText(year?.price),
+  };
+}
+
+/** The lines for the trial (kind: soon · ending · over · plan), and under them the way to Paid when there is a link: its own line, with how to get a fresh one */
+function momentText(kind, state, link, left = null, tt = t) {
+  const f = momentFacts(state, left);
+  const text = tt.moment(kind, f);
+  return link ? `${text}\n${tt.momentCta(f)}\n${link}\n${dim(tt.linkExpired)}` : text;
+}
+
+/** The line for the trial ending: T1 (days left) or T2 (under a day), with what the account has had and the way to the plans page when the service gave one */
 function trialLine(kind, state, left) {
-  const enjoyed = state.me ? t.enjoyed(trialFacts(state.me, state.trialDays)) : '';
-  const line = kind === 'T1' ? t.wsTrialSoon(trialLeft(state.me?.realtime_until ?? Date.now() + left), state.trialDays ?? null, enjoyed)
-    : t.wsTrialEnding(state.trialDays ?? null, enjoyed);
-  return withUpgrade(line, { upgrade_url: state.me?.upgrade_url, why: 'realtime' });
+  const link = upgradeLink({ upgrade_url: state.me?.upgrade_url }, 'realtime', { plans: true });
+  return momentText(kind === 'T1' ? 'soon' : 'ending', state, link, left);
 }
 
 /**
@@ -1866,11 +2076,15 @@ async function startNotes(cfg, state) {
   try { m = await api(cfg, 'GET', '/v1/me'); } catch { return; }
   state.me = m;
   const notes = accountNotes(m, cfg);
-  if (notes.p1 && !momentTaken('P1', notes.p1.period)) console.log(notes.p1.text);
-  if (notes.p2 && !momentTaken('P2', notes.p2.period)) console.log(`${notes.p2.text}${notes.p2.link ? ` ${t.renew}: ${notes.p2.link}` : ''}`);
+  const wantPlans = notes.p1 || notes.p2 || (m.plan !== 'paid' && Number.isFinite(m.realtime_until) && m.realtime_until - Date.now() <= 3 * DAY_MS);
+  // The numbers for these lines are the plans' (public, one small request, only when a line is about to be said)
+  if (wantPlans) state.plans = await api(cfg, 'GET', '/v1/plans', undefined, false).catch(() => null);
+  const said = accountNotes(m, cfg, Date.now(), t, state.plans);
+  if (said.p1 && !momentTaken('P1', said.p1.period)) console.log(said.p1.text);
+  if (said.p2 && !momentTaken('P2', said.p2.period)) console.log(paidAgainText(said.p2));
   rememberPlan(m);
   if (m.plan === 'paid' || !Number.isFinite(m.realtime_until)) return;
-  state.trialDays = trialDaysOf(m, Number.isInteger(m.trial_days) && m.trial_days > 0 ? null : await api(cfg, 'GET', '/v1/plans', undefined, false).catch(() => null));
+  state.trialDays = trialDaysOf(m, state.plans);
   const left = m.realtime_until - Date.now();
   if (left > DAY_MS && left <= 3 * DAY_MS && !momentTaken('T1', m.realtime_until)) console.log(trialLine('T1', state, left));
   else if (left > 0 && left <= DAY_MS && !momentTaken('T2', m.realtime_until)) { state.warned = true; console.log(trialLine('T2', state, left)); }
@@ -1885,7 +2099,7 @@ function meLine(m, tt = t, now = Date.now()) {
   const until = m.realtime_until;
   const rt = until === undefined ? (m.ws_available ? tt.rtOn : tt.rtOff)
     : until === null ? tt.rtOn
-      : until > now ? tt.rtTrial(trialLeft(until, tt, now)) : tt.rtTrialOver;
+      : until > now ? tt.rtTrial(trialLeft(until, tt, now)) : paidEndedOf(m, now) ? tt.rtPaidEnded : tt.rtTrialOver;
   return [
     m.plan,
     tt.meDevices(m.devices_used, m.devices_limit ?? '∞'),
@@ -1895,28 +2109,44 @@ function meLine(m, tt = t, now = Date.now()) {
   ].join(' · ');
 }
 
-/** Name, when it was last seen, a tag (this machine · send-only), and the id that `--to` and `revoke` take */
-function deviceLines(list, selfId, tt = t, now = Date.now()) {
+/**
+ * Name, when it was last seen, a tag (default · this machine · send-only), and the id that `--to` and `revoke` take.
+ * `mark`: the devices a send goes to by default (a Set of ids), or null when the default isn't shown.
+ */
+function deviceLines(list, selfId, tt = t, now = Date.now(), mark = null) {
   const rows = list.map((d) => ({
     name: nameOf(d), seen: agoOf(d, now, tt), id: shown(d.device_id),
-    tag: d.device_id === selfId ? 'this' : d.scope !== 'full' ? 'only' : '',
+    tag: d.device_id === selfId ? 'this' : d.scope !== 'full' ? 'only' : mark && mark.has(d.device_id) ? 'default' : '',
   }));
+  const words = { this: tt.devThis, only: tt.devSendOnly, default: tt.devDefaultTag };
   const wn = Math.max(0, ...rows.map((r) => cols(r.name))), ws = Math.max(0, ...rows.map((r) => cols(r.seen)));
-  const wt = Math.max(0, ...rows.map((r) => cols(r.tag === 'this' ? tt.devThis : r.tag === 'only' ? tt.devSendOnly : '')));
+  const wt = Math.max(0, ...rows.map((r) => cols(words[r.tag] ?? '')));
   return rows.map((r) => {
-    const tag = r.tag === 'this' ? blue(padCols(tt.devThis, wt)) : r.tag === 'only' ? dim(padCols(tt.devSendOnly, wt)) : ' '.repeat(wt);
+    const w = words[r.tag] ?? '';
+    const tag = r.tag === 'this' || r.tag === 'default' ? blue(padCols(w, wt)) : r.tag === 'only' ? dim(padCols(w, wt)) : ' '.repeat(wt);
     return `  ${padCols(r.name, wn)}  ${dim(padCols(r.seen, ws))}  ${tag}  ${dim(r.id)}`.trimEnd();
   });
+}
+
+/** The default as the devices list shows it: which devices carry the mark, and the sentence under the list; null while fewer than two others can receive */
+function defaultView(cfg, list, tt = t) {
+  const can = receivers(list, cfg.device_id);
+  if (can.length < 2) return null;
+  const { keep } = settleDefault(savedTargets(cfg), list, cfg.device_id);
+  if (!keep.length) return { mark: new Set(can.map((d) => d.device_id)), line: tt.devDefaultLine(tt.devDefaultAll) };
+  return { mark: new Set(keep.map((e) => e.id)), line: tt.devDefaultLine(keep.map((e) => shown(e.name)).join(tt.tgtSep)) };
 }
 
 async function devices() {
   const cfg = needToken();
   const [list, me] = await Promise.all([fetchDevices(cfg), api(cfg, 'GET', '/v1/me').catch(() => null)]);
-  for (const line of deviceLines(list, cfg.device_id)) console.log(line);
+  const view = defaultView(cfg, list);
+  for (const line of deviceLines(list, cfg.device_id, t, Date.now(), view?.mark ?? null)) console.log(line);
   if (me && me.devices_used != null) {
     const full = Number.isFinite(me.devices_limit) && me.devices_used >= me.devices_limit;
     console.log(`  ${dim(t.devCount(me.devices_used, me.devices_limit ?? '∞'))}${full ? `  ${dim(`· ${t.devFull}`)}` : ''}`);
   }
+  if (view) console.log(`\n  ${dim(view.line)}`);
 }
 
 /**
@@ -1952,8 +2182,51 @@ async function targetCmd(args, tt = t) {
   console.log(`  ${dim(tt.notAutoAdded)}`);
 }
 
-const revoke = (args) => api(needToken(), 'DELETE', `/v1/devices/${encodeURIComponent(args[0] ?? '')}`)
-  .then(() => console.log(t.revoked));
+/**
+ * `dropit revoke <id>` removes a device; with this machine's own id it signs this machine out; `dropit logout` is that, spelled out.
+ * Asks first on a terminal; `--yes` / `-y` skips the question; with no terminal and no `--yes` it refuses (a script must say it means it).
+ */
+async function revoke(args, io = {}) {
+  const yesFlag = args.some((a) => a === '--yes' || a === '-y');
+  const rest = args.filter((a) => a !== '--yes' && a !== '-y');
+  const cfg = needToken();
+  return removeDevice(cfg, (rest[0] ?? '').trim(), yesFlag, io);
+}
+
+const logout = (args, io = {}) => {
+  const cfg = needToken();
+  return removeDevice(cfg, cfg.device_id, args.some((a) => a === '--yes' || a === '-y'), io);
+};
+
+async function removeDevice(cfg, id, yesFlag, io = {}) {
+  const tty = io.tty ?? Boolean(process.stdin.isTTY);
+  const ask = io.ask ?? defaultIo().ask;
+  if (!id) die(t.revokeUsage);
+  const self = id === cfg.device_id;
+  let name = null;
+  if (!self) {
+    const list = await fetchDevices(cfg).catch(() => null);        // without the list the service still answers for an unknown id
+    const d = list?.find((x) => x.device_id === id);
+    if (list && !d) die(t.revokeUnknown(shown(id)));
+    name = d ? shown(nameOf(d)) : shown(id);
+  }
+  if (!yesFlag) {
+    if (!tty) die(t.revokeNeedsYes);
+    if (!yes(await ask(self ? t.confirmSelf : t.confirmOther(name)))) return console.log(t.revokeAborted);
+  }
+  try {
+    await api(cfg, 'DELETE', `/v1/devices/${encodeURIComponent(id)}`);
+  } catch (err) {
+    if (err.status === 404) die(t.revokeUnknown(shown(id)));
+    throw err;
+  }
+  if (self) {                                    // this machine: its token no longer works, so don't keep it (files, rules and the rest stay)
+    const { token: _t, device_id: _d, ...kept } = load();
+    save(kept);
+    return console.log(t.revokedSelf);
+  }
+  console.log(t.revoked(name));
+}
 
 /**
  * Refresh the endpoint list and persist it.
@@ -2011,28 +2284,57 @@ function withSrc(url, src) {
   return `${base}${base.includes('?') ? '&' : '?'}src=${src}${h < 0 ? '' : url.slice(h)}`;
 }
 
+/** The link with its `why=` set to the reason this client is showing it for (the account's own link carries a generic one) */
+function withWhy(url, why) {
+  const h = url.indexOf('#');
+  const base = h < 0 ? url : url.slice(0, h);
+  const q = base.indexOf('?');
+  const head = q < 0 ? base : base.slice(0, q);
+  const kept = q < 0 ? [] : base.slice(q + 1).split('&').filter((p) => p && !/^why=/.test(p));
+  return `${head}?${[...kept, `why=${why}`].join('&')}${h < 0 ? '' : url.slice(h)}`;
+}
+
 /**
  * The upgrade link of an answer, ready to open: a safe link, tagged with where it was opened (`src=cli`).
+ * `why` names the reason it is shown for, when the link itself says something more general.
  * Null when there is none — none was given, or the limit is the hourly one (waiting is the way past it).
  */
-function upgradeLink(data) {
+function upgradeLink(data, why, opts = {}) {
   if (data?.window === 'hour') return null;
-  const url = safeLink(data?.upgrade_url);
-  return url ? withSrc(url, 'cli') : null;
+  let url = safeLink(data?.upgrade_url);
+  if (url) url = withoutBuy(url);        // always the plans page: never straight to a checkout, whatever the link carried
+  return url ? withSrc(why ? withWhy(url, why) : url, 'cli') : null;
+}
+
+/** The link without `buy=`: it opens the plans page (price and what is bought, the yearly plan in view) instead of going straight to the checkout */
+function withoutBuy(url) {
+  const h = url.indexOf('#');
+  const base = h < 0 ? url : url.slice(0, h);
+  const q = base.indexOf('?');
+  if (q < 0) return url;
+  const kept = base.slice(q + 1).split('&').filter((x) => x && !/^buy=/.test(x));
+  return `${base.slice(0, q)}${kept.length ? `?${kept.join('&')}` : ''}${h < 0 ? '' : url.slice(h)}`;
 }
 
 /** A limit the paid plan lifts: the sentence, then the way past it. The service gives the link to free accounts only, so nobody else sees this */
 function withUpgrade(message, data = {}, tt = t) {
   const url = upgradeLink(data);
-  return url ? `${message} — ${tt.upgradeFor(data.why)}: ${url}` : message;
+  return url ? `${message}\n${tt.upgradeFor(data.why)}:\n${url}` : message;
 }
 
-function errorText(code, data = {}, status, tt = t, now = Date.now()) {
+function errorText(code, data = {}, status, tt = t, now = Date.now(), where = '') {
   if (code === 'PAYLOAD_TOO_LARGE' && data.field === 'size' && data.limit) return tt.tooLarge(mb(data.limit));
+  if (code === 'PAYLOAD_TOO_LARGE' && data.field === 'raw' && data.limit) return tt.tooLargeText(mb(data.limit));
   if (code === 'RATE_LIMITED' && data.window === 'day') {
     // Today's uploads or downloads (their own daily limits) say so; today's sends have no field
     const back = clock(data.retry_after ?? 0, now);
-    return data.field === 'uploads' ? tt.rateDayUploads(back) : data.field === 'downloads' ? tt.rateDayDownloads(back) : tt.rateDay(back);
+    // Which daily limit it was: the answer's `field` where it has one; otherwise the request that was refused (sends carry neither)
+    if (data.field === 'pairings') return tt.ratePairings(back);
+    if (data.field === 'uploads') return tt.rateDayUploads(back);
+    if (data.field === 'downloads') return tt.rateDayDownloads(back);
+    if (where.startsWith('/v1/ws/ticket')) return tt.rateTickets(back);
+    if (where.startsWith('/v1/checkout')) return tt.rateCheckouts(back);
+    return tt.rateDay(back);
   }
   if (code === 'RATE_LIMITED' && data.window === 'hour') return tt.rateHour;
   if (code === 'SIGNUP_LIMITED' && Number.isFinite(data.retry_after) && Number.isFinite(data.limit)) return tt.signupLimitedAt(clock(data.retry_after, now), data.limit);
@@ -2042,7 +2344,7 @@ function errorText(code, data = {}, status, tt = t, now = Date.now()) {
   if (code === 'QUOTA_EXCEEDED' && data.field === 'bytes') return frees ? tt.quotaBytesIn(frees) : tt.quotaBytes;
   if (code === 'DEVICE_REVOKED' && data.reason === 'replaced') return tt.revokedReplaced;
   if (code === 'TARGET_UNAVAILABLE' && tt.targetRefused[data.reason]) return tt.targetRefused[data.reason];
-  return tt.errors[code] ?? tt.httpFailed(status);
+  return tt.errors[code] ?? (status >= 500 ? tt.serverDown : tt.httpFailed(status));
 }
 
 // Control characters: C0, DEL and C1. In a name printed to the terminal, ESC sequences can rewrite what's on screen
@@ -2337,6 +2639,8 @@ function composeInput(handler, item, fileNames) {
  */
 function sanitizeAnswer(text, max = RUN_DEFAULTS.maxAnswerChars) {
   let s = String(text ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g, '');
+  // Bound the work first: the patterns below are quadratic on a long run of unclosed brackets, and the answer is cut to `max` anyway
+  if (s.length > max * 2) s = s.slice(0, max * 2);
   // Every Markdown image goes, whatever it points at: ![alt](anything) and ![alt][ref]. A result has no use for one
   s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt) => `[image removed${alt ? ': ' + alt : ''}]`);
   s = s.replace(/!\[([^\]]*)\]\[[^\]]*\]/g, (_, alt) => `[image removed${alt ? ': ' + alt : ''}]`);
@@ -3308,8 +3612,30 @@ async function runCmd(args, io = defaultIo()) {
   throw new Error(r.message);
 }
 
+/**
+ * `dropit upgrade`: the plans page of this account, as a link to open. A free account gets the page its own link opens
+ * (the link lasts a little while — run this again for a fresh one); a paid one that does not renew by itself gets a new
+ * checkout to renew for a year, made now. One that renews itself or is paid for good has nothing to buy.
+ */
+async function upgrade() {
+  const cfg = needToken();
+  const m = await api(cfg, 'GET', '/v1/me');
+  if (m.plan !== 'paid') {
+    const link = upgradeLink({ upgrade_url: m.upgrade_url }, undefined, { plans: true });
+    if (!link) throw new Error(t.upgradeClosed);
+    console.log(`${t.upgradePlans}\n${link}\n${dim(t.upgradeKeepFresh)}`);
+    return;
+  }
+  if (m.paid_kind === 'life') return console.log(t.upgradeForGood);
+  if (m.renews === true) return console.log(t.upgradeRenews);
+  const made = await api(cfg, 'POST', '/v1/checkout', { plan: 'year_once', from: 'cli' });
+  const url = safeLink(made.checkout_url);
+  if (!url) throw new Error(t.upgradeClosed);
+  console.log(`${t.upgradeRenew}\n${withSrc(url, 'cli')}`);
+}
+
 const COMMANDS = {
-  pair, code: newCode, send, watch, me, devices, target: targetCmd, revoke, agents: agentsCmd, handlers: handlersCmd, run: runCmd,
+  pair, code: newCode, send, watch, me, upgrade, devices, target: targetCmd, revoke, logout, agents: agentsCmd, handlers: handlersCmd, run: runCmd,
   version: async () => console.log(VERSION), help: async () => console.log(t.usage),
 };
 COMMANDS['--help'] = COMMANDS['-h'] = COMMANDS.help;
@@ -3321,7 +3647,7 @@ if (require.main === module) {
   COMMANDS[cmd](args).catch((err) => die(err.message));
 } else {
   module.exports = {                             // for tests
-    T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, withUpgrade, upgradeLink, safeLink, meLine, accountNotes, trialDaysOf, trialFacts, momentTaken, pairAction, FILES_MAX, tildePath,
+    T, pickLang, markdownOf, filesOf, filesProblem, groupsFor, errorText, withUpgrade, upgradeLink, withoutBuy, safeLink, meLine, momentFacts, momentText, moneyText, upgrade, accountNotes, trialDaysOf, trialFacts, momentTaken, pairAction, FILES_MAX, tildePath, revoke, logout, deviceNameOf, idShort, freeName, defaultView, paidEndedOf, removeDevice,
     deviceKey, machineFacts, VERSION, powChallengeOf, powSolve, withPow, zeroBits,
     // the network side, driven by the tests with a stand-in fetch, WebSocket and clock
     api, endpointsOf, sanitize, shown, yamlValue, watch,

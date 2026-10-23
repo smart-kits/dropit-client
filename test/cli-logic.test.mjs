@@ -16,7 +16,7 @@ import { join } from 'node:path';
 const HOME = mkdtempSync(join(tmpdir(), 'dropit-cli-test-'));
 process.env.HOME = HOME;
 process.env.USERPROFILE = HOME;
-const { T, filesOf, filesProblem, groupsFor, errorText, withUpgrade, safeLink, meLine, pairAction, FILES_MAX, deviceKey, machineFacts } = require('../cli/dropit');
+const { deviceNameOf, idShort, T, filesOf, filesProblem, groupsFor, errorText, withUpgrade, safeLink, meLine, pairAction, FILES_MAX, deviceKey, machineFacts } = require('../cli/dropit');
 const P = require('../cli/dropit');
 import { readFileSync } from 'node:fs';
 let pass = 0, fail = 0;
@@ -60,7 +60,7 @@ ok('a new id each time', groupsFor(2)[0].id !== groupsFor(2)[0].id);
 // ── error sentences: numbers from the answer ─────────────────────────────
 const now = new Date(2026, 9, 4, 22, 15).getTime();          // local time
 is('413 size → the limit from the answer', errorText('PAYLOAD_TOO_LARGE', { field: 'size', limit: 5242880 }, 413, en),
-  'Larger than 5 MB, the most one item can be');
+  'Over the 5 MB limit for one item');
 is('413 size, other limit → that number', errorText('PAYLOAD_TOO_LARGE', { field: 'size', limit: 1572864 }, 413, zh),
   '超过了单条上限 1.5 MB');
 is('413 without field → plain sentence', errorText('PAYLOAD_TOO_LARGE', {}, 413, en), en.errors.PAYLOAD_TOO_LARGE);
@@ -74,15 +74,16 @@ is('429 day, zh', errorText('RATE_LIMITED', { window: 'day', retry_after: 90 }, 
 is('429 without window → old sentence', errorText('RATE_LIMITED', { retry_after: 30 }, 429, en), en.errors.RATE_LIMITED);
 is('429 day, uploads → its own sentence', errorText('RATE_LIMITED', { window: 'day', field: 'uploads', retry_after: 7200 }, 429, en, now), "Today's file uploads are used up — back at 00:15");
 is('429 day, downloads, zh → its own sentence', errorText('RATE_LIMITED', { window: 'day', field: 'downloads', retry_after: 90 }, 429, zh, now), '今天的下载次数用完了，22:16 恢复');
-is('space full → when room frees up', errorText('QUOTA_EXCEEDED', { field: 'bytes', frees_in: 7200 }, 507, en), 'Storage is full — the oldest item expires in about 2 hours and frees up room');
+is('space full → when room frees up', errorText('QUOTA_EXCEEDED', { field: 'bytes', frees_in: 7200 }, 507, en), 'Space is full — the oldest item expires in about 2 hours and frees up room');
 is('queue full, zh → when room frees up', errorText('QUOTA_EXCEEDED', { field: 'items', frees_in: 90000 }, 507, zh), '积压的内容太多了，最早的一条约 25 小时后到期，到时自动腾出位置');
 is('space full, no time given → the plain sentence', errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, en), en.quotaBytes);
 is('a span under an hour', en.span(600), 'under an hour');
 // the way past a limit the paid plan lifts rides on the sentence (the service gives the link to free accounts only)
 const link = 'https://dropit.example/upgrade?u=1&why=per_day';
-is('upgrade link follows the sentence, tagged with this client', withUpgrade('Too fast', { upgrade_url: link, why: 'per_day' }, en), `Too fast — Keep sending with Paid: ${link}&src=cli`);
-is('upgrade link, zh', withUpgrade('投得太快', { upgrade_url: link, why: 'queue' }, zh), `投得太快 — 升级后可以积压更多: ${link}&src=cli`);
-is('a link with no query gets ?src', withUpgrade('x', { upgrade_url: 'https://dropit.example/upgrade', why: 'per_day' }, en), 'x — Keep sending with Paid: https://dropit.example/upgrade?src=cli');
+is('upgrade link follows the sentence, tagged with this client', withUpgrade('Too fast', { upgrade_url: link, why: 'per_day' }, en), `Too fast\nKeep sending with Paid:\n${link}&src=cli`);
+is('upgrade link, zh', withUpgrade('投得太快', { upgrade_url: link, why: 'queue' }, zh), `投得太快\n升级后可以积压更多:\n${link}&src=cli`);
+is('a link with no query gets ?src', withUpgrade('x', { upgrade_url: 'https://dropit.example/upgrade', why: 'per_day' }, en), 'x\nKeep sending with Paid:\nhttps://dropit.example/upgrade?src=cli');
+is('a wall link that still carries buy= opens the plans page, not the checkout', withUpgrade('x', { upgrade_url: `${link}&buy=year`, why: 'per_day' }, en), 'x\nKeep sending with Paid:\nhttps://dropit.example/upgrade?u=1&why=per_day&src=cli');
 is('the hourly limit is never sold, even if a link came', withUpgrade('Slow down', { upgrade_url: link, why: 'per_day', window: 'hour' }, en), 'Slow down');
 for (const [u, want] of [["https://dropit.example/upgrade?u=1", "https://dropit.example/upgrade?u=1"], ["http://127.0.0.1:8799/upgrade", "http://127.0.0.1:8799/upgrade"], ["http://localhost:8780/x", "http://localhost:8780/x"], ["javascript:alert(1)", null], ["data:text/html,<b>x</b>", null], ["file:///etc/passwd", null], ["obsidian://open?vault=x", null], ["http://evil.example/up", null], ["//evil.example/x", null], ["", null], [null, null]]) is(`a link from the service: ${String(u).slice(0, 40)}`, safeLink(u), want);
 is('a link that is not one to open is left out of the sentence', withUpgrade('Too fast', { upgrade_url: 'javascript:alert(1)', why: 'per_day' }, en), 'Too fast');
@@ -95,24 +96,34 @@ is('507 bytes', errorText('QUOTA_EXCEEDED', { field: 'bytes' }, 507, en), en.quo
 is('507 without field → old sentence', errorText('QUOTA_EXCEEDED', {}, 507, en), en.errors.QUOTA_EXCEEDED);
 is('503 circuit', errorText('GLOBAL_CIRCUIT_OPEN', { retry_after: 60 }, 503, en), en.errors.GLOBAL_CIRCUIT_OPEN);
 is('blob unavailable', errorText('BLOB_UNAVAILABLE', {}, 503, zh), zh.errors.BLOB_UNAVAILABLE);
-is('unknown code → HTTP status', errorText('SOMETHING_NEW', {}, 500, en), en.httpFailed(500));
+is('unknown code, 4xx → HTTP status', errorText('SOMETHING_NEW', {}, 400, en), en.httpFailed(400));
+is('unknown code, 5xx → the service is unavailable, no HTTP number', [errorText('SOMETHING_NEW', {}, 500, en), errorText(undefined, {}, 503, zh)], [en.serverDown, zh.serverDown]);
+ok('…and it says to try later, without the status', /try again later/.test(en.serverDown) && /稍后再试/.test(zh.serverDown) && !/HTTP|50\d/.test(en.serverDown + zh.serverDown));
+is('413 text → says it is text, with the limit from the answer', [errorText('PAYLOAD_TOO_LARGE', { field: 'raw', limit: 1048576 }, 413, en), errorText('PAYLOAD_TOO_LARGE', { field: 'raw', limit: 1048576 }, 413, zh)], [en.tooLargeText('1 MB'), zh.tooLargeText('1 MB')]);
+ok('…the number is in the sentence', /1 MB/.test(en.tooLargeText('1 MB')) && /1 MB/.test(zh.tooLargeText('1 MB')));
+is('413 text without a limit → the plain sentence', errorText('PAYLOAD_TOO_LARGE', { field: 'raw' }, 413, en), en.errors.PAYLOAD_TOO_LARGE);
+is('account id on screen: six characters only', [idShort('u_5KvuQ6abcdef'), en.created('u_5KvuQ6abcdef').includes('abcdef'), zh.created('u_5KvuQ6abcdef').includes('abcdef')], ['u_5Kvu…', false, false]);
+const nm = deviceNameOf('h'.repeat(300));
+ok('device name: a long host name is cut to 48 characters', Array.from(nm).length === 48 && nm.startsWith('CLI · hhh'), nm);
+ok('…and a Chinese one stays within 64 bytes', Buffer.byteLength(deviceNameOf('主机'.repeat(60))) <= 64);
+is('…a short one is unchanged', deviceNameOf('mac'), 'CLI · mac');
 
 // ── dropit me ────────────────────────────────────────────────────────────
 const DAY = 86_400_000;
 const base = { plan: 'free', devices_used: 1, devices_limit: 2, bytes_used: 0, bytes_limit: 31457280, item_bytes_limit: 5242880 };
 is('trial with days left', meLine({ ...base, ws_available: true, realtime_until: now + 2.5 * DAY }, en, now),
-  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time trial: 3 days left');
+  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time delivery: trial, 3 days left');
 is('trial under a day', meLine({ ...base, ws_available: true, realtime_until: now + 3_600_000 }, en, now),
-  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time trial: less than a day left');
+  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time delivery: trial, less than a day left');
 is('trial over', meLine({ ...base, ws_available: false, realtime_until: now - DAY }, en, now),
-  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time trial ended');
+  'free · 1/2 devices · 0.0/30 MB · files up to 5 MB · real-time delivery: trial ended');
 is('null → always on', meLine({ ...base, plan: 'pro', devices_limit: null, ws_available: true, realtime_until: null }, en, now),
-  'pro · 1/∞ devices · 0.0/30 MB · files up to 5 MB · real-time available');
+  'pro · 1/∞ devices · 0.0/30 MB · files up to 5 MB · real-time delivery on');
 is('older service: no realtime_until, no item limit → ws_available', meLine(
   { plan: 'free', devices_used: 2, devices_limit: 2, bytes_used: 1258291, bytes_limit: 31457280, ws_available: false }, en, now),
-  'free · 2/2 devices · 1.2/30 MB · real-time unavailable');
+  'free · 2/2 devices · 1.2/30 MB · real-time delivery not included');
 is('zh trial', meLine({ ...base, ws_available: true, realtime_until: now + 3 * DAY }, zh, now),
-  'free · 1/2 台设备 · 0.0/30 MB · 单个文件最大 5 MB · 实时推送体验期：还剩 3 天');
+  'free · 1/2 台设备 · 0.0/30 MB · 单个文件最大 5 MB · 实时送达体验：还剩 3 天');
 
 // ── Upgrade moments: numbers from the service, lines once, nothing made up ──
 {
@@ -122,17 +133,28 @@ is('zh trial', meLine({ ...base, ws_available: true, realtime_until: now + 3 * D
   is('…else from the account\'s two dates', trialDaysOf({ created_at: 0, realtime_until: 7 * DAY }, null), 7);
   is('…else nothing: no number is written', [trialDaysOf({}, null), trialDaysOf(null, null)], [null, null]);
   is('upgradeLink: nothing without a link', [upgradeLink({}), upgradeLink(undefined), upgradeLink({ upgrade_url: 'javascript:alert(1)' })], [null, null, null]);
+  is('upgradeLink with a reason: why= is replaced, not doubled; the rest and the fragment stay',
+    [upgradeLink({ upgrade_url: 'https://x.test/upgrade?u=1&why=account&buy=year#p' }, 'devices'), upgradeLink({ upgrade_url: 'https://x.test/upgrade' }, 'devices'), upgradeLink({ upgrade_url: 'https://x.test/upgrade?why=account' })],
+    ['https://x.test/upgrade?u=1&why=devices&src=cli#p', 'https://x.test/upgrade?why=devices&src=cli', 'https://x.test/upgrade?why=account&src=cli']);
   is('what the account has had: only what it said', trialFacts({}, 14, now), { days: 0, items: 0, devices: 0 });
   is('…the first day counts as 1, and it stops at the trial\'s length', [trialFacts({ created_at: now - 100 }, 14, now).days, trialFacts({ created_at: now - 30 * DAY }, 14, now).days], [1, 14]);
 
   for (const [lang, S] of [['en', en], ['zh', zh]]) {
-    const f = { days: 12, items: 41, devices: 2 };
-    ok(`${lang}: "what you had" says days, items and devices`, /12/.test(S.enjoyed(f)) && /41/.test(S.enjoyed(f)) && /2/.test(S.enjoyed(f)), S.enjoyed(f));
-    ok(`${lang}: no items sent: that half is left out`, !/41|\b0\b/.test(S.enjoyed({ ...f, items: 0 })) && /12/.test(S.enjoyed({ ...f, items: 0 })), S.enjoyed({ ...f, items: 0 }));
-    ok(`${lang}: one device: that half is left out`, S.enjoyed({ ...f, devices: 1 }).replace(/12|41/g, '').search(/\d/) === -1, S.enjoyed({ ...f, devices: 1 }));
-    ok(`${lang}: the trial lines carry the length they are given, and none when they have none`,
-      [S.wsTrialEnding, S.wsNotIncluded, S.wsTrialOver].every((fn) => fn(14).includes('14') && !/\d{2}/.test(fn(null)))
-      && S.wsTrialSoon(S.daysLeft(3), 14).includes('14') && !/\d{2}/.test(S.wsTrialSoon(S.daysLeft(0), null)), S.wsTrialOver(14));
+    const rich = { left: S.daysLeft(3), items: 41, devices: 2, rich: true, freeDays: 1, paid: { perDay: 300, fileMB: 100, devices: 10, days: 10 }, trial: '$1.90', year: '$19.90' };
+    const bare = { left: S.daysLeft(3), items: 0, devices: 0, rich: false };
+    for (const kind of ['soon', 'ending', 'over', 'plan']) {
+      const text = S.moment(kind, rich);
+      ok(`${lang} ${kind}: the data version says items, devices and what Paid adds`, /41/.test(text) && /\b2\b/.test(text) && /300/.test(text) && /100/.test(text) && /10\b/.test(text), text);
+      ok(`${lang} ${kind}: no number the service did not give`, !/\d/.test(S.moment(kind, { ...bare, left: null }).replace(/不到 1 天/, '')) && !/\d/.test(S.moment(kind, { rich: false }).replace(/不到 1 天/, '')), S.moment(kind, bare));
+      ok(`${lang} ${kind}: no storage / cloud / backup wording, no implementation talk`, !/storage|cloud|backup|存储|云盘|备份|new accounts|新账号|catches up and exits|拉到/i.test(text + S.moment(kind, bare)), text);
+    }
+    ok(`${lang}: the data version leaves out a half the service did not say`, !/\b300\b|10 MB|devices got|台设备都是/.test(S.moment('over', { ...rich, items: 0, devices: 1, paid: {} })) && !/Paid you also|付费版还有/.test(S.moment('over', { ...rich, paid: {} })), S.moment('over', { ...rich, items: 0, devices: 1, paid: {} }));
+    ok(`${lang}: the way on names the prices it was given, or none`, /1\.90/.test(S.momentCta(rich)) && /19\.90/.test(S.momentCta(rich)) && !/\d/.test(S.momentCta({})), S.momentCta(rich));
+    ok(`${lang}: a new link is one command away`, /dropit upgrade/.test(S.linkExpired));
+    ok(`${lang}: Paid ending says the date, what to keep, and how to renew`, /2026-11-05/.test(S.paidEnding('2026-11-05', { perDay: 300, fileMB: 100, devices: 10 })) && /300/.test(S.paidEnding('2026-11-05', { perDay: 300 })) && /dropit upgrade/.test(S.paidEnding('2026-11-05')) && !/300/.test(S.paidEnding('2026-11-05')), S.paidEnding('2026-11-05', { perDay: 300 }));
+    ok(`${lang}: Paid ended says the date and Free's numbers, nothing about backlog`, /2026-11-15/.test(S.paidEnded('2026-11-15', { perDay: 20 })) && /20/.test(S.paidEnded('2026-11-15', { perDay: 20 })) && !/backlog|积压|retention/.test(S.paidEnded('2026-11-15', { perDay: 20 })));
+    ok(`${lang}: the daily limits of pairing, real-time connections and upgrade links each have their own sentence`,
+      new Set([S.rateDay('08:00'), S.ratePairings('08:00'), S.rateTickets('08:00'), S.rateCheckouts('08:00')]).size === 4 && !/Storage|存储/.test(JSON.stringify(S)));
     is(`${lang}: me usage: both halves only when said`, [S.meUsage(0, 0), S.meUsage(3, 0).includes('3'), /41/.test(S.meUsage(0, 41))], ['', true, true]);
   }
   is('me usage, en', en.meUsage(12, 41), '12 days in use / 41 items sent');
@@ -143,16 +165,36 @@ is('zh trial', meLine({ ...base, ws_available: true, realtime_until: now + 3 * D
   is('me: nothing said when the account gave neither', accountNotes({ plan: 'free' }, {}, now, en).usage, null);
   is('me: no items sent yet: only the days', accountNotes({ ...free, items_total: 0 }, {}, now, en).usage, '13 days in use');
   const paid = { plan: 'paid', paid_until: now + 5 * DAY, renews: false, items_total: 9 };
-  ok('P1: a paid year with under a week left says when it ends', /^Paid runs until \d{4}-\d{2}-\d{2}\./.test(accountNotes(paid, {}, now, en).p1?.text ?? ''), JSON.stringify(accountNotes(paid, {}, now, en).p1));
+  ok('P1: a paid year with under a week left says when it ends', /^Paid ends on \d{4}-\d{2}-\d{2}\./.test(accountNotes(paid, {}, now, en).p1?.text ?? ''), JSON.stringify(accountNotes(paid, {}, now, en).p1));
   is('P1: a plan that renews itself: nothing', accountNotes({ ...paid, renews: true }, {}, now, en).p1, null);
   is('P1: more than a week away: nothing', accountNotes({ ...paid, paid_until: now + 30 * DAY }, {}, now, en).p1, null);
   is('P1: a lifetime plan (no end): nothing', accountNotes({ plan: 'paid', paid_until: null, renews: false }, {}, now, en).p1, null);
   const gone = { plan: 'free', paid_until: now - 1000, paid_grace_until: now + 10 * DAY, items_total: 500, upgrade_url: link };
   const ended = accountNotes(gone, { lastPlan: 'paid', lastPaidUntil: now - 1000 }, now, en).p2;
-  ok('P2: Paid just ended: the account\'s total, the grace date, and a link tagged with this client', /Paid has ended/.test(ended?.text) && /500 items in total/.test(ended.text) && ended.link === `${link}&src=cli`, JSON.stringify(ended));
-  is('P2: not known to have been paid here: nothing', accountNotes(gone, {}, now, en).p2, null);
+  ok('P2: Paid just ended: the account\'s total, the grace date, and a link tagged with this client', /Paid has ended/.test(ended?.text) && !/500/.test(ended.text) && ended.link === `${link}&src=cli`, JSON.stringify(ended));
+  ok('P2: Paid has ended is said from the account\'s own dates, even when this machine never saw Paid', /Paid has ended/.test(accountNotes(gone, {}, now, en).p2?.text));
   is('P2: no grace period (refunded, or never paid): nothing', accountNotes({ ...gone, paid_grace_until: null }, { lastPlan: 'paid' }, now, en).p2, null);
   is('P2: still paid: nothing', accountNotes(paid, { lastPlan: 'paid' }, now, en).p2, null);
+}
+
+// ── The daily limit of a request that is not a send: said by what it was ──
+{
+  const DAYQ = { window: 'day', retry_after: 7200, limit: 20 };
+  is('429 day, pairings → its own sentence, not "sends"', errorText('RATE_LIMITED', { ...DAYQ, field: 'pairings' }, 429, en, now), en.ratePairings('00:15'));
+  is('429 day, real-time ticket → its own sentence', errorText('RATE_LIMITED', DAYQ, 429, en, now, '/v1/ws/ticket'), en.rateTickets('00:15'));
+  is('429 day, upgrade link → its own sentence', errorText('RATE_LIMITED', DAYQ, 429, zh, now, '/v1/checkout'), zh.rateCheckouts('00:15'));
+  is('429 day on a send (no field, other path) is still the sends sentence', errorText('RATE_LIMITED', DAYQ, 429, en, now, '/v1/ingest'), en.rateDay('00:15'));
+  ok('none of the three says "sends"', ![en.ratePairings('x'), en.rateTickets('x'), en.rateCheckouts('x')].some((x) => /sends/i.test(x)));
+  is('withoutBuy: the plans page, the rest of the query and the fragment kept',
+    [P.withoutBuy('https://x.test/upgrade?u=1&buy=year&why=a#p'), P.withoutBuy('https://x.test/upgrade?buy=year'), P.withoutBuy('https://x.test/upgrade')],
+    ['https://x.test/upgrade?u=1&why=a#p', 'https://x.test/upgrade', 'https://x.test/upgrade']);
+  is('upgradeLink: buy= is always off (the plans page, never straight to a checkout), why= set, src=cli on — for a reader and for a wall',
+    [P.upgradeLink({ upgrade_url: 'https://x.test/upgrade?u=1&why=account&buy=year' }, 'realtime', { plans: true }), P.upgradeLink({ upgrade_url: 'https://x.test/upgrade?u=1&why=per_day&buy=year' })],
+    ['https://x.test/upgrade?u=1&why=realtime&src=cli', 'https://x.test/upgrade?u=1&why=per_day&src=cli']);
+  is('money: from the cents and currency the service gave; none given → none', [P.moneyText({ cents: 1990, currency: 'USD' }), P.moneyText({}), P.moneyText(null)], ['$19.90', null, null]);
+  const f = P.momentFacts({ me: { items_total: 9, devices_used: 1, trial_available: false }, plans: { plans: [{ id: 'year', price: { cents: 1990, currency: 'USD' }, trial: { cents: 190 } }], limits: { free: { days: 1 }, paid: {} } } });
+  is('facts: few items, one device → not rich; no first-month price when the account had a subscription', [f.rich, f.trial, f.year, f.freeDays], [false, null, '$19.90', 1]);
+  is('facts: ten items → rich; several devices → rich', [P.momentFacts({ me: { items_total: 10 } }).rich, P.momentFacts({ me: { devices_used: 2 } }).rich], [true, true]);
 }
 
 // ── dropit pair ──────────────────────────────────────────────────────────
@@ -287,11 +329,14 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
   {
     const ME = (extra = {}) => ({ plan: 'free', trial_days: 14, created_at: T0 - 12 * 86_400_000 - 1000, items_total: 41, devices_used: 2, upgrade_url: 'https://dropit.test/upgrade?u=1&why=account&buy=year', ...extra });
     const readMoments = () => JSON.parse(fs.readFileSync(CONFIG, 'utf8')).moments ?? {};
-    await scenario('T1', { handler: (r) => r.path === '/v1/me' && answer(200, ME({ realtime_until: T0 + 2.5 * 86_400_000 })), ws: (w) => opens(w) }, async () => {
+    const PLANS = { plans: [{ id: 'year', price: { cents: 1990, currency: 'USD' }, trial: { cents: 190, days: 30 } }], limits: { free: { days: 1 }, paid: { perDay: 300, fileMB: 100, devices: 10, days: 10 } } };
+    await scenario('T1', { handler: (r) => (r.path === '/v1/me' ? answer(200, ME({ realtime_until: T0 + 2.5 * 86_400_000, trial_available: true })) : r.path === '/v1/plans' ? answer(200, PLANS) : null), ws: (w) => opens(w) }, async () => {
       await advance(2000);
       const line = logs.find((l) => /3 days left/.test(l));
-      ok('T1: three days out, watch says so once at start, with the length and what the account had', !!line && /14 days/.test(line) && /41 items/.test(line) && /2 devices/.test(line), logs.join(' | '));
-      ok('…with the way to Paid, tagged with this client', !!line && /&src=cli$/.test(line), line);
+      ok('T1: three days out, watch says so once at start, with what the account had and what Paid adds', !!line && /41 items/.test(line) && /2 devices/.test(line) && /300 items a day/.test(line) && /100 MB/.test(line) && /up to 10 devices/.test(line), logs.join(' | '));
+      ok('…the price line names the first month and the year, and the link has a line to itself', /first month \$1\.90, then \$19\.90\/year/.test(line) && line.split('\n').some((l) => /^https:\/\/dropit\.test\/upgrade\?.*&src=cli$/.test(l)), line);
+      ok('…and it goes to the plans page, not the checkout, saying why it was shown', !/buy=/.test(line) && /why=realtime/.test(line), line);
+      ok('…and says how to get a fresh link', /dropit upgrade/.test(line), line);
       ok('…and remembers it in the config file', Object.keys(readMoments()).some((k) => k.startsWith('T1.')), JSON.stringify(readMoments()));
     });
     writeConfig({ token: 'dk_A', endpoints: ['https://dropit.test'], cursor: 0 });
@@ -302,7 +347,7 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     await scenario('T2', { handler: (r) => r.path === '/v1/me' && answer(200, ME({ realtime_until: T0 + 3 * 3_600_000, items_total: 0, devices_used: 1 })), ws: (w) => opens(w) }, async () => {
       await advance(2000);
       const line = logs.find((l) => /less than a day/.test(l));
-      ok('T2: under a day: the old wording, the service\'s length, and no halves with nothing to say', !!line && /14 days/.test(line) && !/items sent|devices receiving/.test(line) && /12 days|13 days/.test(line), logs.join(' | '));
+      ok('T2: under a day: no halves with nothing to say, no number made up', !!line && !/This account|devices get|With Paid|\d/.test(line.split('\n').slice(0, 2).join(' ').replace('less than a day', '')), logs.join(' | '));
       await advance(3 * 60 * MIN);
       ok('…said once in this run (the heartbeat does not say it again)', logs.filter((l) => /less than a day/.test(l)).length === 1, logs.join(' | '));
     });
@@ -311,14 +356,14 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
         : r.path === '/v1/ws/ticket' ? answer(403, { error: 'WS_REQUIRES_PAID', reason: 'trial_over', upgrade_url: 'https://dropit.test/upgrade?u=1&why=realtime&buy=year', why: 'realtime' }) : null),
     }, async () => {
       await advance(2000);
-      const line = logs.find((l) => /real-time trial has ended/.test(l));
+      const line = logs.find((l) => /real-time delivery trial has ended/.test(l));
       ok('T3: exits after catching up (code 0)', exits[0] === 0, JSON.stringify(exits));
-      ok('T3: says the trial\'s length and what the account had', !!line && /14-day/.test(line) && /41 items/.test(line) && /2 devices/.test(line), logs.join(' | '));
-      ok('T3: the link is tagged with this client', !!line && /&src=cli$/.test(line), line);
+      ok('T3: says what the account had', !!line && /41 items/.test(line) && /2 devices/.test(line), logs.join(' | '));
+      ok('T3: the link is on its own line, tagged with this client, and goes to the plans page', !!line && line.split('\n').some((l) => /^https:.*&src=cli$/.test(l)) && !/buy=/.test(line), line);
     });
     await scenario('T3, account unreadable', { handler: (r) => (r.path === '/v1/ws/ticket' ? answer(403, { error: 'WS_REQUIRES_PAID', reason: 'trial_over' }) : null) }, async () => {
       await advance(2000);
-      const line = logs.find((l) => /real-time trial has ended/.test(l));
+      const line = logs.find((l) => /real-time delivery trial has ended/.test(l));
       ok('T3 with no answer from the account: still said, with no number and no link', !!line && !/\d/.test(line) && !/https?:/.test(line), logs.join(' | '));
     });
     await scenario('paid', { handler: (r) => r.path === '/v1/me' && answer(200, { plan: 'paid', paid_until: T0 + 100 * 86_400_000, renews: true, realtime_until: null }), ws: (w) => opens(w) }, async () => {
@@ -365,12 +410,12 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
 
   await scenario('too many', { ws: (w) => { opens(w); setTimeout(() => w.say({ type: 'end', end: 'too_many', limit: 12 }), 50); } }, async () => {
     await advance(14 * MIN);
-    ok('told the account\'s connections are full: says so', logs.filter((l) => l.includes('Real-time push is paused')).length === 1, logs.join(' | '));
+    ok('told the account\'s connections are full: says so', logs.filter((l) => l.includes('Real-time delivery is paused')).length === 1, logs.join(' | '));
     ok('…and waits: no ticket request for 14 minutes', count('/v1/ws/ticket') === 1, String(count('/v1/ws/ticket')));
     await advance(10 * MIN);
     ok('…tries again after about 15', count('/v1/ws/ticket') === 2, String(count('/v1/ws/ticket')));
-    ok('…without repeating the notice while it stays full', logs.filter((l) => l.includes('Real-time push is paused')).length === 1,
-      String(logs.filter((l) => l.includes('Real-time push is paused')).length));
+    ok('…without repeating the notice while it stays full', logs.filter((l) => l.includes('Real-time delivery is paused')).length === 1,
+      String(logs.filter((l) => l.includes('Real-time delivery is paused')).length));
   });
 
   await scenario('account switched', { ws: opens }, async () => {
@@ -577,7 +622,7 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
   }
   // the link of a limit: src goes before a fragment
   {
-    const up = (u) => withUpgrade('x', { upgrade_url: u, why: 'per_day' }, en).split(': ').pop();
+    const up = (u) => withUpgrade('x', { upgrade_url: u, why: 'per_day' }, en).split('\n').pop();
     is('src= goes before a #fragment, with ? or & as the link needs', [up('https://dropit.example/upgrade#plans'), up('https://dropit.example/upgrade?a=1#plans'), up('https://dropit.example/upgrade?a=1')],
       ['https://dropit.example/upgrade?src=cli#plans', 'https://dropit.example/upgrade?a=1&src=cli#plans', 'https://dropit.example/upgrade?a=1&src=cli']);
   }
@@ -656,6 +701,20 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
   const paths = (r) => r.reqs.map((x) => `${x.method} ${x.path}`);
   const clockLine = (s) => /^✓ Sent #\d+  → .* · \d\d:\d\d$/.test(s);
 
+  // a text typed before -f goes with the files, in one batch (it used to be dropped without a word)
+  writeConfig(base);
+  {
+    const f1 = join(HOME, 'tw1.txt'); fsx.writeFileSync(f1, 'one');
+    const r = await run(() => cli.send(['note for you', '-f', f1]));
+    const text = r.reqs.find((x) => x.path === '/v1/ingest'), file = r.reqs.find((x) => x.path === '/v1/ingest/file');
+    ok('send "text" -f file: the text is sent, as the first of a batch of two', text?.body.raw === 'note for you' && text.body.meta?.group?.i === 1 && text.body.meta.group.n === 2, JSON.stringify(text?.body));
+    is('…and the file is the second of the same batch', [file?.query.get('group') === text?.body.meta.group.id, file?.query.get('i'), file?.query.get('n')], [true, '2', '2']);
+    ok('…order: the text first, then the file; exit not forced', paths(r).indexOf('POST /v1/ingest') < paths(r).indexOf('POST /v1/ingest/file') && r.exit === null, JSON.stringify(paths(r)));
+    const plain = await run(() => cli.send(['-f', f1]));
+    ok('send -f file alone: no text, no batch', !plain.reqs.some((x) => x.path === '/v1/ingest') && plain.reqs.find((x) => x.path === '/v1/ingest/file').query.get('group') === null);
+    const both = await run(() => cli.send(['hi', '-f', f1, '--batch', 'bGRPabc123', '--of', '2', '--at', '2']));
+    ok('a text with --batch is refused, nothing sent', both.exit === 1 && both.err.includes(en.textWithBatch) && both.reqs.length === 0, JSON.stringify(both));
+  }
   // text
   writeConfig(base);
   {
@@ -817,6 +876,10 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     route = () => null;
     fsx.rmSync(join(dir, odd));
     ok('a file name with an escape character is shown with it replaced, in every line (the resend line too)', !/\u001b/.test(ctl.err.join('\n')) && ctl.err.at(-1).includes('?[2Jy.jpg'), JSON.stringify(ctl.err));
+    route = (r) => (r.path === '/v1/me' ? answer(200, { item_bytes_limit: 1000, upgrade_url: 'https://dropit.test/upgrade?u=1&why=account&buy=year' }) : null);
+    const bigBatch = await run(() => cli.send(['-f', 'a.jpg', 'b.jpg']));
+    route = () => null;
+    ok('a batch with a file over the limit: the link says why=file_size (not the account\'s own reason), tagged src=cli', bigBatch.exit === 1 && /why=file_size/.test(bigBatch.err.join('\n')) && !/why=account/.test(bigBatch.err.join('\n')) && /src=cli/.test(bigBatch.err.join('\n')), JSON.stringify(bigBatch.err));
     const mism = await run(() => cli.send(['-f', 'a.jpg', 'b.jpg', '--batch', 'bGRPabc123', '--of', '5', '--at', '2']));
     ok('places that do not match the files: refused before anything is sent', mism.exit === 1 && mism.err.some((l) => l.includes(en.batchPlaces(2, 1))) && !mism.reqs.some((x) => x.path === '/v1/ingest/file'), JSON.stringify([mism.exit, mism.err]));
     const alone = await run(() => cli.send(['hello', '--batch', 'bGRPabc123', '--of', '5', '--at', '2']));
@@ -908,10 +971,10 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
 
     const full = (extra = {}) => (r) => (r.path === '/v1/me' ? answer(200, { devices_used: 6, devices_limit: 6, ...extra }) : r.path === '/v1/pair' ? answer(200, { code: 'ABC234', expires_at: NOW + 300_000 }) : null);
     writeConfig(base);
-    route = full({ upgrade_url: 'https://dropit.test/upgrade?why=devices' });
+    route = full({ upgrade_url: 'https://dropit.test/upgrade?u=1&why=account&buy=year' });
     let r = await run(() => cli.newCode([]));
     is('dropit code, full: the pick goes in `replace`', [paths(r).includes('POST /v1/pair'), r.reqs.find((x) => x.path === '/v1/pair').body], [true, { replace: 'd_lin' }]);
-    ok('…says who is replaced, how to change it, and the upgrade link tagged src=cli', r.out.join('\n').includes(en.codeFull(6, 'Home Linux')) && r.out.join('\n').includes('https://dropit.test/upgrade?why=devices&src=cli'), r.out.join('|'));
+    ok('…says who is replaced, how to change it, and the upgrade link tagged src=cli', r.out.join('\n').includes(en.codeFull(6, 'Home Linux')) && r.out.join('\n').includes('https://dropit.test/upgrade?u=1&why=devices&src=cli') && !r.out.join('\n').includes('why=account'), r.out.join('|'));
     r = await run(() => cli.newCode(['--replace', 'My Pixel']));
     is('dropit code --replace <name>: that device is the one', r.reqs.find((x) => x.path === '/v1/pair').body, { replace: 'd_pix' });
     r = await run(() => cli.newCode(['--replace', 'Nope']));
@@ -927,10 +990,91 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     is('dropit code, room left: a plain POST /v1/pair, nothing replaced', [r.reqs.find((x) => x.path === '/v1/pair')?.body], [null]);
     route = (q) => (q.path === '/v1/me' ? answer(200, { devices_used: 6, devices_limit: 6 }) : null);
     r = await run(() => cli.devices());
-    ok('dropit devices: when full, the count line says so', r.out.at(-1).includes(en.devFull), r.out.join('|'));
+    ok('dropit devices: when full, the count line says so', r.out.some((l) => l.includes(en.devFull)), r.out.join('|'));
     route = () => null;
     r = await run(() => cli.devices());
-    ok('dropit devices: when there is room, it does not', !r.out.at(-1).includes(en.devFull), r.out.join('|'));
+    ok('dropit devices: when there is room, it does not', !r.out.some((l) => l.includes(en.devFull)), r.out.join('|'));
+    // the default, marked in the list and said under it
+    {
+      const rows = (o) => o.filter((l) => /d_(me|pix|lin|ios|o1|o2)\s*$/.test(l.trim()));
+      route = () => null;
+      writeConfig(base);
+      r = await run(() => cli.devices());
+      ok('devices: default all → every device that receives is marked, and the line says all incl. later ones', rows(r.out).filter((l) => l.includes(en.devDefaultTag)).length === 4 && r.out.at(-1).includes(en.devDefaultLine(en.devDefaultAll)), r.out.join('|'));
+      ok('…this machine and the send-only one carry their own words, not the mark', rows(r.out).some((l) => l.includes(en.devThis) && !l.includes(en.devDefaultTag)) && rows(r.out).some((l) => l.includes(en.devSendOnly) && !l.includes(en.devDefaultTag)));
+      writeConfig({ ...base, targets: [{ id: 'd_pix', name: 'My Pixel' }, { id: 'd_lin', name: 'Home Linux' }] });
+      r = await run(() => cli.devices());
+      ok('devices: a chosen default → only those are marked, and named under the list', rows(r.out).filter((l) => l.includes(en.devDefaultTag)).length === 2 && r.out.at(-1).includes('My Pixel, Home Linux') && r.out.at(-1).includes('dropit target'), r.out.join('|'));
+      const zr = cli.defaultView({ device_id: 'd_me' }, DEVICES, zh);
+      ok('…in Chinese the same line reads 默认投给', zr.line.startsWith('默认投给：') && zr.line.includes('改：dropit target'));
+      is('devices: fewer than two other devices that receive → no mark, no line', cli.defaultView({ device_id: 'd_me' }, DEVICES.slice(0, 2), en), null);
+      writeConfig(base);
+    }
+  }
+
+  // Paid that ended, and a trial long over: Paid's end is what is said
+  {
+    const NOWX = Date.now();
+    const m = { plan: 'free', paid_until: NOWX - 1000, paid_grace_until: NOWX + 5 * 86400000, realtime_until: NOWX - 86400000, trial_available: true };
+    ok('me: realtime says Paid has ended, not the trial', cli.meLine(m, en, NOWX).endsWith(en.rtPaidEnded) && cli.meLine(m, zh, NOWX).endsWith(zh.rtPaidEnded));
+    ok('…an account that never paid still says the trial ended', cli.meLine({ ...m, paid_until: null, paid_grace_until: null }, en, NOWX).endsWith(en.rtTrialOver));
+    ok('…no trial price offered to an account that had Paid', cli.momentFacts({ me: m, plans: { plans: [{ id: 'year', price: { cents: 1990 }, trial: { cents: 190 } }] } }).trial === null);
+  }
+
+  // dropit revoke / logout: asks first; --yes skips; no terminal and no --yes refuses
+  {
+    const gone = [];
+    route = (q) => (q.method === 'DELETE' ? (gone.push(q.path), answer(200, { ok: true })) : null);
+    writeConfig(base);
+    const asked = [];
+    const io = (tty, reply) => ({ tty, ask: async (q) => (asked.push(q), reply) });
+    let r = await run(() => cli.revoke(['d_pix'], io(false)));
+    ok('revoke, no terminal, no --yes: refused with the way out, nothing removed', r.exit === 1 && r.err.join('').includes('--yes') && gone.length === 0, JSON.stringify(r));
+    r = await run(() => cli.revoke(['d_pix'], io(true, 'n')));
+    ok('revoke on a terminal: asks with the device\'s name, and "n" changes nothing', asked.at(-1) === en.confirmOther('My Pixel') && gone.length === 0 && r.out.includes(en.revokeAborted), JSON.stringify([asked, r.out]));
+    r = await run(() => cli.revoke(['d_pix'], io(true, 'y')));
+    ok('…"y" removes it and says which', gone.at(-1) === '/v1/devices/d_pix' && r.out.at(-1) === en.revoked('My Pixel'), JSON.stringify([gone, r.out]));
+    r = await run(() => cli.revoke(['d_lin', '--yes'], io(false)));
+    ok('--yes: no question, also with no terminal', gone.at(-1) === '/v1/devices/d_lin' && r.out.at(-1) === en.revoked('Home Linux'));
+    r = await run(() => cli.revoke(['-y', 'd_o1'], io(false)));
+    ok('-y, before the id: the same', gone.at(-1) === '/v1/devices/d_o1');
+    r = await run(() => cli.revoke(['d_nope', '--yes'], io(false)));
+    ok('an id that is not in the list: said, nothing sent', r.exit === 1 && r.err.join('').includes(en.revokeUnknown('d_nope')) && !gone.includes('/v1/devices/d_nope'), JSON.stringify(r));
+    r = await run(() => cli.revoke([], io(true, 'y')));
+    ok('no id: the usage, which also names logout', r.exit === 1 && r.err.join('').includes('dropit logout'));
+    writeConfig({ ...base, targets: [{ id: 'd_pix', name: 'My Pixel' }], cursor: 7 });
+    asked.length = 0;
+    r = await run(() => cli.logout([], io(true, 'y')));
+    ok('logout on a terminal: asks about this machine, signs out, clears the token and device id only', asked[0] === en.confirmSelf && gone.at(-1) === '/v1/devices/d_me' && readConfig().token === undefined && readConfig().device_id === undefined && readConfig().cursor === 7 && readConfig().endpoints !== undefined && r.out.at(-1) === en.revokedSelf, JSON.stringify([asked, readConfig(), r.out]));
+    writeConfig(base);
+    r = await run(() => cli.revoke(['d_me', '--yes'], io(false)));
+    ok('revoke with this machine\'s own id = logout', readConfig().token === undefined && r.out.at(-1) === en.revokedSelf);
+    r = await run(() => cli.logout([], io(false)));
+    ok('logout when already signed out: says not paired', r.exit === 1);
+    writeConfig(base);
+    ok('the words: sign out / 退出 for this machine, remove / 移除 for the others, no 吊销', [en.confirmSelf, en.revokedSelf, en.revoked('X'), zh.confirmSelf, zh.revokedSelf, zh.revoked('X'), zh.revokeUsage, en.usage, zh.usage].every((x) => !/吊销|Revoked|Unpair/.test(x)) && zh.confirmSelf.includes('退出') && zh.confirmOther('X').includes('移除') && en.usage.includes('dropit logout') && zh.usage.includes('dropit logout'));
+    route = () => null;
+  }
+
+  // dropit upgrade: a free account's own link without buy=; a paid one that does not renew gets a new checkout; the rest, a sentence
+  {
+    const mine = (extra) => (q) => (q.path === '/v1/me' ? answer(200, extra) : q.path === '/v1/checkout' ? answer(200, { checkout_url: 'https://dropit.test/upgrade?_ptxn=txn_x', transaction_id: 'txn_x' }) : null);
+    route = mine({ plan: 'free', upgrade_url: 'https://dropit.test/upgrade?u=1&e=2&s=3&why=account&buy=year' });
+    let r = await run(() => cli.upgrade());
+    ok('upgrade, free: the plans page (no buy=), tagged src=cli, on a line of its own; no request for a checkout', r.out.join('\n').split('\n').includes('https://dropit.test/upgrade?u=1&e=2&s=3&why=account&src=cli') && !paths(r).includes('POST /v1/checkout'), r.out.join('|'));
+    route = mine({ plan: 'free' });
+    r = await run(() => cli.upgrade());
+    ok('upgrade, free with no link from the service: says paying is not open', r.thrown?.includes(en.upgradeClosed), JSON.stringify(r));
+    route = mine({ plan: 'paid', paid_kind: 'year', renews: false });
+    r = await run(() => cli.upgrade());
+    is('upgrade, paid and not renewing: asks for a one-year checkout from the CLI, prints its link', [r.reqs.find((x) => x.path === '/v1/checkout').body, r.out.join('\n').includes('https://dropit.test/upgrade?_ptxn=txn_x&src=cli')], [{ plan: 'year_once', from: 'cli' }, true]);
+    route = mine({ plan: 'paid', paid_kind: 'year', renews: true });
+    r = await run(() => cli.upgrade());
+    ok('upgrade, paid and renewing by itself: nothing to buy, no checkout made', r.out.join('\n').includes(en.upgradeRenews) && !paths(r).includes('POST /v1/checkout'), r.out.join('|'));
+    route = mine({ plan: 'paid', paid_kind: 'life', renews: false });
+    r = await run(() => cli.upgrade());
+    ok('upgrade, paid for good: nothing to buy', r.out.join('\n').includes(en.upgradeForGood) && !paths(r).includes('POST /v1/checkout'), r.out.join('|'));
+    ok('the help and both languages name dropit upgrade', [en.usage, zh.usage].every((u) => u.includes('dropit upgrade')));
   }
 
   ok('the help names --to and dropit target, in both languages', [en.usage, zh.usage].every((u) => u.includes('--to <') && u.includes('dropit target')));

@@ -34,6 +34,7 @@ dropit send < notes.txt            # a text file's contents
 dropit send -f photo.jpg           # a file: image, video, PDF, anything
 ```
 
+- **A note with the files:** `dropit send "the signed copy" -f contract.pdf` — the text goes first, in the same batch as the files.
 - **Several files at once:** `dropit send -f *.png` — up to 10, sent as one batch that arrives together.
   More than 10 and nothing is sent; a missing file is caught before anything goes. One line per file, then one that says where it went.
 - **A failed batch stops there:** what already went stays sent, the files that did not go are listed, and so is the command that
@@ -100,12 +101,12 @@ Point it at an Obsidian or Logseq folder and every item becomes a note there.
 
 | It says | Means |
 |---|---|
-| `Real-time push connected` | Live — items appear within seconds |
-| `Real-time push connected · trial: 3 days left` | New accounts get real-time for a while |
-| `…The real-time trial has ended…` | It caught up and exits; run it again (or on a schedule) to catch up. The line also says what you used it for (how many days, items sent, devices receiving) |
-| `Real-time push has 3 days left…` / `…ends in less than a day…` | Printed once when `watch` starts, as the trial nears its end: what you've had so far, and what changes after it |
-| `…Today's real-time spots are full…` | It waits and reconnects by itself a little after midnight UTC |
-| `Real-time push is paused: this account already has 12 live connections…` | Too many machines are receiving at once on this account (another `watch`, Obsidian on several machines). It tries again by itself in about 15 minutes and catches up then |
+| `Real-time delivery connected` | Live — items appear within seconds |
+| `Real-time delivery connected · trial: 3 days left` | Real-time delivery starts with a trial period |
+| `…The real-time delivery trial has ended…` | It caught up and exits; run it again (or on a schedule) to catch up. With enough use it also says what the account has had and what Paid adds, then gives the plans link on a line of its own |
+| `Real-time delivery has 3 days left…` / `…ends in less than a day…` | Printed once when `watch` starts, as the trial nears its end: what changes after it, and the plans link on its own line (`dropit upgrade` gives a fresh one) |
+| `…Today's real-time delivery spots are full…` | It waits and reconnects by itself a little after midnight UTC |
+| `Real-time delivery is paused: this account already has 12 live connections…` | Too many machines are receiving at once on this account (another `watch`, Obsidian on several machines). It tries again by itself in about 15 minutes and catches up then |
 | `watch stopped: This device was removed…` | This machine was removed from your account. Trying again can't fix that, so `watch` stops (and a launch agent or service won't restart it). Pair again with `dropit pair <code>`, then start `watch` again |
 | `This machine joined another account…` | You ran `dropit pair <code>` while `watch` was running. Nothing to do: it now receives from that account |
 
@@ -408,11 +409,12 @@ Then join your account:
 ```bash
 dropit pair K7M2QX     # with a code from a device you already use (web inbox: Devices; Obsidian: Settings → dropit)
 dropit pair            # only on your very first device: creates the account
-dropit me              # free · 2/2 devices · 1.2/30 MB · files up to 10 MB · real-time trial: 3 days left
+dropit me              # free · 2/2 devices · 1.2/30 MB · files up to 10 MB · real-time delivery: trial, 3 days left
 ```
 
 > On a machine that's already joined, plain `dropit pair` stops and says so — it won't switch you to a new, empty account.
 > To join another account, give its code. To really start a separate account here, `dropit pair --new`.
+> Creating or joining prints a one-line notice first (what joining sends, and the privacy page link). A hostname that is too long is cut in the device name; joining by a code that replaced another device says which one.
 > On a network where many accounts were created today, creating one may take a few extra seconds ("Preparing the account…"). You are no longer sent to the browser for it.
 
 ## Your account from here
@@ -420,10 +422,12 @@ dropit me              # free · 2/2 devices · 1.2/30 MB · files up to 10 MB �
 | Command | Does |
 |---|---|
 | `dropit code` | A 6-character code for a new device, valid 5 minutes — type it there, or `dropit pair <code>` on another terminal. When every device slot is in use it picks the device idle longest for the new one to replace and says which; `--replace <name or id>` picks another (a name shared by two devices needs the id; this machine can't be replaced). With no other device to replace it makes no code and tells you to `dropit revoke <id>` one first |
-| `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time is on; under it, how long you've been using dropit and how many items you've sent, and a line when a paid year is about to end or has just ended |
-| `dropit devices` | Every device on your account: when it was last seen, which one this is, which can only send, and its ID; under them `used / limit`, with “All device slots are in use” when full |
+| `dropit me` | Plan, devices used, space used, the largest file you can send, whether real-time delivery is on; under it, how long you've been using dropit and how many items you've sent, and a line when a paid year is about to end or has just ended |
+| `dropit devices` | Every device on your account: when it was last seen, which one this is, which can only send, which ones a send goes to by default (`→ default`), and its ID; under them `used / limit`, with “All device slots are in use” when full, then — when two or more other devices can receive — `Sends to by default: …  (change: dropit target …)` |
 | `dropit target` | Which devices a send goes to by default on this computer; `dropit target <names…\|all>` sets it (see Sending) |
-| `dropit revoke <device_id>` | Removes a device at once and frees its slot — a lost laptop, an old phone |
+| `dropit upgrade` | Prints the link to this account's plans page. The link in a notice works for a short while; run this for a fresh one. A paid account that does not renew by itself gets a link to renew for a year |
+| `dropit revoke <device_id>` | Removes another device at once and frees its slot — a lost laptop, an old phone. On a terminal it asks first (`Remove "<name>"? (y/N)`); `--yes` / `-y` skips the question. With no terminal (a script) it refuses unless you pass `--yes`. With this machine's own id it signs this machine out, same as `dropit logout`. Without an id, or with an unknown one, it says so and points to `dropit devices` |
+| `dropit logout` | Signs out of this machine: asks first (`--yes` skips), then removes this machine from the account and clears its token and device id here. Files already received and your handler rules stay; to join again, `dropit pair` |
 | `dropit version` | The version installed — each one is a release on GitHub (`cli-<version>`) |
 
 Pairing codes are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix-ups don't matter.
@@ -436,7 +440,7 @@ Pairing codes are forgiving: case, spaces, dashes and `0`/`O` or `1`/`I`/`l` mix
 | `Invalid token` · `This device was removed` | This machine was removed from your account | Get a new code, `dropit pair <code>` |
 | `Invalid pairing code` · `Pairing code expired` | Wrong, used or older than 5 minutes | Generate a fresh one |
 | `Device limit reached` | Your plan's device count is used up | `dropit devices`, then `dropit revoke <id>` one you don't use |
-| `Larger than 10 MB, the most one item can be` | The file is over your plan's size limit | Send a smaller file, or a link to it |
+| `Over the 10 MB limit for one item` | The file is over your plan's size limit | Send a smaller file, or a link to it |
 | `Network unavailable (tried N addresses)` | No connection, or a proxy is blocking it | Check the network or proxy |
 | `Node.js < 22 has no global WebSocket` | Real-time needs Node.js 22+ | Upgrade Node.js, or run `watch` on a schedule |
 
