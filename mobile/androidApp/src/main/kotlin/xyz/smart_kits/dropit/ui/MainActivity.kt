@@ -19,28 +19,26 @@ import xyz.smart_kits.dropit.ui.theme.DropitTheme
 /** Where the app is. Home is underneath everything; the rest stack on it and go back to it. */
 sealed interface Screen {
     data object Settings : Screen
-    /** Who a send from this phone goes to when nothing is chosen */
-    data object DefaultTargets : Screen
     /** Bring back what this phone already had: everything, the newest 50, the last three days */
     data object Repull : Screen
     data object Devices : Screen
     data object AddDevice : Screen
     /** `why`: what limit was just hit, when that is what brought the person here; `from`: where in the app they came from (counted with the checkout, see UpgradeFrom) */
     data class Plans(val why: String? = null, val from: String = UpgradeFrom.PLANS) : Screen
-    /** The first-run steps; `gesturesOnly` shows just the quick-settings and gesture ones again */
-    data class Onboarding(val gesturesOnly: Boolean = false) : Screen
+    /** The guide again, from the settings page, opened at one of its screens */
+    data class Onboarding(val page: Int = 0) : Screen
     data object Scan : Screen
 }
 
 class MainActivity : ComponentActivity() {
     private var incomingCode by mutableStateOf<String?>(null)
-    /** The code came from this phone's own camera: joining goes ahead without another tap */
-    private var scanned by mutableStateOf(false)
+    /** The code that came from the camera: only that one is joined at once; a code from a link or typed waits for the button */
+    private var scanned by mutableStateOf<String?>(null)
     private var signedIn by mutableStateOf(false)
+    /** The first-run guide is up: shown once, to everyone, ahead of joining or ahead of the home screen */
+    private var guide by mutableStateOf(false)
     private var resumed by mutableStateOf(0)
     private var offer by mutableStateOf<ClipOffer?>(null)
-    /** A limit's notification was tapped: the checkout opens from the home screen (the limit that was met is the text, "" when not said) */
-    private var checkoutWhy by mutableStateOf<String?>(null)
     private val stack = mutableStateListOf<Screen>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,8 +48,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         signedIn = app.account.signedIn
         read(intent)
-        // Joined before the first-run steps existed, or left them half-way: they come up once
-        if (signedIn && !app.store.onboarded) stack += Screen.Onboarding()
+        // One guide, the same for everyone, once; after it comes joining, or the home screen for a phone that has joined already
+        guide = !app.store.onboarded
         setContent {
             DropitTheme {
                 val go: (Screen) -> Unit = { stack += it }
@@ -60,14 +58,14 @@ class MainActivity : ComponentActivity() {
                 val top = stack.lastOrNull()
                 val update by app.updater.state.collectAsState()
                 when {
-                    !signedIn && top == Screen.Scan -> ScanScreen(onCode = { incomingCode = it; scanned = true; back() }, onBack = back)
-                    !signedIn -> JoinScreen(incomingCode, resumed, joinNow = scanned, onJoined = ::joined, onScan = { scanned = false; go(Screen.Scan) })
-                    top == null || top == Screen.Scan -> HomeScreen(resumed, offer, onOfferDone = ::offerDone, onSignedOut = ::signedOut, go = go, checkoutWhy = checkoutWhy, onCheckoutStarted = { checkoutWhy = null })
-                    top is Screen.Onboarding -> OnboardingScreen(resumed, top.gesturesOnly, onDone = { app.store.onboarded = true; back() })
-                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
-                    top == Screen.DefaultTargets -> DefaultTargetsScreen(resumed, go = go, onBack = back)
-                    top == Screen.Repull -> RepullScreen(resumed, onBack = back)
-                    top == Screen.Devices -> DevicesScreen(resumed, go = go, onBack = back)
+                    guide -> OnboardingScreen(resumed, onDone = { app.store.onboarded = true; guide = false })
+                    !signedIn && top == Screen.Scan -> ScanScreen(onCode = { incomingCode = it; scanned = it; back() }, onBack = back)
+                    !signedIn -> JoinScreen(incomingCode, resumed, joinNow = scanned != null && scanned == incomingCode, onJoined = ::joined, onScan = { scanned = null; go(Screen.Scan) })
+                    top == null || top == Screen.Scan -> HomeScreen(resumed, offer, onOfferDone = ::offerDone, onSignedOut = ::signedOut, go = go)
+                    top is Screen.Onboarding -> OnboardingScreen(resumed, top.page, onDone = { app.store.onboarded = true; back() })
+                    top == Screen.Settings -> SettingsScreen(resumed, go = go, onBack = back)
+                    top == Screen.Repull -> RepullScreen(resumed, go = go, onBack = back)
+                    top == Screen.Devices -> DevicesScreen(resumed, go = go, onBack = back, onSignedOut = ::signedOut)
                     top == Screen.AddDevice -> AddDeviceScreen(go = go, onBack = back)
                     top is Screen.Plans -> PlansScreen(resumed, top.why, top.from, onBack = back)
                 }
@@ -80,15 +78,15 @@ class MainActivity : ComponentActivity() {
     private fun joined() {
         signedIn = true
         incomingCode = null
-        scanned = false
+        scanned = null
         stack.clear()
         app.sendWaiting()
         // Background receiving starts on; if the account can't have it, settings say why
         app.scope.launch { app.receiving.enable() }
-        if (!app.store.onboarded) stack += Screen.Onboarding()
     }
 
     private fun signedOut() {
+        app.letters.clear()    // the same clean-up as leaving by hand: nothing of the old account is left on the home screen
         app.peers.reset()      // what was known about this account's devices goes with it
         signedIn = false
         stack.clear()
@@ -121,14 +119,14 @@ class MainActivity : ComponentActivity() {
         read(intent)
     }
 
-    /** A code handed over by the web page (`?pair=`) or another app; or a notification asking for a screen */
+    /** A code handed over by the web page (`?pair=`); or a notification asking for a screen */
     private fun read(i: Intent?) {
-        (i?.getStringExtra("code") ?: i?.data?.getQueryParameter("pair"))?.let { incomingCode = it }
-        if (i?.getStringExtra(SHOW) == SHOW_PLANS && signedIn && stack.lastOrNull() !is Screen.Plans) stack += Screen.Plans(from = UpgradeFrom.SHARE)
-        // A limit's notification: straight to the checkout for what was met (the home screen does it, and says so if it can't)
-        if (i?.getStringExtra(SHOW) == SHOW_CHECKOUT && signedIn) {
+        i?.data?.getQueryParameter("pair")?.let { incomingCode = it }
+        // The share card or a limit's notification: the plans page, at the limit that was met (the year plan is the one picked there)
+        val show = i?.getStringExtra(SHOW)
+        if ((show == SHOW_PLANS || show == SHOW_CHECKOUT) && signedIn) {
             stack.clear()
-            checkoutWhy = i.getStringExtra(WHY).orEmpty()
+            stack += Screen.Plans(i?.getStringExtra(WHY)?.ifEmpty { null }, UpgradeFrom.SHARE)
         }
     }
 

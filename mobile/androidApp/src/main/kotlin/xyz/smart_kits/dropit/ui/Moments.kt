@@ -154,12 +154,25 @@ fun spaceNear(me: Me, extraBytes: Long = 0): Boolean {
     return used * 5 >= me.bytesLimit * 4 && used < me.bytesLimit
 }
 
+/** The space is half used or more: close enough that the kept answer is worth asking again after a send, before the line about it is chosen */
+fun spaceHalf(me: Me, extraBytes: Long = 0): Boolean =
+    !me.paid && me.bytesLimit > 0 && (me.bytesUsed + extraBytes.coerceAtLeast(0)) * 2 >= me.bytesLimit
+
 /** The paid plan ends within a week and does not renew by itself */
 fun paidEndingSoon(me: Me, now: Long): Boolean {
     if (!me.paid || me.renews == true || me.paidKind == "life") return false
     val until = me.paidUntil ?: return false
     return until - now in 1..PAID_SOON_MS
 }
+
+/** From this many items sent, the trial's cards say what the account has had in numbers (and what Paid adds); with fewer, they stay short */
+const val RICH_ITEMS = 10
+
+/**
+ * Which wording the trial's cards use, chosen from the account's own numbers: the fuller one when it has sent a good deal
+ * ([RICH_ITEMS] or more) or more than one device is on it, the short one otherwise. A number the service did not say counts as nothing.
+ */
+fun richTrialCopy(me: Me): Boolean = (me.itemsTotal ?: 0) >= RICH_ITEMS || me.devicesUsed > 1
 
 /** The prices the notes may name: what is listed (the first month's only for an account that can still have it). Not open for sale: nothing */
 fun pricesOf(catalog: Catalog?, trialAvailable: Boolean, open: Boolean): Prices {

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Receiving in the background, the "Get latest" tile, the Download button on a notification, the floating button -->
-    <string name="bg_channel">Receiving in the background</string>
+    <string name="bg_channel">Real-time delivery</string>
     <string name="bg_channel_desc">A quiet line that shows while dropit keeps a connection open to hear about new items</string>
     <string name="bg_receiving">dropit is receiving</string>
 

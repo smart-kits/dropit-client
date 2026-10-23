@@ -22,8 +22,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -40,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -67,9 +71,7 @@ import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.Letter
-import xyz.smart_kits.dropit.shared.UpgradeFrom
 import xyz.smart_kits.dropit.ui.MainActivity
-import xyz.smart_kits.dropit.ui.rememberBuy
 import xyz.smart_kits.dropit.ui.kit.Glyph
 import xyz.smart_kits.dropit.ui.kit.Icons
 import xyz.smart_kits.dropit.ui.kit.Spinner
@@ -149,10 +151,20 @@ class SendCard(private val activity: ComponentActivity, private val jobId: Strin
         var fade by remember { mutableStateOf(false) }
         val alpha by animateFloatAsState(if (fade) 0f else 1f, tween(if (still) 0 else 300), label = "fade", finishedListener = { if (it == 0f) activity.finish() })
         var countdown by remember { mutableStateOf(1f) }
-        LaunchedEffect(state, said.size) {
+        // What did not go (too big, unreadable, past the count): kept apart from the receipt, and shown on the card in red
+        val notSent = out?.getString(SendWorker.PROBLEMS).orEmpty().lines().filter { it.isNotBlank() }
+        val problems = notSent.isNotEmpty()
+        // A limit a paid plan lifts was among them: the way out is on the card
+        // (the worker only says so for a free account: a paid plan is already at the highest limit, there is nothing to upgrade to)
+        val bigUpgrade = state == WorkInfo.State.SUCCEEDED && problems && BuildConfig.PAYMENTS && activity.app.plans.offering && out?.getBoolean(SendWorker.BIG, false) == true
+        // What did not go, one entry per item: the file's name (null where it is not about one file) and why, short
+        val names = out?.getStringArray(SendWorker.CARD_NAMES).orEmpty()
+        val whys = out?.getStringArray(SendWorker.CARD_WHYS).orEmpty()
+        val cards = whys.indices.map { (names.getOrNull(it)?.takeIf { n -> n.isNotEmpty() }) to whys[it] }
+        LaunchedEffect(state, problems) {
             when (state) {
                 WorkInfo.State.SUCCEEDED -> {
-                    val total = if (said.size > 1) 4_000L else 2_000L
+                    val total = if (bigUpgrade) 10_000L else if (problems) 8_000L else 2_000L
                     val began = android.os.SystemClock.elapsedRealtime()
                     while (true) {
                         val left = total - (android.os.SystemClock.elapsedRealtime() - began)
@@ -185,36 +197,90 @@ class SendCard(private val activity: ComponentActivity, private val jobId: Strin
             // new is made (null), and the card goes on showing the run that has it
             activity.app.scope.launch { run = Outbox(activity).start(jobId, toAll) }
         }
-        fun plans() {
-            activity.startActivity(Intent(activity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(MainActivity.SHOW, MainActivity.SHOW_PLANS))
+        // A limit that a paid plan lifts: the app's plans page, at that limit and with the year plan picked; the card goes. No checkout is
+        // made from here: the person sees what the plan is before paying for it
+        fun upgradeNow() {
+            val why = out?.getString(SendWorker.WHY) ?: if (bigUpgrade) "file_size" else null
+            activity.startActivity(
+                Intent(activity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(MainActivity.SHOW, MainActivity.SHOW_PLANS).apply { if (why != null) putExtra(MainActivity.WHY, why) },
+            )
             activity.finish()
         }
-        // A limit that a paid plan lifts: straight to the checkout for it (the person has just met it, there is nothing to compare first);
-        // the card goes once the browser has it. If the checkout can't be had, the plans page opens instead, which says what to do
-        val buy = rememberBuy()
-        LaunchedEffect(buy.error) { if (buy.error != null) plans() }
-        fun upgradeNow() = buy.start(UpgradeFrom.SHARE, out?.getString(SendWorker.WHY), onOpened = { activity.finish() })
 
         Box(
-            Modifier.alpha(alpha).height(HEIGHT.dp).widthIn(min = 200.dp, max = 340.dp).clip(shape)
+            // A fixed width (340 dp, less on a narrow screen) that fills the window: the window is centred on the screen, so the pill is too, and the
+            // blur behind it is exactly its shape
+            Modifier.alpha(alpha).widthIn(max = 340.dp).fillMaxWidth().heightIn(min = HEIGHT.dp).clip(shape)
                 .then(if (blurred) Modifier else Modifier.background(if (c.dark) Color(0xF01B1E24) else Color(0xF0FFFFFF)))      // 94 % when there is no blur
-                .border(if (failed) 1.5.dp else 1.dp, if (failed) c.red.copy(alpha = .55f) else c.line.copy(alpha = .8f), shape)
-                .then(if (failed && retryable) Modifier.clickable(role = Role.Button, onClick = ::again) else if (failed && upgrade != null) Modifier.clickable(role = Role.Button, onClick = ::upgradeNow) else Modifier),
+                .border(if (failed || problems) 1.5.dp else 1.dp, if (failed || problems) c.red.copy(alpha = .55f) else c.line.copy(alpha = .8f), shape)
+                // The whole pill is the button when there is one to press (retry, send to everyone, upgrade); otherwise it still takes the touch,
+                // so a press on it is never passed to what is behind it
+                .then(
+                    when {
+                        failed && retryable -> Modifier.clickable(role = Role.Button, onClick = ::again)
+                        failed && upgrade != null -> Modifier.clickable(role = Role.Button, onClick = ::upgradeNow)
+                        else -> Modifier.pointerInput(Unit) { detectTapGestures { } }
+                    },
+                ),
         ) {
+            // The text takes all the room there is and the action sits at the right edge, whatever the state says; the card is as tall as its
+            // words need (never more than a few lines) and never taller
+            val detail = (state == WorkInfo.State.SUCCEEDED && problems) || (failed && cards.isNotEmpty())
             Row(
-                Modifier.fillMaxHeight().padding(start = 14.dp, end = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+                Modifier.fillMaxWidth().heightIn(min = HEIGHT.dp).padding(vertical = if (detail) 8.dp else 0.dp).padding(start = 14.dp, end = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 when {
+                    state == WorkInfo.State.SUCCEEDED && problems -> Glyph(Icons.Alert, c.red, size = 20.dp)
                     state == WorkInfo.State.SUCCEEDED -> Glyph(Icons.Check, c.ok.let { if (c.dark) it else Color(0xFF17623F) }, size = 20.dp)
                     failed -> Glyph(Icons.Alert, c.red, size = 20.dp)
                     else -> Spinner(action, 20.dp)
                 }
-                androidx.compose.foundation.text.BasicText(
-                    pillText(state, info, said, letter, c.ink, second), Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite },
-                    style = sans(14.sp, lineHeight = 18.sp).copy(color = c.ink), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+                Column(Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }) {
+                    val first = cards.firstOrNull()
+                    // A failure that is about named files: the name (shortened in the middle, its ending kept) and under it why, in full
+                    if (failed && first != null) {
+                        if (first.first != null) androidx.compose.foundation.text.BasicText(
+                            first.first!!, style = sans(14.sp, FontWeight.Bold, lineHeight = 18.sp).copy(color = c.ink), maxLines = 1, overflow = TextOverflow.MiddleEllipsis,
+                        )
+                        androidx.compose.foundation.text.BasicText(
+                            if (cards.size > 1) stringResource(R.string.card_not_sent_more, first.second, cards.size - 1) else first.second,
+                            Modifier.padding(top = if (first.first != null) 2.dp else 0.dp),
+                            style = sans(13.sp, lineHeight = 17.sp).copy(color = c.red), maxLines = if (first.first != null) 2 else 3, overflow = TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        androidx.compose.foundation.text.BasicText(
+                            pillText(state, info, said, letter, c.ink, second),
+                            style = sans(14.sp, lineHeight = 18.sp).copy(color = c.ink), maxLines = if (failed) 2 else 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    // Sent, with some that were not: the first of them under the receipt, the name on a line of its own and why under it; how many
+                    // more when there are more (all of them are in the app). Three lines at most, and the reason is the last of them
+                    if (state == WorkInfo.State.SUCCEEDED && problems) {
+                        if (first != null) {
+                            if (first.first != null) androidx.compose.foundation.text.BasicText(
+                                first.first!!, Modifier.padding(top = 2.dp), style = sans(13.sp, FontWeight.SemiBold, lineHeight = 17.sp).copy(color = c.ink),
+                                maxLines = 1, overflow = TextOverflow.MiddleEllipsis,
+                            )
+                            androidx.compose.foundation.text.BasicText(
+                                if (cards.size > 1) stringResource(R.string.card_not_sent_more, first.second, cards.size - 1) else first.second,
+                                Modifier.padding(top = 1.dp),
+                                style = sans(13.sp, lineHeight = 17.sp).copy(color = c.red), maxLines = if (first.first != null) 1 else 2, overflow = TextOverflow.Ellipsis,
+                            )
+                        } else {
+                            val line = notSent.first()
+                            androidx.compose.foundation.text.BasicText(
+                                if (notSent.size > 1) stringResource(R.string.card_not_sent_more, line, notSent.size - 1) else line,
+                                Modifier.padding(top = 2.dp),
+                                style = sans(13.sp, lineHeight = 17.sp).copy(color = c.red), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
                 Box(Modifier.height(24.dp).width(1.dp).background(second.copy(alpha = .35f)))
                 val label = when {
+                    bigUpgrade -> stringResource(R.string.action_upgrade)
                     state == WorkInfo.State.SUCCEEDED -> stringResource(R.string.card_done)
                     upgrade != null && failed -> stringResource(R.string.action_upgrade)
                     toAll -> stringResource(R.string.action_send_all)
@@ -226,6 +292,7 @@ class SendCard(private val activity: ComponentActivity, private val jobId: Strin
                     label, sans(14.5.sp, FontWeight.Bold, lineHeight = 18.sp), action,
                     Modifier.clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) {
                         when {
+                            bigUpgrade -> upgradeNow()
                             state == null || !state.isFinished -> work.cancelUniqueWork(jobId)
                             retryable -> again()
                             upgrade != null && failed -> upgradeNow()
@@ -250,7 +317,7 @@ class SendCard(private val activity: ComponentActivity, private val jobId: Strin
                 val moving = if (line < 0f && !still) rememberInfiniteTransition(label = "wait").animateFloat(.15f, .85f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse), label = "line").value else .3f
                 val fraction = if (line < 0f) moving else line
                 val color = if (state == WorkInfo.State.SUCCEEDED) (if (c.dark) c.ok else Color(0xFF17623F)) else action
-                Box(Modifier.align(Alignment.BottomStart).fillMaxHeight().drawBehind {
+                Box(Modifier.matchParentSize().drawBehind {
                     drawRect(color, Offset(0f, size.height - 3.dp.toPx()), Size(size.width * fraction, 3.dp.toPx()))
                 })
             }

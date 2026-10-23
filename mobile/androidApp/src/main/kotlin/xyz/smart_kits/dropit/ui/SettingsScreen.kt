@@ -40,6 +40,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.smart_kits.dropit.BuildConfig
+import xyz.smart_kits.dropit.shared.UpgradeFrom
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import xyz.smart_kits.dropit.Me
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
@@ -48,7 +59,18 @@ import xyz.smart_kits.dropit.receive.Repull
 import xyz.smart_kits.dropit.receive.ReceiveStatus
 import xyz.smart_kits.dropit.receive.batteryLimited
 import xyz.smart_kits.dropit.shared.PRIVACY_URL
-import xyz.smart_kits.dropit.shared.RepullSpan
+import xyz.smart_kits.dropit.shared.REPULL_MAX_COUNT
+import xyz.smart_kits.dropit.shared.REPULL_MIN_COUNT
+import xyz.smart_kits.dropit.shared.REPULL_DEFAULT_COUNT
+import xyz.smart_kits.dropit.shared.REPULL_DEFAULT_DAYS
+import xyz.smart_kits.dropit.shared.RepullPlan
+import xyz.smart_kits.dropit.shared.repullDaysLimit
+import xyz.smart_kits.dropit.shared.repullDaysMovable
+import xyz.smart_kits.dropit.shared.repullDaysShown
+import xyz.smart_kits.dropit.shared.repullHintHasButton
+import xyz.smart_kits.dropit.shared.repullKeptHintFor
+import xyz.smart_kits.dropit.shared.repullTrackDays
+import xyz.smart_kits.dropit.shared.repullPlanOf
 import xyz.smart_kits.dropit.shared.SOURCE_URL
 import xyz.smart_kits.dropit.shared.TileKind
 import xyz.smart_kits.dropit.shared.Targets
@@ -61,6 +83,7 @@ import xyz.smart_kits.dropit.ui.kit.Icons
 import xyz.smart_kits.dropit.ui.kit.Panel
 import xyz.smart_kits.dropit.ui.kit.PanelDivider
 import xyz.smart_kits.dropit.ui.kit.PanelRow
+import xyz.smart_kits.dropit.ui.kit.Cta
 import xyz.smart_kits.dropit.ui.kit.Segmented
 import xyz.smart_kits.dropit.ui.kit.Spinner
 import xyz.smart_kits.dropit.ui.kit.TitleBar
@@ -106,21 +129,15 @@ private fun Go() { Glyph(Icons.Chevron, ink.dim, size = 16.dp) }
  * devices, and about. Each row is a tile, what it is, and one line of how it stands; every number comes from the service.
  */
 @Composable
-fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSignedOut: () -> Unit) {
+fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val c = ink
     var me by remember { mutableStateOf<Me?>(null) }
-    var leaving by remember { mutableStateOf(false) }
-    var signingOut by remember { mutableStateOf(false) }
     LaunchedEffect(resumed) {
         if (me == null) me = ctx.app.account.me(stale = true)
         me = ctx.app.account.me(fresh = true)
     }
-    val peers = ctx.app.peers
-    val peerState by peers.state.collectAsState()
-    val defaultTo by peers.defaultTo.collectAsState()
-    LaunchedEffect(resumed, me?.devicesUsed) { if ((me?.devicesUsed ?: 0) > 1) peers.refresh(maxAgeMs = 300_000) }
 
     Box {
         Page(stringResource(R.string.label_settings), onBack) {
@@ -137,20 +154,13 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
             // ───── send
             GroupHead(stringResource(R.string.set_group_send))
             Panel {
-                val receivers = peers.receivers(peerState.peers)
-                PanelRow(
-                    stringResource(R.string.set_default_to), icon = Icons.Devices,
-                    sub = targetText(defaultTo, Targets.of(defaultTo, receivers).names),
-                    onClick = { go(Screen.DefaultTargets) },
-                ) { Go() }
-                PanelDivider()
                 TileSettingRow(TileKind.SEND_CLIPBOARD, resumed)
                 if (Overlay.available) {
                     PanelDivider()
                     BallRow(resumed)
                 }
                 PanelDivider()
-                PanelRow(stringResource(R.string.set_backtap), icon = Icons.Tap, sub = stringResource(R.string.set_backtap_sub), onClick = { go(Screen.Onboarding(gesturesOnly = true)) }) { Go() }
+                PanelRow(stringResource(R.string.set_backtap), icon = Icons.Tap, sub = stringResource(R.string.set_backtap_sub), onClick = { go(Screen.Onboarding(page = 4)) }) { Go() }
                 PanelDivider()
                 var shrink by remember { mutableStateOf(ctx.app.store.shrinkImages) }
                 PanelRow(stringResource(R.string.set_photo_quality), icon = Icons.Picture, sub = stringResource(R.string.set_photo_quality_sub)) {
@@ -184,9 +194,6 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
                     me?.let { Txt(stringResource(R.string.set_devices_count, it.devicesUsed, it.devicesLimit), sans(13.5.sp).copy(fontFeatureSettings = "tnum"), c.dim) }
                     Go()
                 }
-                PanelDivider()
-                // Red only for what cannot be taken back
-                PanelRow(stringResource(R.string.set_sign_out), icon = Icons.SignOut, danger = true, sub = stringResource(R.string.set_sign_out_sub), onClick = { leaving = true })
             }
 
             // ───── about
@@ -198,29 +205,6 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSig
                 PanelDivider()
                 PanelRow(stringResource(R.string.set_source), icon = Icons.Code, sub = "smart-kits/dropit-client", onClick = { ctx.openLink(SOURCE_URL) }) {
                     Glyph(Icons.External, c.dim, size = 16.dp)
-                }
-            }
-        }
-
-        if (leaving) {
-            Confirm(
-                stringResource(R.string.sign_out_ask), stringResource(R.string.set_sign_out_sub), stringResource(R.string.sign_out_confirm),
-                onConfirm = {
-                    leaving = false; signingOut = true
-                    scope.launch { ctx.app.account.signOut(); ctx.app.letters.clear(); ctx.app.peers.reset(); onSignedOut() }
-                },
-                onDismiss = { leaving = false },
-            )
-        }
-        // Leaving waits for the service for a few seconds at most; until then the screen says so and takes no more taps
-        if (signingOut) {
-            Box(
-                Modifier.matchParentSize().background(c.ground.copy(alpha = .85f)).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = {}),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Spinner(c.ink, 20.dp)
-                    Txt(stringResource(R.string.signing_out), sans(15.sp), c.ink)
                 }
             }
         }
@@ -273,7 +257,28 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReceiveRows(resumed: 
         PanelRow(
             stringResource(R.string.set_receive), icon = Icons.Bell, sub = line.text, subColor = if (line.accent) c.navy else c.dim,
         ) {
-            Toggle(receive != ReceiveStatus.Off, { on -> scope.launch { if (on) receiving.enable() else receiving.disable() } }, name = stringResource(R.string.set_receive))
+            // With notifications off nothing can be heard, so the switch shows off to match the line; turning it on goes to where they are allowed
+            Toggle(
+                receive != ReceiveStatus.Off && !notifyOff,
+                { on ->
+                    if (on && notifyOff) runCatching {
+                        ctx.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName),
+                        )
+                    } else scope.launch { if (on) receiving.enable() else receiving.disable() }
+                },
+                name = stringResource(R.string.set_receive),
+            )
+        }
+        // The trial of real-time delivery is over: the way back is one tap from the line that says so (only where Paid can be had)
+        val refused = receive as? ReceiveStatus.Refused
+        if (refused?.why?.key == "realtimeOver" && BuildConfig.PAYMENTS && ctx.app.plans.offering) {
+            PanelDivider()
+            PanelRow(
+                stringResource(R.string.mo_see_paid), icon = Icons.Star, titleColor = c.navy,
+                onClick = { go(Screen.Plans(why = "realtime", from = UpgradeFrom.SETTINGS)) },
+            ) { Go() }
         }
         // On a connection that the battery setting may cut off: said in red, and one tap leads to the setting
         if (receive.batteryLimited(unrestricted)) {
@@ -285,14 +290,36 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReceiveRows(resumed: 
         }
         PanelDivider()
     }
+    // What the guide asked for and was put off: still here, one tap away
+    if (notifyOff) {
+        PanelRow(
+            stringResource(R.string.set_notify_title), icon = Icons.Bell, sub = stringResource(R.string.set_notify_sub),
+            onClick = {
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName),
+                    )
+                }
+            },
+        ) { Go() }
+        PanelDivider()
+    }
+    if (!unrestricted && !receive.batteryLimited(unrestricted)) {
+        PanelRow(
+            stringResource(R.string.set_bg_title), icon = Icons.Bolt, sub = stringResource(R.string.set_bg_sub),
+            onClick = { ctx.app.askRunInBackground(ctx) },
+        ) { Go() }
+        PanelDivider()
+    }
     var autoClip by remember { mutableStateOf(ctx.app.store.autoClip) }
-    PanelRow(stringResource(R.string.set_auto_clip), icon = Icons.Clip) {
+    PanelRow(stringResource(R.string.set_auto_clip), iconRes = R.drawable.ic_tile) {
         Toggle(autoClip, { autoClip = it; ctx.app.store.autoClip = it }, name = stringResource(R.string.set_auto_clip))
     }
     PanelDivider()
     TileSettingRow(TileKind.RECEIVE_LATEST, resumed)
     PanelDivider()
-    PanelRow(stringResource(R.string.set_repull), icon = Icons.Retry, sub = stringResource(R.string.set_repull_sub), onClick = { go(Screen.Repull) }) {
+    PanelRow(stringResource(R.string.set_repull), icon = Icons.Retry, sub = stringResource(R.string.set_repull_sub, pluralStringResource(R.plurals.repull_latest, REPULL_DEFAULT_COUNT, REPULL_DEFAULT_COUNT), pluralStringResource(R.plurals.repull_last_days, REPULL_DEFAULT_DAYS, REPULL_DEFAULT_DAYS)), onClick = { go(Screen.Repull) }) {
         Glyph(Icons.Chevron, c.dim, size = 16.dp)
     }
 }
@@ -391,24 +418,41 @@ private fun VersionRow() {
 // ───────────────────────────── pull again ─────────────────────────────
 
 /**
- * Pull again: bring back what this phone already had. Three steps, nothing to type: everything the service still keeps, the newest 50,
- * or the last three days. What comes back goes in the list without a notice; at most one a minute.
+ * Pull again: bring back what this phone already had. One plan with two choices, each one tap: how many (10, 20 or 50: never more than
+ * 50) and how far back (1 to 3 days, but no further than the account's content is kept: a free account has one day). It brings back the
+ * newest of that many that are also not older than that. What comes back goes in the list without a notice; at most one a minute.
  */
 @Composable
-fun RepullScreen(resumed: Int, onBack: () -> Unit) {
+fun RepullScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val c = ink
-    var busy by remember { mutableStateOf<RepullSpan?>(null) }
+    var busy by remember { mutableStateOf(false) }
     var said by remember { mutableStateOf<String?>(null) }
     var bad by remember { mutableStateOf(false) }
+    // What the account is: Paid or free, and how long its content is kept as the service says it (what was kept on this phone first)
+    var account by remember { mutableStateOf<xyz.smart_kits.dropit.Me?>(null) }
+    LaunchedEffect(resumed) {
+        account = ctx.app.account.me(stale = true)
+        account = ctx.app.account.me() ?: account
+    }
+    val plans = ctx.app.plans
+    // The days track is as long as a paid plan keeps content; only a Paid account can move along it
+    val paidDays = plans.paid.days.takeIf { it > 0 }
+    val daysLimit = repullDaysLimit(account?.paid == true, account?.keptDays, paidDays)
+    var count by remember { mutableStateOf(REPULL_DEFAULT_COUNT) }
+    var day by remember { mutableStateOf(REPULL_DEFAULT_DAYS) }
+    val plan = repullPlanOf(count, day, daysLimit)
+    // A free account that touches the stopped days slider is told, once, under it, for a few seconds
+    var hint by remember { mutableStateOf(false) }
+    LaunchedEffect(hint) { if (hint) { delay(3_000); hint = false } }
 
-    fun run(span: RepullSpan) {
-        if (busy != null) return
-        busy = span; said = null
+    fun run() {
+        if (busy) return
+        busy = true; said = null; hint = false
         scope.launch {
-            val r = Repull(ctx.app).run(span)
-            busy = null
+            val r = Repull(ctx.app).run(plan)
+            busy = false
             bad = r !is Repull.Result.Done
             said = when (r) {
                 is Repull.Result.Done -> if (r.letters == 0) ctx.getString(R.string.repull_none) else ctx.resources.getQuantityString(R.plurals.repull_n, r.letters, r.letters)
@@ -420,20 +464,64 @@ fun RepullScreen(resumed: Int, onBack: () -> Unit) {
     }
 
     Page(stringResource(R.string.set_repull), onBack) {
-        Txt(stringResource(R.string.repull_intro), sans(14.sp, lineHeight = 21.sp), c.dim, Modifier.padding(start = 2.dp, top = 4.dp, bottom = 12.dp))
+        Txt(
+            stringResource(R.string.repull_intro, pluralStringResource(R.plurals.repull_count, plan.count, plan.count), pluralStringResource(R.plurals.repull_days, plan.days, plan.days)),
+            sans(14.sp, lineHeight = 21.sp), c.dim, Modifier.padding(start = 2.dp, top = 4.dp, bottom = 12.dp),
+        )
         Panel {
-            val rows = listOf(
-                Triple(RepullSpan.ALL, R.string.repull_all, R.string.repull_all_sub),
-                Triple(RepullSpan.LAST_50, R.string.repull_50, R.string.repull_50_sub),
-                Triple(RepullSpan.DAYS_3, R.string.repull_3d, R.string.repull_3d_sub),
-            )
-            rows.forEachIndexed { k, (span, title, sub) ->
-                if (k > 0) PanelDivider()
-                PanelRow(stringResource(title), icon = Icons.Retry, sub = stringResource(sub), onClick = if (busy == null) ({ run(span) }) else null) {
-                    if (busy == span) Spinner(c.navy, 20.dp) else Glyph(Icons.Chevron, c.dim, size = 16.dp)
+            val latest = pluralStringResource(R.plurals.repull_latest, plan.count, plan.count)
+            Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt(stringResource(R.string.repull_count_label), sans(13.5.sp, FontWeight.SemiBold), c.ink, Modifier.weight(1f))
+                    Txt(latest, sans(14.sp, FontWeight.Bold).copy(fontFeatureSettings = "tnum"), c.navy)
+                }
+                Slider(
+                    value = plan.count.toFloat(), onValueChange = { count = it.roundToInt(); hint = false },
+                    valueRange = REPULL_MIN_COUNT.toFloat()..REPULL_MAX_COUNT.toFloat(),
+                    colors = sliderColors(true),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = latest; stateDescription = latest },
+                )
+            }
+            if (repullDaysShown(paidDays)) {
+                PanelDivider()
+                val track = repullTrackDays(paidDays)
+                val movable = repullDaysMovable(daysLimit)
+                val last = pluralStringResource(R.plurals.repull_last_days, plan.days, plan.days)
+                Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Txt(stringResource(R.string.repull_days_label), sans(13.5.sp, FontWeight.SemiBold), c.ink, Modifier.weight(1f))
+                        Txt(last, sans(14.sp, FontWeight.Bold).copy(fontFeatureSettings = "tnum"), c.navy)
+                    }
+                    // The whole track is drawn for everyone, so a free account sees how far Paid goes. Stopped, it takes no touch of its own: a
+                    // clear layer over it takes the touch instead and says why
+                    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Slider(
+                            value = plan.days.toFloat(), onValueChange = { day = it.roundToInt() },
+                            valueRange = 1f..track.toFloat(), enabled = movable, colors = sliderColors(movable),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = last; stateDescription = last },
+                        )
+                        if (repullKeptHintFor(daysLimit, paidDays)) Box(
+                            Modifier.matchParentSize().clickable(role = Role.Button, onClickLabel = stringResource(R.string.repull_see_plans)) { hint = true },
+                        )
+                    }
+                }
+            }
+            if (hint) {
+                PanelDivider()
+                val free = pluralStringResource(R.plurals.repull_days, plans.free.days.coerceAtLeast(1), plans.free.days.coerceAtLeast(1))
+                val text = if (paidDays != null) stringResource(R.string.repull_kept_hint, free, pluralStringResource(R.plurals.repull_days, paidDays, paidDays))
+                else stringResource(R.string.repull_kept_hint_plain, free)
+                Column(Modifier.fillMaxWidth().padding(14.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+                    Txt(text, sans(13.5.sp, lineHeight = 20.sp), c.ink)
+                    if (repullHintHasButton(BuildConfig.PAYMENTS, plans.offering)) Txt(
+                        stringResource(R.string.repull_see_plans), sans(14.5.sp, FontWeight.SemiBold), c.navy,
+                        Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { go(Screen.Plans(why = "kept", from = UpgradeFrom.SETTINGS)) }
+                            .heightIn(min = 48.dp).padding(vertical = 14.dp, horizontal = 2.dp),
+                    )
                 }
             }
         }
+        Cta(stringResource(R.string.repull_go), ::run, Modifier.padding(top = 14.dp), icon = Icons.Retry, loading = busy)
         said?.let {
             Row(Modifier.padding(top = 12.dp, start = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
                 if (bad) Glyph(Icons.Alert, c.red, Modifier.padding(top = 1.dp), size = 15.dp) else Glyph(Icons.Check, c.ok, Modifier.padding(top = 1.dp), size = 15.dp)
@@ -443,6 +531,13 @@ fun RepullScreen(resumed: Int, onBack: () -> Unit) {
         Txt(stringResource(R.string.repull_note), sans(12.5.sp, lineHeight = 18.sp), c.dim, Modifier.padding(start = 4.dp, end = 4.dp, top = 12.dp))
     }
 }
+
+/** The sliders' colours: the brand blue; a stopped one stays readable (a paler blue), since it shows how far Paid goes */
+@Composable
+private fun sliderColors(enabled: Boolean) = SliderDefaults.colors(
+    thumbColor = ink.navy, activeTrackColor = ink.navy, inactiveTrackColor = ink.line,
+    disabledThumbColor = ink.navy.copy(alpha = .55f), disabledActiveTrackColor = ink.navy.copy(alpha = .55f), disabledInactiveTrackColor = ink.line,
+)
 
 /** One question before something that cannot be undone; the way out is always there */
 @Composable

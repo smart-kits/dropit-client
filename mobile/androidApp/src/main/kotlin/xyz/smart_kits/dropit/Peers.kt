@@ -61,7 +61,7 @@ class Peers(private val store: Store, private val client: DropitClient) {
             reconcile(peers)
             true
         } catch (e: ApiError) {
-            if (e.failure == Failure.AUTH_LOST) store.forget()
+            if (e.failure == Failure.AUTH_LOST) store.forget(e.sentence().key)
             shown.value = have.copy(failed = true)
             false
         } catch (e: OfflineError) {

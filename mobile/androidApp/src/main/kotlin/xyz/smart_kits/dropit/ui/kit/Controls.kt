@@ -206,6 +206,8 @@ fun PanelRow(
     titleColor: Color = ink.ink,
     onClick: (() -> Unit)? = null,
     icon: ImageVector? = null,
+    /** A drawable instead of a line icon (the dropit mark), tinted the same way */
+    @androidx.annotation.DrawableRes iconRes: Int? = null,
     danger: Boolean = false,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
@@ -219,7 +221,7 @@ fun PanelRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) IconTile(icon, danger = danger)
+        if (icon != null) IconTile(icon, danger = danger) else if (iconRes != null) IconTile(iconRes, danger = danger)
         Column(Modifier.weight(1f)) {
             Txt(title, sans(15.sp, lineHeight = 20.sp), if (danger && titleColor == ink.ink) ink.red else titleColor)
             if (sub != null) Txt(sub, sans(12.5.sp, lineHeight = 17.sp), subColor, Modifier.padding(top = 1.dp))
@@ -237,6 +239,22 @@ fun IconTile(icon: ImageVector, modifier: Modifier = Modifier, danger: Boolean =
         modifier.size(size).clip(RoundedCornerShape(10.dp)).background(if (danger) c.red.copy(alpha = .12f) else c.tile),
         contentAlignment = Alignment.Center,
     ) { Glyph(icon, if (danger) c.red else c.navy, size = size * .55f) }
+}
+
+/**
+ * The same tile around a drawable, drawn in one colour: the dropit mark. Its lines are thin, so it is a solid navy tile with the mark in
+ * white (as it shows in quick settings), and the mark is larger than a line icon: it stays readable beside the others.
+ */
+@Composable
+fun IconTile(@androidx.annotation.DrawableRes res: Int, modifier: Modifier = Modifier, danger: Boolean = false, size: Dp = 36.dp) {
+    val c = ink
+    val fill = if (danger) c.red else c.navy
+    Box(modifier.size(size).clip(RoundedCornerShape(10.dp)).background(fill), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(res), contentDescription = null,
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (c.dark) Color(0xFF0E1626) else Color.White), modifier = Modifier.size(size * .78f),
+        )
+    }
 }
 
 /** On or off. Navy when on: it means "arrivals are on" wherever it is used. 48 × 28 with a white knob; the touch area is 48 × 48. */

@@ -38,7 +38,7 @@ class Resend(private val context: Context) {
                 answer.seq?.let(made::add)
             }
         } catch (e: ApiError) {
-            if (e.failure == Failure.AUTH_LOST) app.store.forget()
+            if (e.failure == Failure.AUTH_LOST) app.store.forget(e.sentence().key)
             keep(letter, made, targets, now)
             return when (e.code) {
                 "ITEM_EXPIRED" -> {

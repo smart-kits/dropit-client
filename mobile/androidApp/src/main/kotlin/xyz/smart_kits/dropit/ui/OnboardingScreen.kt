@@ -23,6 +23,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.contentDescription
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,116 +74,155 @@ import xyz.smart_kits.dropit.ui.theme.label
 import xyz.smart_kits.dropit.ui.theme.sans
 import xyz.smart_kits.dropit.work.Notes
 
-private enum class Step { Notify, Background, Tile, Faster }
+private enum class Step { Intro1, Intro2, Receive, Tile, Faster }
+
+private val STEPS = Step.entries
 
 /**
- * After joining: the settings the system will not let an app change by itself, one per screen, each with
- * one button and a way past. In the order of "leave this undone and something breaks": notifications,
- * background, quick settings, gestures. A step already done is not shown.
+ * The one guide, the same for everyone and shown once: what dropit is, how to send, then the settings the system will not let an app
+ * change by itself, each with one button and a way on ("Not now" just goes to the next screen). A setting that is already on shows as
+ * on, and its button becomes "Next". None of them needs an account. [page] starts it part-way (the settings page opens the gestures).
  */
 @Composable
-fun OnboardingScreen(resumed: Int, gesturesOnly: Boolean, onDone: () -> Unit) {
+fun OnboardingScreen(resumed: Int, page: Int = 0, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val c = ink
-    val steps = remember {
-        buildList {
-            if (!gesturesOnly) {
-                if (!Notes(ctx).allowed) add(Step.Notify)
-                if (!ctx.app.runsInBackground) add(Step.Background)
-            }
-            if (!ctx.app.store.tileAdded) add(Step.Tile)
-            add(Step.Faster)
+    val steps = STEPS
+    val pager = rememberPagerState(initialPage = page) { steps.size }
+    val scope = rememberCoroutineScope()
+    val at = pager.currentPage
+    val step = steps[at]
+    val last = at == steps.size - 1
+    val next: () -> Unit = { if (!last) scope.launch { pager.animateScrollToPage(at + 1) } else onDone() }
+    val family = remember { PhoneFamily.of(Build.MANUFACTURER, Build.BRAND) }
+    BackHandler(enabled = at > 0) { scope.launch { pager.animateScrollToPage(at - 1) } }
+
+    // Read again when the screen comes back from the system's pages, and after the permission question
+    var asked by remember { mutableIntStateOf(0) }
+    val notifyOk = remember(resumed, asked) { Notes(ctx).allowed }
+    val backgroundOk = remember(resumed, asked) { ctx.app.runsInBackground }
+    fun openNotifySettings() {
+        runCatching {
+            ctx.startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName),
+            )
         }
     }
-    var at by remember { mutableIntStateOf(0) }
-    val next: () -> Unit = { if (at + 1 < steps.size) at++ else onDone() }
-    val step = steps[at]
-    val family = remember { PhoneFamily.of(Build.MANUFACTURER, Build.BRAND) }
-
-    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
-    // Back from the system's battery page: once it is set, this step is done by itself
-    LaunchedEffect(resumed) { if (step == Step.Background && ctx.app.runsInBackground) next() }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        asked++
+        // Said no (perhaps for good, when the system will not ask again): the system's page is the way to change it
+        if (!granted) openNotifySettings()
+    }
     var tileManual by remember { mutableStateOf(false) }
+    var tileOn by remember(resumed) { mutableStateOf(ctx.app.store.tileAdded) }
 
     Column(Modifier.fillMaxSize().background(c.ground).safeDrawingPadding()) {
-        Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Dots(steps.size, at)
-            Spacer(Modifier.height(30.dp))
-            Box(Modifier.size(112.dp).clip(RoundedCornerShape(30.dp)).background(if (c.dark) c.tile else Color(0xFFDCE1EA)), contentAlignment = Alignment.Center) {
-                Glyph(
-                    when (step) { Step.Notify -> Icons.Bell; Step.Background -> Icons.Bolt; Step.Tile -> Icons.Tiles; Step.Faster -> Icons.Share },
-                    c.navy, size = 56.dp,
-                )
-            }
-            val title = when (step) {
-                Step.Notify -> R.string.label_ob_notify
-                Step.Background -> R.string.label_ob_background
-                Step.Tile -> R.string.label_ob_tile
-                Step.Faster -> R.string.label_ob_faster
-            }
-            Txt(
-                stringResource(title), label(30.sp, tracking = .01.em, lineHeight = 34.sp), c.ink,
-                Modifier.padding(top = 26.dp, bottom = 10.dp).semantics { heading() }, align = TextAlign.Center,
-            )
-            val body = when (step) {
-                Step.Notify -> stringResource(R.string.ob_notify_body)
-                Step.Background -> stringResource(R.string.ob_background_body)
-                Step.Tile -> stringResource(if (tileManual) R.string.ob_tile_manual else R.string.ob_tile_body)
-                Step.Faster -> stringResource(R.string.ob_faster_body)
-            }
-            Txt(body, sans(15.5.sp, lineHeight = 24.sp), c.dim, Modifier.widthIn(max = 330.dp), align = TextAlign.Center)
-            Spacer(Modifier.height(24.dp))
-            when (step) {
-                Step.Notify -> SampleNotification()
-                Step.Background -> BatteryChoices()
-                Step.Tile -> SampleQuickSettings()
-                Step.Faster -> {
-                    SampleShareSheet()
-                    Spacer(Modifier.height(14.dp))
-                    Faster(family)
+        Brand(Modifier.padding(start = 16.dp, top = 6.dp, bottom = 6.dp))
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { page ->
+            val s = steps[page]
+            // Each screen sits in the middle of the room above the button (and scrolls when it is taller than that), so there is no
+            // empty half under it
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(Modifier.height(230.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        when (s) {
+                            Step.Intro1 -> WhatItIs()
+                            Step.Intro2 -> HowToSend()
+                            Step.Receive -> ItArrives()
+                            Step.Tile -> SampleQuickSettings()
+                            Step.Faster -> SampleShareSheet()
+                        }
+                    }
+                    Spacer(Modifier.height(22.dp))
+                    Txt(
+                        stringResource(
+                            when (s) {
+                                Step.Intro1 -> R.string.wl_1_title; Step.Intro2 -> R.string.wl_2_title; Step.Receive -> R.string.wl_3_title
+                                Step.Tile -> R.string.label_ob_tile; Step.Faster -> R.string.label_ob_faster
+                            },
+                        ),
+                        sans(26.sp, FontWeight.Bold, lineHeight = 32.sp), c.ink, Modifier.semantics { heading() }, align = TextAlign.Center,
+                    )
+                    Txt(
+                        stringResource(
+                            when (s) {
+                                Step.Intro1 -> R.string.wl_1_body; Step.Intro2 -> R.string.wl_2_body; Step.Receive -> R.string.wl_3_body
+                                Step.Tile -> if (tileManual) R.string.ob_tile_manual else R.string.ob_tile_body
+                                Step.Faster -> R.string.ob_faster_body
+                            },
+                        ),
+                        sans(15.5.sp, lineHeight = 24.sp), c.dim, Modifier.padding(top = 10.dp).widthIn(max = 330.dp), align = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    when (s) {
+                        Step.Receive -> Panel(Modifier.widthIn(max = 340.dp)) {
+                            PanelRow(stringResource(R.string.ob_qs_notifications), sub = stringResource(R.string.rcv_notify_sub), icon = Icons.Bell) { Allowed(notifyOk) }
+                            PanelDivider()
+                            PanelRow(stringResource(R.string.rcv_bg_title), sub = stringResource(R.string.rcv_bg_sub), icon = Icons.Bolt) { Allowed(backgroundOk) }
+                        }
+                        Step.Tile -> if (tileOn) Panel(Modifier.widthIn(max = 340.dp)) {
+                            PanelRow(stringResource(R.string.ob_tile_added).removePrefix("✓ "), iconRes = R.drawable.ic_tile) { Allowed(true) }
+                        }
+                        Step.Faster -> Faster(family)
+                        else -> {}
+                    }
                 }
             }
+        }
+        val pageName = stringResource(R.string.wl_page, at + 1, steps.size)
+        Box(Modifier.fillMaxWidth().padding(bottom = 14.dp).semantics { contentDescription = pageName }, contentAlignment = Alignment.Center) {
+            Dots(steps.size, at)
         }
         CtaBar {
             when (step) {
-                Step.Notify -> {
-                    Cta(stringResource(R.string.ob_notify_allow), {
-                        if (Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) else next()
-                    })
-                    Skip(stringResource(R.string.ob_not_now), next)
-                }
-                Step.Background -> {
-                    Cta(stringResource(R.string.ob_background_allow), { ctx.app.askRunInBackground(ctx) })
-                    Skip(stringResource(R.string.ob_background_skip), next)
+                Step.Intro1, Step.Intro2 -> Cta(stringResource(R.string.ob_next), next)
+                Step.Receive -> {
+                    when {
+                        !notifyOk -> Cta(stringResource(R.string.ob_notify_allow), {
+                            if (Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) else openNotifySettings()
+                        })
+                        !backgroundOk -> Cta(stringResource(R.string.rcv_bg_allow), { ctx.app.askRunInBackground(ctx) })
+                        else -> Cta(stringResource(R.string.ob_next), next)
+                    }
+                    if (!notifyOk || !backgroundOk) Skip(stringResource(R.string.ob_not_now), next)
                 }
                 Step.Tile -> {
-                    if (!tileManual) {
+                    if (tileOn) {
+                        Cta(stringResource(R.string.ob_next), next)
+                    } else if (!tileManual) {
                         Cta(stringResource(R.string.ob_tile_add), {
                             ctx.requestTile { answer ->
                                 when (answer) {
-                                    TileAsk.ADDED -> { ctx.app.store.tileAdded = true; next() }
-                                    TileAsk.DECLINED -> {}               // said no for now: the button stays
+                                    TileAsk.ADDED -> { ctx.app.store.tileAdded = true; tileOn = true; next() }
+                                    TileAsk.DECLINED -> next()           // said no for now: on to the next screen (the tip on the home screen and settings still offer it)
                                     TileAsk.UNAVAILABLE -> tileManual = true
                                 }
                             }
                         })
-                        Skip(stringResource(R.string.ob_skip), next)
+                        Skip(stringResource(R.string.ob_not_now), next)
                     } else {
                         Cta(stringResource(R.string.ob_next), next)
                     }
                 }
-                Step.Faster -> Cta(stringResource(if (gesturesOnly) R.string.ob_done else R.string.ob_start), next)
+                Step.Faster -> Cta(stringResource(R.string.ob_start), next)
             }
         }
     }
 }
 
+/** The tick at the end of a row whose setting is already allowed */
+@Composable
+private fun Allowed(done: Boolean) {
+    if (done) Glyph(Icons.Check, ink.ok, size = 22.dp, name = stringResource(R.string.rcv_done))
+}
+
 /** Where in the steps: the one now is a longer pill */
 @Composable
-private fun Dots(count: Int, at: Int) {
+internal fun Dots(count: Int, at: Int) {
     val c = ink
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         for (k in 0 until count) Box(Modifier.height(8.dp).width(if (k == at) 22.dp else 8.dp).clip(CircleShape).background(if (k == at) c.navy else c.line))
@@ -192,7 +239,7 @@ private fun Skip(text: String, onClick: () -> Unit) {
 
 /** What a notification from dropit looks like, drawn plainly: the system decides its real shape */
 @Composable
-private fun SampleNotification() {
+internal fun SampleNotification() {
     val c = ink
     Panel(Modifier.widthIn(max = 340.dp)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
@@ -236,10 +283,12 @@ private fun BatteryChoices() {
 private fun SampleQuickSettings() {
     val c = ink
     @Composable
-    fun round(icon: ImageVector, text: String, mine: Boolean) {
+    fun round(icon: ImageVector?, text: String, mine: Boolean) {
         Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 64.dp, height = 44.dp).clip(RoundedCornerShape(22.dp)).background(if (mine) c.navy else Color(0xFF3A3F48)), contentAlignment = Alignment.Center) {
-                Glyph(icon, Color.White, size = 22.dp)
+                // The tile that is really there: dropit's own mark, in white like the line icons beside it
+                if (icon != null) Glyph(icon, Color.White, size = 22.dp)
+                else Image(painterResource(R.drawable.ic_tile), contentDescription = null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(26.dp))
             }
             Txt(text, sans(11.5.sp, if (mine) FontWeight.Bold else FontWeight.Normal, lineHeight = 14.sp), if (mine) c.navy else c.dim, maxLines = 2, align = TextAlign.Center)
         }
@@ -249,7 +298,7 @@ private fun SampleQuickSettings() {
             round(Icons.Globe, stringResource(R.string.ob_wifi), false)
             round(Icons.Bell, stringResource(R.string.ob_qs_notifications), false)
             round(Icons.Bolt, stringResource(R.string.ob_qs_saver), false)
-            round(Icons.Clip, stringResource(R.string.send_clipboard), true)
+            round(null, stringResource(R.string.send_clipboard), true)
         }
     }
 }
@@ -262,9 +311,12 @@ private fun SampleShareSheet() {
     fun app(name: String, mine: Boolean) {
         Column(Modifier.width(72.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(
-                Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(if (mine) c.tile else c.seg).then(if (mine) Modifier.border(2.dp, c.navy, RoundedCornerShape(16.dp)) else Modifier),
+                Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(c.seg).then(if (mine) Modifier.border(2.dp, c.navy, RoundedCornerShape(16.dp)) else Modifier),
                 contentAlignment = Alignment.Center,
-            ) { if (mine) Glyph(Icons.Devices, c.navy, size = 26.dp) }
+            ) {
+                // dropit's own logo, as it shows in the real share sheet; the others are grey stand-ins
+                if (mine) Image(painterResource(R.drawable.ic_logo), contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)))
+            }
             Txt(name, sans(11.5.sp, if (mine) FontWeight.Bold else FontWeight.Normal, lineHeight = 14.sp), if (mine) c.navy else c.dim, maxLines = 1)
         }
     }

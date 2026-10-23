@@ -78,7 +78,7 @@ class Notes(private val context: Context) {
             .build()
     }
 
-    /** [quiet]: the card on screen already says it; only the buzz */
+    /** [quiet]: the card on screen already says it, what did not go included (the card shows it in red); only the buzz. Not on screen: the note carries it */
     fun sent(jobId: String, text: String, extra: List<String>, quiet: Boolean = false) {
         buzz()
         if (quiet) return
@@ -98,7 +98,7 @@ class Notes(private val context: Context) {
         // Some systems fold a notification's buttons away (HyperOS: two taps deep), so tapping the note itself
         // does the one useful thing too: rejoin, or retry
         if (rejoin) b.setContentIntent(open())
-        // A limit that a paid plan lifts: trying again would hit it again, so the way out is Upgrade, which goes straight to the checkout for it
+        // A limit that a paid plan lifts: trying again would hit it again, so the way out is Upgrade, which opens the plans page at it
         if (upgrade != null && xyz.smart_kits.dropit.BuildConfig.PAYMENTS) {
             val checkout = open(MainActivity.SHOW_CHECKOUT, why)
             b.setContentIntent(checkout)

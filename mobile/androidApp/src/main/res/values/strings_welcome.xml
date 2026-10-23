@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch, before joining: three short screens -->
+    <string name="wl_1_title">Send it to your other devices</string>
+    <string name="wl_1_body">Links, text, pictures and files — from this phone to your computer and your other devices.</string>
+    <string name="wl_2_title">One step to send</string>
+    <string name="wl_2_body">Share from any app, or write here and tap Send. To add a device, scan its code or type the pairing code.</string>
+    <string name="wl_3_title">Real-time delivery</string>
+    <string name="wl_3_body">What you send reaches your devices in seconds, with a notification. Allow these two so it works even when dropit is closed.</string>
+    <string name="rcv_notify_sub">Hear about it when something arrives</string>
+    <string name="rcv_bg_title">Run in background</string>
+    <string name="rcv_bg_sub">Items arrive in seconds, even when dropit is closed</string>
+    <string name="rcv_bg_allow">Allow running in background</string>
+    <string name="rcv_done">Allowed</string>
+    <string name="set_notify_title">Turn on notifications</string>
+    <string name="set_notify_sub">Opens dropit\'s notification settings</string>
+    <string name="set_bg_title">Allow running in background</string>
+    <string name="set_bg_sub">So items arrive in seconds when dropit is closed</string>
+    <string name="too_large_paid">Paid takes files up to %1$d MB.</string>
+    <string name="wl_page">Page %1$d of %2$d</string>
+
+    <!-- Joining -->
+    <string name="join_or_type">Or type the pairing code</string>
+
+    <!-- A device joined -->
+    <string name="add_joined_sub">It can now receive what you send.</string>
+    <string name="add_joined_replaced">It took the place of %1$s.</string>
+    <string name="add_another">Add another device</string>
+    <string name="dev_default_head">"This phone sends to by default: "</string>
+    <string name="dev_remove_body">It leaves the account and stops sending and receiving; to use it again it has to join again. Other devices are not affected.</string>
+    <string name="sign_out_body">After you sign out, this device stops sending and receiving. The lists in the app are cleared and the default send-to goes back to all; files already saved on this phone and your other settings stay. Join again to carry on.</string>
+    <!-- The send button: where it goes, and what the two parts are called for a screen reader -->
+    <string name="send_to_desc">Send to %1$s</string>
+    <string name="dest_pick_desc">Choose which devices to send to. Now: %1$s</string>
+</resources>

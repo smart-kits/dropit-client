@@ -154,11 +154,11 @@ class ApiTest {
         assertEquals("rateDay", assertFailsWith<ApiError> { parse(429, """{"error":"RATE_LIMITED","window":"day","retry_after":3600}""") }.sentence().key)
         val bytes = assertFailsWith<ApiError> { parse(507, """{"error":"QUOTA_EXCEEDED","field":"bytes","frees_in":7200}""") }
         assertEquals(Message("quotaBytesIn", listOf("7200")), bytes.sentence())
-        assertEquals("Storage is full — the oldest item expires in about 2 hours and frees up room", Strings.EN.render(bytes.sentence()))
+        assertEquals("Your space is full — the oldest item expires in about 2 hours and frees up room", Strings.EN.render(bytes.sentence()))
         assertEquals("空间已满，最早的一条约 2 小时后到期，到时自动腾出位置", Strings.ZH.render(bytes.sentence()))
         val items = assertFailsWith<ApiError> { parse(507, """{"error":"QUOTA_EXCEEDED","field":"items","frees_in":600}""") }
-        assertEquals("Too many items waiting — the oldest expires in under an hour and frees up room", Strings.EN.render(items.sentence()))
-        assertEquals("积压的内容太多了，最早的一条不到 1 小时后到期，到时自动腾出位置", Strings.ZH.render(items.sentence()))
+        assertEquals("Too many items are waiting — the oldest expires in under an hour and frees up room", Strings.EN.render(items.sentence()))
+        assertEquals("排队等收的内容太多了，最早的一条不到 1 小时后到期，到时自动腾出位置", Strings.ZH.render(items.sentence()))
         assertEquals("about 3 days", Strings.EN.render(Message("quotaItemsIn", listOf("200000"))).substringAfter("expires in ").substringBefore(" and"))
     }
 

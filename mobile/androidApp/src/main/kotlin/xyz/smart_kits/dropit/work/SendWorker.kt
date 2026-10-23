@@ -74,16 +74,19 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val f = job.files[i]
             applicationContext.getString(R.string.too_large, f.name ?: "?", fileSize(f.size), mb(me?.itemBytesLimit ?: 0))
         }
+        // Only a free account has a way past the size limit; a paid plan is already at the highest one
+        val canLift = me?.paid == false
         val unreadable = if (job.unreadable > 0) {
             listOf(applicationContext.resources.getQuantityString(R.plurals.unreadable, job.unreadable, job.unreadable))
         } else emptyList()
         if (plan.isEmpty) {
             outbox.drop(job.id)
             // Only files over the plan's limit: a free account is shown the way to send them
-            val upgrade = if (tooLarge.isNotEmpty()) me?.upgradeUrl else null
+            val upgrade = if (tooLarge.isNotEmpty() && canLift) me?.upgradeUrl else null
             return fail(
                 job.id, (unreadable + tooLarge).joinToString("\n").ifEmpty { applicationContext.getString(R.string.nothing_to_send) },
                 retry = false, upgrade = upgrade, why = upgrade?.let { "file_size" },
+                cards = cardsOf(0, unreadable, plan.tooLarge.map { job.files[it] }, me?.itemBytesLimit),
             )
         }
 
@@ -136,7 +139,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             throw e
         } catch (e: ApiError) {
-            if (e.failure == Failure.AUTH_LOST) app.store.forget()
+            if (e.failure == Failure.AUTH_LOST) app.store.forget(e.sentence().key)
             // The devices it was addressed to are not on the account any more: the default is everyone again (the person is told), and
             // what was held stays, so one tap sends it to everyone this time
             if (e.code == "TARGET_UNAVAILABLE") {
@@ -189,14 +192,31 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             )
         }
         outbox.drop(job.id)
-        return Result.success(workDataOf(SEQS to seqs.toLongArray(), DONE to (listOf(said) + extra).joinToString("\n")))
+        // What went is one thing and what did not is another: the words of the first alone, and the second kept apart (shown in its own card)
+        val cards = cardsOf(plan.overCount.size, unreadable, plan.tooLarge.map { job.files[it] }, me?.itemBytesLimit)
+        return Result.success(
+            workDataOf(
+                SEQS to seqs.toLongArray(), DONE to said, PROBLEMS to extra.joinToString("\n"), BIG to (tooLarge.isNotEmpty() && canLift),
+                CARD_NAMES to cards.map { it.first.orEmpty() }.toTypedArray(), CARD_WHYS to cards.map { it.second }.toTypedArray(),
+            ),
+        )
     }
 
-    private fun fail(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false, upgrade: String? = null, why: String? = null, target: Boolean = false): Result {
+    /**
+     * What did not go, for the card at the bottom of the screen, in the order it is listed: the file's name (null where no file is meant) and why,
+     * short, so that the name can be shortened on its own line and the reason never is
+     */
+    private fun cardsOf(overCount: Int, unreadable: List<String>, big: List<HeldFile>, limit: Long?): List<Pair<String?, String>> = buildList {
+        if (overCount > 0) add(null to applicationContext.getString(R.string.over_count, overCount))
+        for (u in unreadable) add(null to u)
+        for (f in big) add((f.name ?: "?") to applicationContext.getString(R.string.card_why_big, mb(limit ?: 0), fileSize(f.size)))
+    }
+
+    private fun fail(jobId: String, reason: String, retry: Boolean, rejoin: Boolean = false, upgrade: String? = null, why: String? = null, target: Boolean = false, cards: List<Pair<String?, String>> = emptyList()): Result {
         // A limit that a paid plan lifts was just met: the pill at the top of the home screen may move for a day
         if (upgrade != null) runCatching { applicationContext.app.moments.markWall(System.currentTimeMillis()) }
         if (InApp.has(jobId)) outbox.drop(jobId) else notes.failed(jobId, reason, retry, rejoin, upgrade, toAll = target, why = why)
-        return Result.failure(workDataOf(ERROR to reason, RETRY to retry, UPGRADE to upgrade, WHY to (if (target) "target" else why), REJOIN to rejoin))
+        return Result.failure(workDataOf(ERROR to reason, RETRY to retry, UPGRADE to upgrade, WHY to (if (target) "target" else why), REJOIN to rejoin, CARD_NAMES to cards.map { it.first.orEmpty() }.toTypedArray(), CARD_WHYS to cards.map { it.second }.toTypedArray()))
     }
 
     /**
@@ -242,6 +262,11 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         const val REJOIN = "rejoin"
         const val SEQS = "seqs"
         const val DONE = "done"
+        const val PROBLEMS = "problems"
+        const val BIG = "big"
+        /** What did not go, for the card: file names (empty where there is none) and the short reasons, side by side */
+        const val CARD_NAMES = "card_names"
+        const val CARD_WHYS = "card_whys"
         const val K = "k"
         const val N = "n"
         const val TAG = "send"

@@ -368,6 +368,14 @@ class MomentsTest {
         assertFalse(Enjoyed(null, null, null).any)
     }
 
+    @Test fun `the trial's cards use the fuller wording only when the account has a good deal behind it`() {
+        assertEquals(false, richTrialCopy(me(itemsTotal = RICH_ITEMS - 1, devices = 1)))
+        assertEquals(true, richTrialCopy(me(itemsTotal = RICH_ITEMS, devices = 1)))     // enough items
+        assertEquals(true, richTrialCopy(me(itemsTotal = 2, devices = 2)))               // more than one device
+        assertEquals(false, richTrialCopy(me(itemsTotal = null, devices = 1)))           // not said counts as nothing
+        assertEquals(true, richTrialCopy(me(itemsTotal = null, devices = 3)))
+    }
+
     @Test fun `the trial's length is taken from the first source that says it, and the app's own starting number is not a source`() {
         val created = now - 3 * day
         assertEquals(21, trialDays(me(trialDays = 21, createdAt = created, realtimeUntil = created + 14 * day), 7))

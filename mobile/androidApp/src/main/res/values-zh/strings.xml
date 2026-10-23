@@ -29,7 +29,6 @@
     <string name="label_group_phone">这台手机</string>
     <string name="label_group_account">账号</string>
     <string name="label_group_about">关于</string>
-    <string name="label_group_leave">离开</string>
     <string name="label_free">免费</string>
     <string name="label_paid">付费</string>
     <string name="label_scope_full">完整</string>
@@ -37,8 +36,6 @@
     <string name="label_save">省</string>
     <string name="label_try">先试</string>
     <string name="label_try_month">1个月</string>
-    <string name="label_ob_notify">投完、收到，\n都用通知告诉你</string>
-    <string name="label_ob_background">让 dropit 在后台\n把事办完</string>
     <string name="label_ob_tile">复制之后，\n下拉点一下就投</string>
     <string name="label_ob_faster">你这台手机\n还能更快</string>
 
@@ -46,12 +43,12 @@
     <string name="channel_send_desc">投递的进度和结果</string>
     <string name="channel_receive">收到的内容</string>
     <string name="channel_receive_desc">你的其他设备投到这台手机的内容</string>
-    <string name="set_receive">后台接收</string>
+    <string name="set_receive">实时送达</string>
     <string name="set_receive_off">已关：打开 dropit 时才会看到新内容</string>
     <string name="set_receive_unknown">刚才没能检查成功，下次打开 dropit 时会再试</string>
     <string name="set_receive_push">已开：dropit 关着时，新内容也会弹通知</string>
     <string name="set_receive_none">这台手机收不到系统推送，新内容要打开 dropit 才会看到</string>
-    <string name="set_receive_notify">dropit 的通知被关了，打开后才能收到新内容的提醒</string>
+    <string name="set_receive_notify">未开：dropit 的通知被关了，打开通知后才能收到新内容的提醒</string>
 
     <string name="sending_n">正在投递 %1$d/%2$d…</string>
     <string name="sending">正在投递…</string>
@@ -60,6 +57,8 @@
     <string name="sent_again">刚才已经投过 %1$s</string>
     <string name="send_failed">没投出去</string>
     <string name="taken">收到，正在投递</string>
+    <string name="card_not_sent_more">%1$s（另有 %2$d 项）</string>
+    <string name="card_why_big">超过 %1$s 单个文件上限（这个有 %2$s）</string>
     <string name="over_count">第 10 个之后的 %1$d 个文件没有投</string>
     <string name="too_large">%1$s 有 %2$s，你的套餐单个上限是 %3$s</string>
     <string name="clipboard_empty">剪贴板是空的 —— 或者 dropit 没有读剪贴板的权限（设置 → 应用 → dropit → 权限 → 剪贴板）</string>
@@ -123,33 +122,22 @@
     <string name="tip_background_allow">允许后台</string>
     <string name="tip_notify">通知没有打开：看不到投递结果。</string>
 
-    <string name="up_per_day">升级接着发 —— 每天 %1$d 条</string>
-    <string name="up_file_size">升级后发送 —— 单个文件 %1$d MB</string>
-    <string name="up_space">付费版有 %1$s</string>
-    <string name="up_queue">付费版最多积压 %1$d 条</string>
-    <string name="up_devices">付费版放得下 %1$d 台</string>
-    <string name="up_realtime">付费版一直实时</string>
+    <string name="up_per_day">继续投递 · 每天 %1$d 条</string>
+    <string name="up_file_size">发送最大 %1$d MB 的文件</string>
+    <string name="up_space">扩到 %1$s 空间</string>
+    <string name="up_queue">最多可排 %1$d 条</string>
+    <string name="up_devices">最多添加 %1$d 台设备</string>
+    <string name="up_realtime">保留实时送达</string>
     <string name="up_generic">看看付费版给什么</string>
-    <string name="up_uploads">升级接着传 —— 每天上限高得多</string>
-    <string name="up_downloads">升级接着下 —— 每天 %1$d 次</string>
-    <string name="up_kept">付费版保留 %1$d 天</string>
+    <string name="up_uploads">继续上传 · 每天上限更高</string>
+    <string name="up_downloads">继续下载 · 每天 %1$d 次</string>
+    <string name="up_kept">内容保留 %1$d 天</string>
 
-    <string name="ob_step">%1$d / %2$d</string>
-    <string name="ob_step_phone">%1$d / %2$d · %3$s</string>
-    <string name="ob_notify_body">投递结果、别的设备发来的东西，都在通知里。锁屏时只显示「dropit · 新内容」。</string>
     <string name="ob_notify_allow">允许通知</string>
     <string name="ob_not_now">以后再说</string>
-    <string name="ob_background_body">这台手机会暂停不在屏幕上的 App。允许 dropit 不受省电限制：投递不再弹卡片，别的设备发来的东西几秒内就到。</string>
-    <string name="ob_background_allow">去设为「无限制」</string>
-    <string name="ob_background_skip">不用了，投递时弹个小卡片就行</string>
-    <string name="ob_battery">省电策略</string>
-    <string name="ob_battery_need">需要设为「无限制」</string>
-    <string name="ob_battery_unset">未设置</string>
-    <string name="ob_battery_ok">✓ 无限制</string>
     <string name="ob_tile_body">把「发剪贴板」放进控制中心。复制了什么，下拉点它就投。</string>
     <string name="ob_tile_add">加到控制中心</string>
     <string name="ob_tile_added">✓ 已在控制中心</string>
-    <string name="ob_skip">跳过</string>
     <string name="ob_next">下一步</string>
     <string name="ob_done">完成</string>
     <string name="ob_share_row">分享时最上面一排</string>
@@ -176,8 +164,6 @@
     <string name="set_plan_sub">%1$s · 已用 %2$s / %3$s</string>
     <string name="set_version">版本</string>
     <string name="set_source">开源代码</string>
-    <string name="set_sign_out">退出这台手机</string>
-    <string name="set_sign_out_sub">从账号移除这台手机，其他设备不受影响</string>
     <string name="sign_out_confirm">退出</string>
 
     <string name="dev_count">%1$d/%2$d</string>
@@ -185,7 +171,7 @@
     <string name="dev_active">%1$s在线</string>
     <string name="dev_up_to">已收到 #%1$d</string>
     <string name="dev_remove_note">移除后，那台设备再请求时会收到「已从账号移除」，名额立刻空出来。</string>
-    <string name="dev_remove_ask">移除 %1$s？</string>
+    <string name="dev_remove_ask">移除「%1$s」？</string>
     <string name="add_help">在新设备上输入这个码，或用它的相机扫二维码</string>
     <string name="add_install">新设备还没装 dropit？用它扫上面的二维码，或点开链接去安装，装好后输入这 6 位：</string>
     <string name="add_install_share">分享给新设备</string>
@@ -193,15 +179,16 @@
     <string name="add_expired">这个码已过期</string>
     <string name="add_new_code">换一个码</string>
     <string name="add_full">%1$d 个名额都用上了。选一台让新设备替换：</string>
+    <string name="add_change">换一台</string>
     <string name="add_replaces">替换 %1$s</string>
     <string name="add_joined">%1$s 已加入</string>
     <string name="qr_name">配对用的二维码</string>
 
-    <string name="plan_space">暂存空间</string>
+    <string name="plan_space">空间</string>
     <string name="plan_space_used">%1$s / %2$s</string>
     <string name="plan_row_per_day">每天投递</string>
     <string name="plan_row_file">单个文件</string>
-    <string name="plan_row_space">暂存空间</string>
+    <string name="plan_row_space">空间</string>
     <string name="plan_row_kept">投出后保留</string>
     <string name="plan_row_devices">设备</string>
     <string name="plan_row_realtime">实时送达</string>
@@ -235,8 +222,7 @@
     <string name="chip_upgrade_label">升级</string>
     <string name="chip_paid">付费版</string>
     <string name="menu_name">菜单</string>
-    <string name="menu_settings_sub">语言 · 后台接收 · 省电策略</string>
-    <string name="menu_account_sub">设备 · 套餐和用量 · 退出</string>
+    <string name="menu_settings_sub">语言 · 实时送达 · 省电策略</string>
     <string name="menu_about_sub">版本 · 隐私说明</string>
     <string name="card_used">已用 %1$s / %2$s</string>
     <string name="card_upgrade_trial">升级：先试一个月 %1$s</string>
@@ -260,26 +246,27 @@
     <string name="why_file_size">这个文件超过了 %1$d MB 的上限</string>
     <string name="why_file_size_sub">付费版单个文件 %1$d MB。</string>
     <string name="why_space">%1$s 的空间满了</string>
-    <string name="why_space_sub">最早的一条到期后自动腾出。付费版有 %1$s。</string>
-    <string name="why_queue">积压的内容太多了</string>
-    <string name="why_queue_sub">积压的内容到期后自动腾出。付费版最多积压 %1$d 条。</string>
+    <string name="why_space_sub">最早的一条到期后自动腾出。付费版有 %1$s 空间。</string>
+    <string name="why_queue">排队等收的内容太多了</string>
+    <string name="why_queue_sub">排队的内容到期后自动腾出。付费版最多可排 %1$d 条。</string>
     <string name="why_devices">%1$d 个设备名额都用上了</string>
     <string name="why_devices_sub">移除一台不用的设备就能再加；或升级到付费版：%1$d 台。</string>
-    <string name="why_realtime">实时送达的 %1$d 天体验到期了</string>
+    <string name="why_realtime">保留实时送达</string>
+    <string name="why_realtime_over">实时送达的体验结束了</string>
+    <string name="why_realtime_over_sub">付费版把它带回来：别的设备会在内容发出的那一刻收到。</string>
     <string name="why_uploads">今天的文件上传次数用完了</string>
     <string name="why_uploads_sub">付费版的每天上限高得多。</string>
     <string name="why_downloads">今天的下载次数用完了（免费版 %1$d 次）</string>
     <string name="why_downloads_sub">付费版每天 %1$d 次。</string>
     <string name="why_kept">这个文件已经过期了</string>
     <string name="why_kept_sub">免费版投出后保留 %1$d 天，付费版 %2$d 天。过期的找不回来了，但之后的会留得更久。</string>
-    <string name="why_realtime_sub">付费版一直实时。</string>
+    <string name="why_realtime_sub">别的设备会在内容发出的那一刻收到，付费版一直这样。</string>
     <string name="ob_sample_app">dropit · 刚刚</string>
     <string name="ob_sample_title">MacBook 发来一段文字</string>
     <string name="ob_sample_text">北京市朝阳区建国路 88 号…</string>
     <string name="ob_wifi">Wi-Fi</string>
-    <string name="ob_bluetooth">蓝牙</string>
     <string name="ob_tile_manual">这台手机没有自动加上：下拉控制中心 → 编辑 → 把「发剪贴板」拖进去。</string>
-    <string name="sign_out_ask">在这台手机上退出？</string>
+    <string name="sign_out_ask">退出这台设备？</string>
     <string name="loading">正在加载…</string>
     <string name="try_again">再试一次</string>
     <string name="add_replace">替换</string>

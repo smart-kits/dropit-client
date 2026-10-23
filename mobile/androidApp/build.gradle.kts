@@ -81,7 +81,8 @@ android {
         create("qa") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
-            buildConfigField("String", "ENDPOINTS", "\"http://127.0.0.1:8799\"")
+            // The local service by default; `-PdropitEndpoints=<address>` points this QA build somewhere else (the real service, to try it on a phone)
+            buildConfigField("String", "ENDPOINTS", "\"${project.findProperty("dropitEndpoints") ?: "http://127.0.0.1:8799"}\"")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
         }

@@ -35,7 +35,6 @@
     <string name="label_group_phone">This phone</string>
     <string name="label_group_account">Account</string>
     <string name="label_group_about">About</string>
-    <string name="label_group_leave">Leave</string>
     <string name="label_free">Free</string>
     <string name="label_paid">Paid</string>
     <string name="label_scope_full">Full</string>
@@ -43,8 +42,6 @@
     <string name="label_save">SAVE</string>
     <string name="label_try">Try</string>
     <string name="label_try_month">1 MONTH</string>
-    <string name="label_ob_notify">Sent or received —\na notification tells you</string>
-    <string name="label_ob_background">Let dropit\nfinish the job</string>
     <string name="label_ob_tile">Copied something?\nPull down and tap</string>
     <string name="label_ob_faster">This phone\ncan go faster</string>
 
@@ -53,12 +50,12 @@
     <string name="channel_send_desc">Progress and results of what you send</string>
     <string name="channel_receive">Arrivals</string>
     <string name="channel_receive_desc">What your other devices send to this phone</string>
-    <string name="set_receive">Receive in background</string>
+    <string name="set_receive">Real-time delivery</string>
     <string name="set_receive_off">Off: new items show when you open dropit</string>
     <string name="set_receive_unknown">Couldn’t check just now — it tries again when you open dropit</string>
     <string name="set_receive_push">On: new items arrive as a notification, even when dropit is closed</string>
     <string name="set_receive_none">This phone can’t get system push, so new items show when you open dropit</string>
-    <string name="set_receive_notify">Notifications for dropit are off — turn them on to hear about new items</string>
+    <string name="set_receive_notify">Off — notifications for dropit are turned off. Turn them on to hear about new items</string>
 
     <!-- Sending -->
     <string name="sending_n">Sending %1$d of %2$d…</string>
@@ -68,6 +65,8 @@
     <string name="sent_again">Already sent a moment ago %1$s</string>
     <string name="send_failed">Not sent</string>
     <string name="taken">Got it — sending</string>
+    <string name="card_not_sent_more">%1$s (+%2$d more)</string>
+    <string name="card_why_big">Over the %1$s limit for one file (this is %2$s)</string>
     <string name="over_count">%1$d files after the first 10 were not sent</string>
     <string name="too_large">%1$s is %2$s — your plan allows up to %3$s per item</string>
     <string name="clipboard_empty">The clipboard is empty — or dropit isn\'t allowed to read it (Settings → Apps → dropit → Permissions → Clipboard)</string>
@@ -136,34 +135,23 @@
     <string name="tip_notify">Notifications are off: results of what you send won\'t show.</string>
 
     <!-- Upgrade, by what was hit -->
-    <string name="up_per_day">Keep sending with Paid — %1$d a day</string>
-    <string name="up_file_size">Send it with Paid — %1$d MB per file</string>
-    <string name="up_space">Paid holds %1$s</string>
-    <string name="up_queue">Paid keeps up to %1$d items waiting</string>
-    <string name="up_devices">Paid fits %1$d devices</string>
-    <string name="up_realtime">Paid stays real-time</string>
+    <string name="up_per_day">Keep sending · %1$d a day</string>
+    <string name="up_file_size">Send files up to %1$d MB</string>
+    <string name="up_space">Get %1$s of space</string>
+    <string name="up_queue">Queue up to %1$d items</string>
+    <string name="up_devices">Add up to %1$d devices</string>
+    <string name="up_realtime">Keep real-time delivery</string>
     <string name="up_generic">See what Paid gives you</string>
-    <string name="up_uploads">Keep sending files — a higher daily limit</string>
+    <string name="up_uploads">Keep uploading · a higher daily limit</string>
     <string name="up_downloads">Keep downloading — %1$d a day</string>
-    <string name="up_kept">Paid keeps items %1$d days</string>
+    <string name="up_kept">Keep items %1$d days</string>
 
     <!-- Onboarding -->
-    <string name="ob_step">%1$d / %2$d</string>
-    <string name="ob_step_phone">%1$d / %2$d · %3$s</string>
-    <string name="ob_notify_body">Send results and what your other devices send. On the lock screen it only says “dropit · New item”.</string>
     <string name="ob_notify_allow">Allow notifications</string>
     <string name="ob_not_now">Not now</string>
-    <string name="ob_background_body">This phone pauses apps that aren\'t on screen. Let dropit run without battery limits: no card while sending, and what other devices send arrives in seconds.</string>
-    <string name="ob_background_allow">Allow in background</string>
-    <string name="ob_background_skip">No thanks, show a small card while sending</string>
-    <string name="ob_battery">Battery</string>
-    <string name="ob_battery_need">Needs “Unrestricted”</string>
-    <string name="ob_battery_unset">Not set</string>
-    <string name="ob_battery_ok">✓ Unrestricted</string>
     <string name="ob_tile_body">Put “Send clipboard” in quick settings. Copied something? Pull down and tap it.</string>
     <string name="ob_tile_add">Add to quick settings</string>
     <string name="ob_tile_added">✓ In quick settings</string>
-    <string name="ob_skip">Skip</string>
     <string name="ob_next">Next</string>
     <string name="ob_done">Done</string>
     <string name="ob_share_row">Top row of the share sheet</string>
@@ -191,8 +179,6 @@
     <string name="set_plan_sub">%1$s · %2$s of %3$s used</string>
     <string name="set_version">Version</string>
     <string name="set_source">Source code</string>
-    <string name="set_sign_out">Sign out of this phone</string>
-    <string name="set_sign_out_sub">Removes this phone from the account; other devices stay</string>
     <string name="sign_out_confirm">Sign out</string>
 
     <!-- Devices -->
@@ -201,7 +187,7 @@
     <string name="dev_active">Active %1$s</string>
     <string name="dev_up_to">up to #%1$d</string>
     <string name="dev_remove_note">A removed device is told so on its next request, and its slot frees up at once.</string>
-    <string name="dev_remove_ask">Remove %1$s?</string>
+    <string name="dev_remove_ask">Remove “%1$s”?</string>
     <string name="add_help">Type this code on the new device, or scan the QR code with its camera</string>
     <string name="add_install">Not installed on the new device yet? Scan the QR code with it, or open the link to install, then enter these 6 characters:</string>
     <string name="add_install_share">Share to the new device</string>
@@ -209,6 +195,7 @@
     <string name="add_expired">This code has expired</string>
     <string name="add_new_code">New code</string>
     <string name="add_full">All %1$d slots are in use. Pick the device the new one replaces:</string>
+    <string name="add_change">Change</string>
     <string name="add_replaces">Takes the place of %1$s</string>
     <string name="add_joined">%1$s joined</string>
     <string name="qr_name">QR code for pairing</string>
@@ -253,8 +240,7 @@
     <string name="chip_upgrade_label">Upgrade</string>
     <string name="chip_paid">Paid</string>
     <string name="menu_name">Menu</string>
-    <string name="menu_settings_sub">Language · background receiving · battery</string>
-    <string name="menu_account_sub">Devices · plan and usage · sign out</string>
+    <string name="menu_settings_sub">Language · real-time delivery · battery</string>
     <string name="menu_about_sub">Version · privacy</string>
     <string name="card_used">%1$s of %2$s used</string>
     <string name="card_upgrade_trial">Upgrade: try a month for %1$s</string>
@@ -278,27 +264,28 @@
     <string name="why_file_size">That file is over the %1$d MB limit</string>
     <string name="why_file_size_sub">Paid takes files up to %1$d MB.</string>
     <string name="why_space">Your %1$s of space is full</string>
-    <string name="why_space_sub">Space frees up as the oldest item expires. Paid holds %1$s.</string>
+    <string name="why_space_sub">Space frees up as the oldest item expires. Paid has %1$s of space.</string>
     <string name="why_queue">Too many items are waiting</string>
-    <string name="why_queue_sub">Items waiting free up as they expire. Paid keeps up to %1$d.</string>
+    <string name="why_queue_sub">Items waiting free up as they expire. Paid can queue up to %1$d.</string>
     <string name="why_devices">All %1$d device slots are in use</string>
     <string name="why_devices_sub">Remove one you don’t use to add another, or go Paid: %1$d devices.</string>
-    <string name="why_realtime">Your %1$d days of real-time delivery are over</string>
+    <string name="why_realtime">Keep real-time delivery on</string>
+    <string name="why_realtime_over">Real-time delivery has ended</string>
+    <string name="why_realtime_over_sub">Paid brings it back: your other devices get items the moment they’re sent.</string>
     <string name="why_uploads">Today’s file uploads are used up</string>
     <string name="why_uploads_sub">Paid has a much higher daily limit.</string>
     <string name="why_downloads">Today’s downloads are used up (%1$d on Free)</string>
     <string name="why_downloads_sub">Paid downloads %1$d a day.</string>
     <string name="why_kept">That file has expired</string>
     <string name="why_kept_sub">Free keeps items %1$d day, Paid keeps them %2$d days. An expired file can’t be brought back, but the next one will last.</string>
-    <string name="why_realtime_sub">Paid stays real-time.</string>
+    <string name="why_realtime_sub">Your other devices get items the moment they’re sent. Paid keeps it that way.</string>
     <!-- Samples shown in the first-run pictures -->
     <string name="ob_sample_app">dropit · now</string>
     <string name="ob_sample_title">Text from MacBook</string>
     <string name="ob_sample_text">221B Baker Street, London…</string>
     <string name="ob_wifi">Wi-Fi</string>
-    <string name="ob_bluetooth">Bluetooth</string>
     <string name="ob_tile_manual">This phone didn\'t add it by itself: pull down quick settings → edit → drag “Send clipboard” in.</string>
-    <string name="sign_out_ask">Sign out on this phone?</string>
+    <string name="sign_out_ask">Sign out of this device?</string>
     <string name="loading">Loading…</string>
     <string name="try_again">Try again</string>
     <string name="add_replace">Replace</string>

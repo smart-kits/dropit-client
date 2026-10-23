@@ -21,7 +21,6 @@
     <string name="panel_load_failed">没取到设备列表</string>
     <string name="panel_none">还没有别的设备可以收</string>
     <string name="panel_nothing">先写点什么或选个文件，再选设备</string>
-    <string name="panel_choose">选择投给哪些设备</string>
     <string name="state_ticked">已勾选</string>
     <string name="state_not_ticked">未勾选</string>
     <string name="row_received">已收</string>
@@ -52,12 +51,9 @@
     </plurals>
     <string name="auto_copied">已放进剪贴板</string>
 
-    <string name="set_default_to">默认投给</string>
-    <string name="dt_intro">这台手机每次投递，默认发给下面勾上的设备。</string>
     <string name="dt_saved">已保存</string>
-    <string name="dt_none">还没有别的设备可以收。加一台设备后，就能在这里选。</string>
-    <string name="dt_note_all">勾选即保存，只存在这台手机上。全勾上 = 默认投给全部，新加入的设备会自动加入。</string>
-    <string name="dt_note_part">勾选即保存，只存在这台手机上。你选的是一部分：新加入的设备不会自动加入。</string>
+    <string name="dt_note_all">勾选即保存，只对这台手机生效。全部勾上 = 发给所有设备，以后新加的也包含。</string>
+    <string name="dt_note_part">勾选即保存，只对这台手机生效。你选的是一部分：以后新加的设备不会自动包含。</string>
     <string name="dt_note_reset">默认投给的设备都已被移除，已改回投给全部。</string>
     <plurals name="dt_note_removed">
         <item quantity="other">默认投给里有 %1$d 台设备已被移除，已经去掉了。</item>
@@ -77,9 +73,9 @@
     <string name="set_receive_still">现在仍可以打开 dropit，或点下拉里的「取最新」。</string>
     <string name="set_battery_warn">省电策略可能让后台收不到</string>
     <string name="set_battery_warn_sub">点此改成「无限制」</string>
-    <string name="set_auto_clip">电脑发来的文字放进剪贴板</string>
+    <string name="set_auto_clip">收到的文字放进剪贴板</string>
     <string name="set_repull">重新拉取</string>
-    <string name="set_repull_sub">全部 · 最近 50 条 · 最近 3 天</string>
+    <string name="set_repull_sub">%1$s · %2$s</string>
     <string name="set_tile_latest">下拉磁贴「取最新」</string>
     <string name="set_tile_send">下拉磁贴「发剪贴板」</string>
     <string name="set_tile_added">已添加</string>
@@ -96,7 +92,7 @@
     <string name="set_photo_quality_sub">大于 2 MB 的照片才压缩，保留拍摄时间</string>
     <string name="photo_shrink">压缩</string>
     <string name="photo_original">原图</string>
-    <string name="set_devices_manage">管理已加入的设备</string>
+    <string name="set_devices_manage">管理设备、默认投给和退出</string>
     <string name="set_devices_count">%1$d / %2$d</string>
     <string name="set_version_n">版本 %1$s</string>
     <string name="update_ready_sub">有新版本</string>
@@ -105,13 +101,25 @@
     <string name="update_check">检查更新</string>
 
     <!-- 重新拉取 -->
-    <string name="repull_intro">把这台手机以前收到过的内容拉回来。只能拉回服务上还保留着的。</string>
-    <string name="repull_all">全部</string>
-    <string name="repull_all_sub">服务上还保留的所有内容</string>
-    <string name="repull_50">最近 50 条</string>
-    <string name="repull_50_sub">最新的 50 条</string>
-    <string name="repull_3d">最近 3 天</string>
-    <string name="repull_3d_sub">只拉最近三天内收到的</string>
+    <string name="repull_intro">把这台手机以前收到过的内容拉回来：最新的 %1$s，且不早于 %2$s前。只能拉回服务上还保留着的。</string>
+    <plurals name="repull_count">
+        <item quantity="other">%1$d 条</item>
+    </plurals>
+    <plurals name="repull_days">
+        <item quantity="other">%1$d 天</item>
+    </plurals>
+    <string name="repull_count_label">条数</string>
+    <string name="repull_days_label">时间范围</string>
+    <plurals name="repull_latest">
+        <item quantity="other">最新 %1$d 条</item>
+    </plurals>
+    <plurals name="repull_last_days">
+        <item quantity="other">最近 %1$d 天</item>
+    </plurals>
+    <string name="repull_kept_hint">免费版内容保留 %1$s。升级付费版，手机错过的内容最长可以找回 %2$s。</string>
+    <string name="repull_kept_hint_plain">免费版内容保留 %1$s。升级付费版，手机错过的内容可以找回更长的天数。</string>
+    <string name="repull_see_plans">了解付费版</string>
+    <string name="repull_go">拉回</string>
     <string name="repull_none">没有更多可以拉回的</string>
     <plurals name="repull_n">
         <item quantity="other">拉回了 %1$d 项</item>
@@ -139,7 +147,7 @@
 
     <!-- 套餐 -->
     <string name="plan_head">dropit 付费版</string>
-    <string name="plan_tagline">更大、更久、更多设备</string>
+    <string name="plan_tagline">实时送达、更大的文件、更多设备</string>
     <string name="plan_chip_first">首月 %1$s</string>
     <string name="plan_chip_save">省 %1$d%%</string>
     <string name="plan_buy_once">买一年 · %1$s</string>

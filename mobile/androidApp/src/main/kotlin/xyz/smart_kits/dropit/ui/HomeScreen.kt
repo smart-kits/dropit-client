@@ -117,6 +117,10 @@ import xyz.smart_kits.dropit.shared.Targets
 import xyz.smart_kits.dropit.shared.resendAvail
 import xyz.smart_kits.dropit.work.Resend
 import xyz.smart_kits.dropit.shared.Plans
+import xyz.smart_kits.dropit.shared.Pick
+import xyz.smart_kits.dropit.shared.TargetWords
+import xyz.smart_kits.dropit.shared.targetWordsOf
+import xyz.smart_kits.dropit.ui.kit.Dest
 import xyz.smart_kits.dropit.shared.UpgradeFrom
 import xyz.smart_kits.dropit.shared.fileSize
 import xyz.smart_kits.dropit.shared.seqRange
@@ -153,7 +157,7 @@ private data class Picked(val uri: Uri, val name: String, val size: Long?)
 /** How the last send from this screen ended: said in the envelope until the next edit or send */
 private sealed interface Outcome {
     /** [near]: the day's items or the space are close, said once beside the result (see Moments) */
-    data class Sent(val line: String, val extra: List<String>, val near: NearView? = null) : Outcome
+    data class Sent(val line: String, val extra: List<String>, val near: NearView? = null, val problems: List<String> = emptyList(), val big: Boolean = false) : Outcome
     data class Failed(val reasons: List<String>, val upgrade: String?, val why: String?) : Outcome
 }
 
@@ -179,8 +183,6 @@ private fun Context.describe(uri: Uri): Picked {
 @Composable
 fun HomeScreen(
     resumed: Int, offer: ClipOffer?, onOfferDone: (ClipOffer) -> Unit, onSignedOut: () -> Unit, go: (Screen) -> Unit,
-    /** A limit's notification was tapped: the checkout for what was met opens at once ("" when it is not known which) */
-    checkoutWhy: String? = null, onCheckoutStarted: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -190,11 +192,14 @@ fun HomeScreen(
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(0 to 0) }
     var outcome by remember { mutableStateOf<Outcome?>(null) }
+    // The send block turns green for a moment after a send (what it said: "Sent #71")
+    var justSent by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(justSent) { if (justSent != null) { delay(1_500); justSent = null } }
     var me by remember { mutableStateOf<Me?>(null) }
     // A free account, with paying on offer: the places that meet a limit can offer the way past it (its checkout, naming what that plan gives for exactly that limit)
     val upgradeOffered = BuildConfig.PAYMENTS && ctx.app.plans.offering && me?.paid == false
     val letters by ctx.app.letters.all.collectAsState()
-    // A limit that was just met goes straight to the checkout; the pill and the cards open the plans first (see Buy)
+    // Only the renewal and managing a subscription go through here; every other way to upgrade opens the plans page
     val buy = rememberBuy()
     val moments = ctx.app.moments
     // What was sent since the account was last asked, so the notes about a day's items or the space being close are right without asking after every send
@@ -233,12 +238,6 @@ fun HomeScreen(
         cardTick++
         if (!ctx.app.account.signedIn) onSignedOut()
     }
-    // A tap on a limit's notification: the checkout for it (or, where paying is not on offer, nothing more than the plans' words)
-    LaunchedEffect(checkoutWhy) {
-        val w = checkoutWhy ?: return@LaunchedEffect
-        onCheckoutStarted()
-        if (BuildConfig.PAYMENTS && ctx.app.plans.offering) buy.start(UpgradeFrom.SHARE, w.ifEmpty { null }) else go(Screen.Plans(w.ifEmpty { null }, UpgradeFrom.SHARE))
-    }
     // How the last send went stays until the next edit, then goes: it is about what was there
     var settled by remember { mutableStateOf("" to 0) }
     LaunchedEffect(draft.text, files.size) {
@@ -272,16 +271,19 @@ fun HomeScreen(
             val out = info.outputData
             if (info.state == WorkInfo.State.SUCCEEDED) {
                 val said = out.getString(SendWorker.DONE).orEmpty().lines()
+                justSent = said.firstOrNull()
+                val problems = out.getString(SendWorker.PROBLEMS).orEmpty().lines().filter { it.isNotBlank() }
                 val clock = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
                 val seqs = out.getLongArray(SendWorker.SEQS)?.toList().orEmpty()
                 val bytesSent = files.sumOf { it.size ?: 0L }
-                outcome = Outcome.Sent(ctx.getString(R.string.sent_at, seqRange(seqs), clock), said.drop(1))
+                outcome = Outcome.Sent(ctx.getString(R.string.sent_at, seqRange(seqs), clock), said.drop(1), problems = problems, big = out.getBoolean(SendWorker.BIG, false))
                 sent()
                 settled = draft.text.toString() to files.size
                 sentSince += seqs.size; sentBytes += bytesSent
                 var latest = ctx.app.account.me()
-                // Close to a limit by what was sent since the last answer: ask for the real numbers once, so the line beside the result is right
-                if (latest != null && !latest.paid && (itemsTier(latest, ctx.app.store.meAt, System.currentTimeMillis(), sentSince) != Tier.NONE || spaceNear(latest, sentBytes))) {
+                // Close to a limit (or the space more than half used, where the kept answer may be an hour old and what other devices sent
+                // is not counted here) by what was sent since the last answer: ask for the real numbers once, so the line beside the result is right
+                if (latest != null && !latest.paid && (itemsTier(latest, ctx.app.store.meAt, System.currentTimeMillis(), sentSince) != Tier.NONE || spaceNear(latest, sentBytes) || spaceHalf(latest, sentBytes))) {
                     val fresh = ctx.app.account.me(fresh = true)
                     if (fresh != null) { latest = fresh; sentSince = 0; sentBytes = 0 }
                 }
@@ -430,29 +432,39 @@ fun HomeScreen(
                         }
                     }
                     me == null -> Spacer(Modifier.weight(1f))
+                    // Paid, or free with no upgrade on offer (a store build): the same line, and it opens the plan and usage page. A small
+                    // arrow says it can be pressed; the touch area is 48 dp high though the pill looks 32
                     else -> me?.let {
-                        Txt(
-                            stringResource(R.string.plan_line, stringResource(if (it.paid) R.string.label_paid else R.string.label_free), it.devicesUsed, it.devicesLimit),
-                            sans(12.5.sp).copy(fontFeatureSettings = "tnum"), c.dim, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            PlanLine(
+                                stringResource(R.string.plan_line, stringResource(if (it.paid) R.string.label_paid else R.string.label_free), it.devicesUsed, it.devicesLimit),
+                                action = stringResource(R.string.label_plan),
+                            ) { go(Screen.Plans(from = UpgradeFrom.PILL)) }
+                        }
                     }
                 }
                 Spacer(Modifier.width(12.dp))     // the pill and the gear are two targets: far enough apart that one finger picks one
                 LinkAction({ go(Screen.Settings) }, Modifier.offset(x = 10.dp), icon = Icons.Gear, name = stringResource(R.string.label_settings), iconSize = 26.dp, minSize = 48.dp)
             }
             buy.error?.let { ErrorLine(errorText(it), Modifier.padding(bottom = 10.dp)) }
-            // One note about the plan at a time, only when something is close or has just changed (see Moments)
+            // One note at the top at a time, in this order: a limit met / the paid plan ending / the trial / a limit close (the card, see
+            // Moments), then what changed about the devices, then what was just copied, then setup left undone. The rest wait until
+            // the one showing is put away, so the envelope is never pushed down the screen by a pile of them
+            val peersNote by ctx.app.peers.note.collectAsState()
+            val cardShown = card != null && me != null
+            val noteShown = !cardShown && targetsNoteText(peersNote) != null
+            val offerShown = !cardShown && !noteShown && offer != null
             card?.let { k ->
                 me?.let { m ->
                     HomeMomentCard(k, m, momentsNow, onDismiss = { moments.dismiss(k); cardTick++ }, go = go, buy = buy, modifier = Modifier.padding(bottom = 10.dp))
                 }
             }
-            TargetsNote()
+            if (noteShown) TargetsNote(peersNote)
 
-            SetupTips(resumed)
+            SetupTips(resumed, show = !cardShown && !noteShown && !offerShown)
 
             // Copied something before opening dropit: one tap sends it. A quiet slip; the stamp stays the main button
-            if (offer != null) {
+            if (offerShown && offer != null) {
                 Column(
                     Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(3.dp)).background(c.paper).border(1.dp, c.line, RoundedCornerShape(3.dp))
                         .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 2.dp),
@@ -481,12 +493,17 @@ fun HomeScreen(
                     // Sent: the envelope empties, ready for the next one
                     send(Inbound(text = draft.text.toString(), streams = files.map { it.uri.toString() }), to) { draft.clearText(); files.clear() }
                 }
-                // The place to write, and the send button beside it, level with the bottom of it: as the writing grows (up to six lines),
-                // the button stays the height of one line
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                // The place to write (108 dp high at least, up to about six lines and then it scrolls inside) and the send block beside it, the
+                // same height: the block is always at the right, so the writing never gives up width to a button that moved
+                val pickNow = Pick.forSending(receivers, defaultTo)
+                val dest = if (receivers.isEmpty()) null else Dest(
+                    if (pickNow.isAll) TargetWords.All else targetWordsOf(pickNow.ticked.toList(), Targets.of(pickNow.ticked.toList(), receivers).names, stringResource(R.string.target_sep)),
+                    pickNow.count,
+                )
+                ComposeRow(8.dp, Modifier.fillMaxWidth(), field = {
                     BasicTextField(
                         state = draft,
-                        modifier = Modifier.weight(1f).contentReceiver(
+                        modifier = Modifier.fillMaxWidth().contentReceiver(
                             // A picture pasted or dropped in from the keyboard becomes a file to send
                             ReceiveContentListener { content ->
                                 if (!content.hasMediaType(MediaType.Image)) content
@@ -497,29 +514,31 @@ fun HomeScreen(
                         cursorBrush = SolidColor(c.red),
                         lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6),
                         decorator = { field ->
-                            Row(Modifier.fillMaxWidth().dashed(c.line).heightIn(min = 56.dp).padding(start = 12.dp, end = 2.dp), verticalAlignment = Alignment.Bottom) {
-                                Box(Modifier.weight(1f).padding(vertical = 17.dp)) {
-                                    if (draft.text.isEmpty()) Txt(stringResource(R.string.compose_hint), sans(15.sp, lineHeight = 22.5.sp), c.dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(Modifier.fillMaxWidth().dashed(c.line).heightIn(min = 108.dp).padding(start = 12.dp), verticalAlignment = Alignment.Top) {
+                                Box(Modifier.weight(1f).padding(vertical = 15.dp)) {
+                                    if (draft.text.isEmpty()) Txt(stringResource(R.string.compose_hint), sans(15.sp, lineHeight = 22.5.sp), c.dim, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     field()
                                 }
-                                // Attaching sits inside the place to write, where the eye already is
-                                LinkAction({ pick.launch(arrayOf("*/*")) }, icon = Icons.Clip, name = stringResource(R.string.attach), iconSize = 22.dp, minSize = 52.dp, enabled = !busy)
+                                // Attaching sits inside the place to write, at its bottom corner, where the eye already is
+                                LinkAction({ pick.launch(arrayOf("*/*")) }, Modifier.align(Alignment.Bottom), icon = Icons.Clip, name = stringResource(R.string.attach), iconSize = 22.dp, minSize = 48.dp, enabled = !busy)
                             }
                         },
                     )
+                }, button = {
                     SplitSend(
-                        stringResource(if (busy) R.string.label_sending else R.string.label_send).uppercase(), busy, chooser = receivers.isNotEmpty(),
+                        busy, dest,
                         onSend = { sendNow(null) },
                         onChoose = { sheetError = null; sheet = SheetMode.Send },
-                        partial = defaultTo.size.takeIf { it > 0 && receivers.isNotEmpty() },
+                        sentText = justSent,
+                        progress = if (busy) (if (progress.second > 1) progress.first.coerceAtLeast(0).toFloat() / progress.second else -1f) else null,
                     )
-                }
+                })
                 // The panel for this one send (see TargetSheet): the default is ticked; nothing goes until its button is pressed
                 if (sheet == SheetMode.Send) TargetSheet(
                     SheetMode.Send, peerState, receivers, defaultTo, busy = false, error = null,
                     nothingToSend = nothing,
                     onSubmit = { targets -> sheet = null; sendNow(targets) },
-                    onOpenDefault = { go(Screen.DefaultTargets) },
+                    onOpenDefault = { go(Screen.Devices) },
                     onRetryLoad = { scope.launch { peers.refresh() } },
                     onDismiss = { sheet = null },
                 )
@@ -547,12 +566,23 @@ fun HomeScreen(
                     is Outcome.Sent -> {
                         Txt(o.line, sans(12.sp, FontWeight.SemiBold), c.navy, Modifier.padding(top = 6.dp))
                         for (x in o.extra) Txt(x, sans(12.sp, lineHeight = 17.sp), c.dim)
+                        // What did not go is not part of the receipt above: its own red card, with the way past a size limit when there is one
+                        if (o.problems.isNotEmpty()) NotSent(o.problems, big = o.big && upgradeOffered, onUpgrade = { go(Screen.Plans("file_size", UpgradeFrom.WALL)) }, opening = false, Modifier.padding(top = 10.dp))
                         o.near?.let { NearNote(it, momentsNow, go, Modifier.padding(top = 2.dp)) }
                     }
                     is Outcome.Failed -> {
                         Returned(o.reasons, Modifier.padding(top = 12.dp))
+                        if (o.upgrade != null && o.why == "file_size" && BuildConfig.PAYMENTS && LocalContext.current.app.plans.offering) {
+                            Txt(stringResource(R.string.too_large_paid, ctx.app.plans.paid.fileMB), sans(13.sp, lineHeight = 19.sp), c.dim, Modifier.padding(top = 8.dp))
+                        }
+                        // What was written is still here. Where the devices it was addressed to are gone, one tap sends it to everyone this time (dark,
+                        // filled); any other failure has only "Try again". A limit a paid plan lifts has its own button below
+                        if (o.upgrade == null) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (o.why == "target") Btn(stringResource(R.string.action_send_all), { sendNow(Targets.ALL) }, Modifier.weight(1f), solid = true, enabled = !busy)
+                            Btn(stringResource(R.string.action_retry), { sendNow(null) }, Modifier.weight(1f), enabled = !busy)
+                        }
                         if (o.upgrade != null && BuildConfig.PAYMENTS && LocalContext.current.app.plans.offering) {
-                            Btn(upgradeWord(o.why), { buy.start(UpgradeFrom.WALL, o.why) }, Modifier.fillMaxWidth().padding(top = 10.dp), solid = true, loading = buy.opening != null)
+                            Btn(upgradeWord(o.why), { go(Screen.Plans(o.why, UpgradeFrom.WALL)) }, Modifier.fillMaxWidth().padding(top = 10.dp), solid = true)
                         }
                     }
                     null -> {}
@@ -573,7 +603,7 @@ fun HomeScreen(
             Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 for (l in shown) key(l.id) {
                     LetterRow(
-                        l, now, ops, upgrade = if (upgradeOffered) { why -> buy.start(UpgradeFrom.WALL, why) } else null,
+                        l, now, ops, upgrade = if (upgradeOffered) { why -> go(Screen.Plans(why, UpgradeFrom.WALL)) } else null,
                         keptNote = l.id == keptNoteId,
                         picked = if (selecting) l.id in picked else null,
                         peers = peerState.peers, selfId = selfId,
@@ -658,18 +688,54 @@ internal fun upgradeWord(why: String?): String {
     }
 }
 
+/** The writing box and the send block: side by side, the block as tall as the box (the taller of the two sets the height) */
+@Composable
+private fun ComposeRow(gap: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier, field: @Composable () -> Unit, button: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content = { field(); button() }, modifier = modifier) { ms, c ->
+        val g = gap.roundToPx()
+        val w = c.maxWidth
+        // The block's width is its own; the box has the rest
+        val bw = ms[1].maxIntrinsicWidth(0)
+        val fw = (w - bw - g).coerceAtLeast(0)
+        val f = ms[0].measure(androidx.compose.ui.unit.Constraints(fw, fw))
+        val h = f.height
+        val b = ms[1].measure(androidx.compose.ui.unit.Constraints(minWidth = 0, maxWidth = bw.coerceAtLeast(0), minHeight = h, maxHeight = h))
+        layout(w, h) { f.place(0, 0); b.place(w - b.width, 0) }
+    }
+}
+
+/** What of a send did not go (files over the limit, unreadable ones), apart from the receipt of what did: a red card of its own */
+@Composable
+private fun NotSent(lines: List<String>, big: Boolean, onUpgrade: () -> Unit, opening: Boolean, modifier: Modifier = Modifier) {
+    val c = ink
+    val shape = RoundedCornerShape(10.dp)
+    Column(modifier.fillMaxWidth().clip(shape).background(c.red.copy(alpha = .08f)).border(1.dp, c.red.copy(alpha = .5f), shape).padding(12.dp)) {
+        for (x in lines) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+            Glyph(Icons.Alert, c.red, Modifier.padding(top = 2.dp), size = 16.dp)
+            Txt(x, sans(13.sp, lineHeight = 19.sp), c.ink, Modifier.weight(1f))
+        }
+        if (big) {
+            Txt(stringResource(R.string.too_large_paid, LocalContext.current.app.plans.paid.fileMB), sans(12.5.sp, lineHeight = 18.sp), c.dim, Modifier.padding(top = 8.dp))
+            Btn(upgradeWord("file_size"), onUpgrade, Modifier.fillMaxWidth().padding(top = 8.dp), solid = true, loading = opening)
+        }
+    }
+}
+
 /** Something about the default devices that the person has not been told yet: some were removed, or all of them were */
 @Composable
-private fun TargetsNote() {
+private fun TargetsNote(note: String?) {
     val ctx = LocalContext.current
-    val note by ctx.app.peers.note.collectAsState()
-    val n = note ?: return
-    val text = when {
-        n == "reset" -> stringResource(R.string.dt_note_reset)
-        n.startsWith("removed:") -> n.removePrefix("removed:").toIntOrNull().let { k -> pluralStringResource(R.plurals.dt_note_removed, k ?: 1, k ?: 1) }
-        else -> return
-    }
+    val text = targetsNoteText(note) ?: return
     Tip(text, Modifier.padding(bottom = 10.dp), onDismiss = { ctx.app.peers.noteRead() })
+}
+
+/** The words for what changed about the devices a send goes to; null when there is nothing to say */
+@Composable
+private fun targetsNoteText(n: String?): String? = when {
+    n == null -> null
+    n == "reset" -> stringResource(R.string.dt_note_reset)
+    n.startsWith("removed:") -> n.removePrefix("removed:").toIntOrNull().let { k -> pluralStringResource(R.plurals.dt_note_removed, k ?: 1, k ?: 1) }
+    else -> null
 }
 
 /**
@@ -677,7 +743,7 @@ private fun TargetsNote() {
  * not let an app change these itself.
  */
 @Composable
-private fun SetupTips(resumed: Int) {
+private fun SetupTips(resumed: Int, show: Boolean = true) {
     val ctx = LocalContext.current
     val store = ctx.app.store
     var tileAdded by remember(resumed) { mutableStateOf(store.tileAdded) }
@@ -687,7 +753,9 @@ private fun SetupTips(resumed: Int) {
     val background = remember(resumed) { ctx.app.runsInBackground }
     var backgroundHidden by remember { mutableStateOf(store.tipHidden("background")) }
 
-    if (!tileAdded && !tileHidden) {
+    // One at a time: the quick-settings tile first, then running in the background
+    val tileTip = show && !tileAdded && !tileHidden
+    if (tileTip) {
         Tip(
             stringResource(if (tileManual) R.string.tip_tile_manual else R.string.tip_tile), Modifier.padding(bottom = 10.dp),
             action = if (tileManual) null else stringResource(R.string.tip_tile_add),
@@ -703,7 +771,7 @@ private fun SetupTips(resumed: Int) {
             onDismiss = { store.hideTip("tile"); tileHidden = true },
         )
     }
-    if (!background && !backgroundHidden) {
+    if (show && !tileTip && !background && !backgroundHidden) {
         Tip(
             stringResource(R.string.tip_background), Modifier.padding(bottom = 10.dp),
             action = stringResource(R.string.tip_background_allow), onAction = { ctx.app.askRunInBackground(ctx) },
@@ -784,6 +852,26 @@ internal fun android.content.ClipDescription.isSensitive(): Boolean =
 /** Text for the clipboard that the system keeps out of its on-screen preview (Android 13 and newer): what arrived is the person's own, not for the screen to show */
 internal fun sensitiveClip(text: String): ClipData = ClipData.newPlainText("dropit", text).also { clip ->
     if (android.os.Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true) }
+}
+
+/** The plan and device count at the top of the home screen, as a quiet pill with an arrow: it opens the plan and usage page */
+@Composable
+private fun PlanLine(text: String, action: String, onClick: () -> Unit) {
+    val c = ink
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        Modifier.defaultMinSize(minHeight = 48.dp).clip(RoundedCornerShape(24.dp)).clickable(role = Role.Button, onClickLabel = action, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier.clip(shape).background(c.tile).defaultMinSize(minHeight = 32.dp).padding(start = 12.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Txt(text, sans(12.5.sp, FontWeight.SemiBold).copy(fontFeatureSettings = "tnum"), c.navy, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Glyph(Icons.Chevron, c.navy, size = 14.dp)
+        }
+    }
 }
 
 /**

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bg_channel">后台接收</string>
+    <string name="bg_channel">实时送达</string>
     <string name="bg_channel_desc">dropit 保持连接、等新内容时，通知栏里的一行安静提示</string>
     <string name="bg_receiving">dropit 正在接收</string>
 

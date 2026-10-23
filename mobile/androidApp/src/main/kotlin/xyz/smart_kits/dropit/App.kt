@@ -113,7 +113,7 @@ class App : Application() {
             }
         }
         client = DropitClient(http, store, BuildConfig.ENDPOINTS.split(','), trace = { if (BuildConfig.DEBUG) android.util.Log.i("dropit-net", it) })
-        account = Account(this, store, client)
+        account = Account(this, store, client, onOtherAccount = { letters.clear(); peers.reset() })
         plans = PlansRepo(store, client)
         peers = Peers(store, client)
         letters = LetterBox(this)

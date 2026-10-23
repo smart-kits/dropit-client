@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,7 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -76,6 +77,8 @@ import xyz.smart_kits.dropit.ui.kit.Cta
 import xyz.smart_kits.dropit.ui.kit.dashed
 import xyz.smart_kits.dropit.ui.kit.Envelope
 import xyz.smart_kits.dropit.ui.kit.Glyph
+import xyz.smart_kits.dropit.ui.kit.IconTile
+import xyz.smart_kits.dropit.ui.kit.Stripe
 import xyz.smart_kits.dropit.ui.kit.Icons
 import xyz.smart_kits.dropit.ui.kit.ErrorLine
 import xyz.smart_kits.dropit.ui.kit.Tip
@@ -107,7 +110,7 @@ private fun DeviceFullHint(help: DeviceFullHelp) {
     val url = help.upgradeUrl
     Txt(
         if (url != null) stringResource(R.string.mo_w4_join_up, ctx.app.plans.paid.devices) else stringResource(R.string.mo_w4_join),
-        sans(13.sp, lineHeight = 19.sp), c.dim, Modifier.padding(top = 6.dp),
+        sans(14.sp, FontWeight.SemiBold, lineHeight = 20.sp), c.red, Modifier.padding(top = 10.dp),
     )
     if (url != null) Txt(
         upgradeWord("devices"), sans(13.sp, FontWeight.Bold).copy(textDecoration = TextDecoration.Underline), c.navy,
@@ -166,29 +169,40 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
 
     Column(
         Modifier.fillMaxSize().background(c.ground).safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 40.dp, bottom = 24.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 32.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // The mark: a striped envelope, the name, and what it is for
-        Envelope(Modifier.size(width = 140.dp, height = 84.dp), stripe = xyz.smart_kits.dropit.ui.kit.Stripe.Card, padding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
-            Box(Modifier.fillMaxSize().drawBehind {
-                val w = size.width; val h = size.height
-                val line = androidx.compose.ui.graphics.Path().apply { moveTo(w * .08f, h * .16f); lineTo(w * .5f, h * .66f); lineTo(w * .92f, h * .16f) }
-                drawPath(line, c.line, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-            })
+        // The mark: this phone, the envelope with the logo on it, and the other device it goes to; the name and what it is for
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconTile(Icons.Phone, size = 48.dp)
+            Glyph(Icons.Chevron, c.line, size = 16.dp)
+            Envelope(Modifier.size(width = 136.dp, height = 88.dp).rotate(-3f), stripe = Stripe.Card, padding = PaddingValues(0.dp)) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.ic_logo), contentDescription = null, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)))
+                }
+            }
+            Glyph(Icons.Chevron, c.line, size = 16.dp)
+            IconTile(Icons.Laptop, size = 48.dp)
         }
-        Txt("dropit", label(46.sp, tracking = (-.01).em), c.ink, Modifier.padding(top = 26.dp).semantics { heading() })
-        Txt(stringResource(R.string.join_tagline), sans(16.sp, lineHeight = 22.sp), c.dim, Modifier.padding(top = 4.dp, bottom = 30.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+        Txt("dropit", label(44.sp, tracking = (-.01).em), c.ink, Modifier.padding(top = 22.dp).semantics { heading() })
+        Txt(stringResource(R.string.join_tagline), sans(16.sp, lineHeight = 22.sp), c.dim, Modifier.padding(top = 2.dp, bottom = 26.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+        // Taken off from another device (or replaced): said once here, in the service's own words, until the next join
+        val lost = remember(resumed) { ctx.app.store.lostKey }
+        if (lost != null) ErrorLine(ctx.app.strings.render(xyz.smart_kits.dropit.shared.Message(lost)), Modifier.padding(bottom = 14.dp))
         // Read again each time the screen comes back: a share may have just been held for after joining
         val waiting = remember(resumed) { ctx.app.store.waiting.size }
         if (waiting > 0) {
             Tip(pluralStringResource(R.plurals.join_waiting, waiting, waiting), Modifier.padding(bottom = 12.dp))
         }
+        // Joining an account that exists, said first and kept short: where the code is, then the quick way (scan), then the other way (type)
+        Txt(stringResource(R.string.join_existing), sans(17.sp, FontWeight.Bold, lineHeight = 22.sp), c.ink, Modifier.fillMaxWidth().padding(start = 2.dp, bottom = 4.dp).semantics { heading() })
+        Txt(stringResource(R.string.join_help), sans(13.5.sp, lineHeight = 19.5.sp), c.dim, Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, bottom = 14.dp))
+        // Scanning is the quick way on a phone: it is the main button
+        Cta(stringResource(R.string.scan), onScan, Modifier.padding(bottom = 14.dp), icon = Icons.Scan)
         xyz.smart_kits.dropit.ui.kit.Panel {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Txt(stringResource(R.string.join_existing), sans(15.sp, FontWeight.Bold, lineHeight = 20.sp), c.ink, Modifier.padding(bottom = 12.dp))
+                Txt(stringResource(R.string.join_or_type), sans(14.sp, FontWeight.SemiBold, lineHeight = 19.sp), c.dim, Modifier.padding(bottom = 10.dp))
                 var focused by remember { mutableStateOf(false) }
-                val scanName = stringResource(R.string.scan)
                 BasicTextField(
                     value = input,
                     // Kept exactly as the keyboard typed it: rewriting the text while the keyboard is still composing
@@ -207,26 +221,23 @@ fun JoinScreen(code: String?, resumed: Int, joinNow: Boolean = false, onJoined: 
                     keyboardActions = KeyboardActions(onGo = { if (typed.length == 6 && !busy) run { ctx.app.account.join(typed) } }),
                     decorationBox = { field ->
                         Row(
-                            Modifier.height(52.dp).dashed(if (focused) c.navy else c.line, radius = 8.dp).padding(start = 14.dp, end = 2.dp),
+                            Modifier.height(52.dp).dashed(if (focused) c.navy else c.line, radius = 8.dp).padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                                 if (input.isEmpty()) Txt(stringResource(R.string.join_code), sans(16.sp), c.dim, maxLines = 1)
                                 field()
                             }
-                            // Scanning is the quick way on a phone: it sits inside the field, where the eye already is
-                            Box(
-                                Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onScan).semantics { contentDescription = scanName },
-                                contentAlignment = Alignment.Center,
-                            ) { Glyph(Icons.Scan, c.dim, size = 24.dp) }
                         }
                     },
                 )
-                Cta(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, Modifier.padding(top = 12.dp), enabled = typed.length == 6, loading = busy && errorAt == "join")
+                Cta(stringResource(R.string.join), { run { ctx.app.account.join(typed) } }, Modifier.padding(top = 12.dp), enabled = typed.length == 6, loading = busy && errorAt == "join", ghost = typed.length == 6)
                 if (busy && slow && !preparing && errorAt == "join") Txt(stringResource(R.string.slow_net), sans(12.5.sp), c.dim, Modifier.padding(top = 8.dp))
-                if (errorAt == "join") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 10.dp)) }
-                // Turned away because every place is taken: what to do about it, and (only when the service gave one) the way to pay
-                if (errorAt == "join") deviceFullHelp(error, BuildConfig.PAYMENTS && ctx.app.plans.offering)?.let { help -> DeviceFullHint(help) }
+                // Turned away because every place is taken: one whole sentence of what to do about it and (only when the service gave one)
+                // the way to pay, instead of the service's half sentence above it
+                val full = if (errorAt == "join") deviceFullHelp(error, BuildConfig.PAYMENTS && ctx.app.plans.offering) else null
+                if (full == null && errorAt == "join") error?.let { ErrorLine(errorText(it), Modifier.padding(top = 10.dp)) }
+                full?.let { help -> DeviceFullHint(help) }
             }
         }
         Spacer(Modifier.height(14.dp))

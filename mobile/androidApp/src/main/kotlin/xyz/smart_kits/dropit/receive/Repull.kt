@@ -5,9 +5,9 @@ import xyz.smart_kits.dropit.retentionMs
 import xyz.smart_kits.dropit.shared.ApiError
 import xyz.smart_kits.dropit.shared.Failure
 import xyz.smart_kits.dropit.shared.OfflineError
-import xyz.smart_kits.dropit.shared.RepullSpan
+import xyz.smart_kits.dropit.shared.RepullPlan
 import xyz.smart_kits.dropit.shared.arrive
-import xyz.smart_kits.dropit.shared.keepForSpan
+import xyz.smart_kits.dropit.shared.keepForPlan
 import xyz.smart_kits.dropit.shared.pullAll
 import xyz.smart_kits.dropit.shared.repullReset
 import xyz.smart_kits.dropit.shared.repullWaitMs
@@ -16,7 +16,8 @@ import kotlinx.serialization.json.longOrNull
 
 /**
  * "Pull again": the person asked for what this phone already had to come back (it was cleared from the list, or the list was lost).
- * The place in the line is moved back at the service, everything after it is read again, and what is not in the list yet goes in
+ * The place in the line is moved back to just before the newest N items at the service, they are read again, those within the days of the
+ * plan are kept (so: the newest N, and none older than D days), and what is not in the list yet goes in
  * without a notice (the person asked; the list shows it). Anything already in the list stays as it is. At most once a minute. It only
  * brings back what the service still keeps.
  */
@@ -30,7 +31,7 @@ class Repull(private val app: App) {
         data object Failed : Result
     }
 
-    suspend fun run(span: RepullSpan): Result {
+    suspend fun run(plan: RepullPlan): Result {
         val store = app.store
         if (store.tokenNow() == null) return Result.Failed
         val now = System.currentTimeMillis()
@@ -38,16 +39,16 @@ class Repull(private val app: App) {
         if (wait > 0) return Result.Wait(((wait + 999) / 1000).toInt())
         store.repullAt = now
         return try {
-            val to = app.client.send(repullReset(span)).data["to_seq"]?.jsonPrimitive?.longOrNull ?: 0L
+            val to = app.client.send(repullReset(plan)).data["to_seq"]?.jsonPrimitive?.longOrNull ?: 0L
             val page = pullAll(to, "repull", app.client::send)
-            val items = keepForSpan(page.items, span, now)
+            val items = keepForPlan(page.items, plan, now)
             // Nothing downloads by itself, and what the list already has is left as it is
             val arrival = arrive(items, store.deviceId, app.letters.all.value, store.cursor, unmetered = false, retentionMs = app.retentionMs(), cellularMax = -1)
             arrival.letters.forEach(app.letters::add)
             store.cursor = maxOf(store.cursor, arrival.cursor, page.next)
             Result.Done(arrival.letters.size)
         } catch (e: ApiError) {
-            if (e.failure == Failure.AUTH_LOST) store.forget()
+            if (e.failure == Failure.AUTH_LOST) store.forget(e.sentence().key)
             store.repullAt = 0
             Result.Failed
         } catch (e: OfflineError) {

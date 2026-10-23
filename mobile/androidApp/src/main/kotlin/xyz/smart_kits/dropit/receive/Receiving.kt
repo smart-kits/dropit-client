@@ -350,7 +350,7 @@ class Receiving(
             val page = try {
                 pullAll(store.cursor, why, client::send)
             } catch (e: ApiError) {
-                if (e.failure == Failure.AUTH_LOST) store.forget()
+                if (e.failure == Failure.AUTH_LOST) store.forget(e.sentence().key)
                 return@withLock Pulled(failed = true, retry = e.failure == Failure.UNAVAILABLE)
             } catch (e: OfflineError) {
                 return@withLock Pulled(failed = true, retry = true)

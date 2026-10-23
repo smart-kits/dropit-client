@@ -194,7 +194,7 @@ class Store(context: Context) : ClientStore {
         e.apply()
     }
 
-    /** Whether the first-run steps (notifications, background, quick settings, gestures) were gone through */
+    /** Whether the first-run guide (what it is, how to send, notifications, background, quick settings, gestures) was gone through or skipped */
     var onboarded: Boolean
         get() = prefs.getBoolean("onboarded", false)
         set(v) = prefs.edit().putBoolean("onboarded", v).apply()
@@ -202,25 +202,31 @@ class Store(context: Context) : ClientStore {
     override suspend fun endpoints(): List<String>? = prefs.getString(ENDPOINTS, null)?.split('\n')?.filter { it.isNotBlank() }
     override suspend fun setEndpoints(list: List<String>) { prefs.edit().putString(ENDPOINTS, list.joinToString("\n")).apply() }
 
+    /** The sentence's key for why this phone was signed out from outside; null when it left by itself or was never joined */
+    val lostKey: String? get() = prefs.getString(LOST, null)
+
     fun signedIn(token: String, deviceId: String) {
         forgetMomentState()
-        prefs.edit().putString(TOKEN, Vault.seal(token)).putString(DEVICE_ID, deviceId).remove(PREVIOUS).remove(ME).remove(CURSOR).remove(PUSH_TOKEN).remove(RECEIVE_STATE).remove(DOWNLOAD_LIMIT_UNTIL).remove(DEFAULT_TO).remove(PEERS).remove(TARGETS_NOTE).apply()
+        prefs.edit().putString(TOKEN, Vault.seal(token)).putString(DEVICE_ID, deviceId).remove(PREVIOUS).remove(LOST).remove(ME).remove(CURSOR).remove(PUSH_TOKEN).remove(RECEIVE_STATE).remove(DOWNLOAD_LIMIT_UNTIL).remove(DEFAULT_TO).remove(PEERS).remove(TARGETS_NOTE).apply()
     }
 
     /**
      * Stop using this phone's key. It is kept as `previous_token` and sent with the next join, so the service
      * knows exactly which device this was and lets the new join take its place instead of using another slot.
      */
-    fun forget() {
+    fun forget(lostKey: String? = null) {
         val old = tokenNow()
         forgetMomentState()
         prefs.edit().remove(TOKEN).remove(DEVICE_ID).remove(ME).remove(CURSOR).remove(PUSH_TOKEN).remove(RECEIVE_STATE).remove(DOWNLOAD_LIMIT_UNTIL).remove(DEFAULT_TO).remove(PEERS).remove(TARGETS_NOTE).apply()
+        // Taken off by another device (or the service no longer knows this phone): said on the join page that follows
+        if (lostKey != null) prefs.edit().putString(LOST, lostKey).apply()
         if (old != null) previousToken = old
     }
 
     private companion object {
         const val TOKEN = "token"
         const val PREVIOUS = "previous_token"
+        const val LOST = "lost_key"
         const val DEVICE_ID = "device_id"
         const val CLIP_SEEN = "clip_seen"
         const val WAITING = "waiting"

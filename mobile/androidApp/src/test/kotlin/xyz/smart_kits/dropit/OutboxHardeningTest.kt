@@ -47,8 +47,9 @@ class OutboxHardeningTest {
 
     // ── what is held when it is copied in ──
     @Test fun `H-O4 a file that was listed but not copied says so and the rest of the job reads back as written`() {
+        // The time is given: left to its default it is read from the clock when the job is made and again when it is read back, a millisecond apart
         val job = Job(
-            id = "j", files = listOf(
+            id = "j", createdAt = 1_700_000_000_000L, files = listOf(
                 HeldFile("/o/j/f0", "a.jpg", "image/jpeg", 10),
                 HeldFile("", "big.mov", "video/quicktime", 900_000_000),
                 HeldFile("", null, null, 0),

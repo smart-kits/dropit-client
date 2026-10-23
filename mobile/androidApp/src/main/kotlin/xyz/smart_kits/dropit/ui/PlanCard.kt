@@ -94,7 +94,12 @@ fun PlanCard(go: (Screen) -> Unit, modifier: Modifier = Modifier, buy: Buy = rem
                     LineKind.P5 -> stringResource(R.string.mo_p5)
                     null -> null
                 }
-                text?.let { Txt(it, sans(12.5.sp, lineHeight = 17.5.sp).copy(fontFeatureSettings = "tnum"), c.dim, Modifier.padding(top = 3.dp)) }
+                // The trial's days are a way in as well: the line opens the plans (where paying is on offer), on the part about real-time delivery
+                if (text != null && note?.kind == LineKind.T0 && canBuy) {
+                    LinkAction(
+                        { go(Screen.Plans(why = "realtime", from = UpgradeFrom.SETTINGS)) }, Modifier.offset(x = (-6).dp), text = text, color = c.navy,
+                    )
+                } else text?.let { Txt(it, sans(12.5.sp, lineHeight = 17.5.sp).copy(fontFeatureSettings = "tnum"), c.dim, Modifier.padding(top = 3.dp)) }
                 // Manage: where a subscription is cancelled; only an account that has one to manage, and only where this build pays at all
                 if (m.paid && m.canManage && BuildConfig.PAYMENTS && (note?.kind == LineKind.P1 || note?.kind == LineKind.P1B)) {
                     LinkAction(

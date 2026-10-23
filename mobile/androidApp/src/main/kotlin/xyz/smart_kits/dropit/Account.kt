@@ -91,7 +91,11 @@ data class Me(
 /** How long leaving waits for the service to take this device off before leaving anyway */
 private const val SIGN_OUT_WAIT_MS = 5_000L
 
-class Account(private val context: Context, private val store: Store, private val client: DropitClient) {
+class Account(
+    private val context: Context, private val store: Store, private val client: DropitClient,
+    /** The account on this phone is not (known to be) the one before it: what was kept of the old one (letters, devices) goes */
+    private val onOtherAccount: () -> Unit = {},
+) {
     val signedIn: Boolean get() = store.tokenNow() != null
 
     /** The phone's own name ("Redmi K70"), or maker and model */
@@ -106,13 +110,16 @@ class Account(private val context: Context, private val store: Store, private va
         deviceKey("android", listOf(id, Build.MANUFACTURER, Build.MODEL))
     }.getOrNull()
 
-    suspend fun join(code: String) = signIn(
-        client.send(Requests.claim(code.trim().uppercase(), deviceName(), fingerprint(), store.previousToken)),
-    )
+    suspend fun join(code: String): Unit {
+        // This phone's old key is sent along: when the service takes it as this device's place, it is the same account again and what
+        // was kept stays. With no old key (never joined, or left by hand and cleaned), nothing ties the new account to the old one
+        val continued = store.previousToken != null
+        signIn(client.send(Requests.claim(code.trim().uppercase(), deviceName(), fingerprint(), store.previousToken)), continued)
+    }
 
     /** `onPreparing`: told when the service has asked for a little computing first, and when that is done */
     suspend fun createAccount(onPreparing: (Boolean) -> Unit = {}) =
-        signIn(client.createAccount(deviceName(), fingerprint(), onPreparing))
+        signIn(client.createAccount(deviceName(), fingerprint(), onPreparing), continued = false)   // a new account is never the old one
 
     /**
      * An account just created is a free one: written down at once as what `/v1/me` would say, so the home screen can show its plan
@@ -130,7 +137,10 @@ class Account(private val context: Context, private val store: Store, private va
         )).toString()
     }
 
-    private fun signIn(a: Answer) {
+    private fun signIn(a: Answer, continued: Boolean) {
+        // Signed out from outside (the key was refused) the screen goes to the join page at once and nothing is cleaned there, so the
+        // cleaning happens here, at the join: before the new key is written, so nothing of the old account is shown under the new one
+        if (!continued) onOtherAccount()
         store.signedIn(a.str("token") ?: error("no token in answer"), a.str("device_id") ?: "")
     }
 
@@ -162,7 +172,7 @@ class Account(private val context: Context, private val store: Store, private va
             store.meJson = data.toString()
             Me.from(data)
         } catch (e: ApiError) {
-            if (e.failure == Failure.AUTH_LOST) store.forget()
+            if (e.failure == Failure.AUTH_LOST) store.forget(e.sentence().key)
             cached?.let(Me::from)
         } catch (e: OfflineError) {
             cached?.let(Me::from)

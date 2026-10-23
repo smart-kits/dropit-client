@@ -31,6 +31,17 @@ private fun circle(cx: Float, cy: Float, r: Float) = "M${cx + r} ${cy}a$r $r 0 1
 
 object Icons {
     val Clip by lazy { line("clip", "M20.5 11.5l-8.2 8.2a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8") }
+    /** A clipboard: the board with its clip at the top and two lines of what is on it */
+    val Clipboard by lazy {
+        line(
+            "clipboard",
+            "M9 5.5H7A1.5 1.5 0 0 0 5.5 7v12A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V7A1.5 1.5 0 0 0 17 5.5h-2",
+            "M10 3.5h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z",
+            "M9 12.5h6M9 16h4",
+        )
+    }
+    /** A paper plane: send */
+    val Send by lazy { line("send", "M21 3L10.5 13.5", "M21 3l-6.5 18-4-7.5L3 9.5z") }
     val File by lazy { line("file", "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5") }
     val Down by lazy { line("down", "M12 4v11M7 11l5 5 5-5M5 20h14") }
     val Copy by lazy { line("copy", "M11.5 9h6a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-6A2.5 2.5 0 0 1 9 17.5v-6A2.5 2.5 0 0 1 11.5 9z", "M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15") }

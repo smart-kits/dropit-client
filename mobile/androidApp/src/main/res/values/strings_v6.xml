@@ -23,7 +23,6 @@
     <string name="panel_load_failed">Couldn\'t get the list of devices</string>
     <string name="panel_none">No other device can receive yet</string>
     <string name="panel_nothing">Write something or add a file first</string>
-    <string name="panel_choose">Choose devices</string>
     <string name="state_ticked">Ticked</string>
     <string name="state_not_ticked">Not ticked</string>
     <string name="row_received">Received</string>
@@ -56,12 +55,9 @@
     </plurals>
     <string name="auto_copied">Put on the clipboard</string>
 
-    <string name="set_default_to">Send to by default</string>
-    <string name="dt_intro">Each time this phone sends, it goes to the devices ticked below.</string>
     <string name="dt_saved">Saved</string>
-    <string name="dt_none">No other device can receive yet. Add one and you can choose here.</string>
-    <string name="dt_note_all">Ticks are saved at once, on this phone only. All ticked = send to everyone by default, and devices that join later are included.</string>
-    <string name="dt_note_part">Ticks are saved at once, on this phone only. You picked some: devices that join later are not included by themselves.</string>
+    <string name="dt_note_all">Ticks are saved at once, on this phone only. All ticked = everyone, including devices added later.</string>
+    <string name="dt_note_part">Ticks are saved at once, on this phone only. You picked some: devices added later are not included by themselves.</string>
     <string name="dt_note_reset">All the devices in your default were removed, so it is everyone again.</string>
     <plurals name="dt_note_removed">
         <item quantity="one">%1$d device in your default was removed and has been dropped from it.</item>
@@ -83,9 +79,9 @@
     <string name="set_receive_still">You can still open dropit, or use the Get latest tile.</string>
     <string name="set_battery_warn">Battery saver may block receiving</string>
     <string name="set_battery_warn_sub">Tap to set it to “Unrestricted”</string>
-    <string name="set_auto_clip">Put text from your computer on the clipboard</string>
+    <string name="set_auto_clip">Put received text on the clipboard</string>
     <string name="set_repull">Pull again</string>
-    <string name="set_repull_sub">All · last 50 · last 3 days</string>
+    <string name="set_repull_sub">%1$s · %2$s</string>
     <string name="set_tile_latest">Quick Settings tile “Get latest”</string>
     <string name="set_tile_send">Quick Settings tile “Send clipboard”</string>
     <string name="set_tile_added">Added</string>
@@ -102,7 +98,7 @@
     <string name="set_photo_quality_sub">Only photos over 2 MB are shrunk; capture time is kept</string>
     <string name="photo_shrink">Shrink</string>
     <string name="photo_original">Original</string>
-    <string name="set_devices_manage">Manage joined devices</string>
+    <string name="set_devices_manage">Manage devices, default send-to and sign out</string>
     <string name="set_devices_count">%1$d / %2$d</string>
     <string name="set_version_n">Version %1$s</string>
     <string name="update_ready_sub">An update is ready</string>
@@ -111,13 +107,29 @@
     <string name="update_check">Check</string>
 
     <!-- Pull again -->
-    <string name="repull_intro">Bring back what this phone already had. Only what the service still keeps can come back.</string>
-    <string name="repull_all">All</string>
-    <string name="repull_all_sub">Everything the service still keeps</string>
-    <string name="repull_50">Last 50</string>
-    <string name="repull_50_sub">The newest 50 items</string>
-    <string name="repull_3d">Last 3 days</string>
-    <string name="repull_3d_sub">Only what arrived in the last three days</string>
+    <string name="repull_intro">Bring back what this phone already had: the newest %1$s, and none older than %2$s. Only what the service still keeps can come back.</string>
+    <plurals name="repull_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="repull_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="repull_count_label">How many</string>
+    <string name="repull_days_label">How far back</string>
+    <plurals name="repull_latest">
+        <item quantity="one">Latest %1$d item</item>
+        <item quantity="other">Latest %1$d items</item>
+    </plurals>
+    <plurals name="repull_last_days">
+        <item quantity="one">Last %1$d day</item>
+        <item quantity="other">Last %1$d days</item>
+    </plurals>
+    <string name="repull_kept_hint">Free keeps items for %1$s. With Paid, anything you missed can come back for up to %2$s.</string>
+    <string name="repull_kept_hint_plain">Free keeps items for %1$s. With Paid, anything you missed can come back for longer.</string>
+    <string name="repull_see_plans">See plans</string>
+    <string name="repull_go">Bring back</string>
     <string name="repull_none">Nothing more to bring back</string>
     <plurals name="repull_n">
         <item quantity="one">%1$d item came back</item>
@@ -146,7 +158,7 @@
 
     <!-- Plans -->
     <string name="plan_head">dropit Paid</string>
-    <string name="plan_tagline">Bigger, longer, more devices</string>
+    <string name="plan_tagline">Real-time delivery, bigger files, more devices</string>
     <string name="plan_chip_first">First month %1$s</string>
     <string name="plan_chip_save">Save %1$d%%</string>
     <string name="plan_buy_once">Buy a year · %1$s</string>

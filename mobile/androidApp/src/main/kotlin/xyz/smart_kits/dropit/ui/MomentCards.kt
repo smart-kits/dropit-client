@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.DateFormat
@@ -26,7 +27,9 @@ import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.Me
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
+import xyz.smart_kits.dropit.shared.PlanLimits
 import xyz.smart_kits.dropit.shared.UpgradeFrom
+import xyz.smart_kits.dropit.shared.Plans
 import xyz.smart_kits.dropit.shared.fileSize
 import xyz.smart_kits.dropit.shared.mb
 import xyz.smart_kits.dropit.ui.kit.Btn
@@ -40,8 +43,8 @@ import xyz.smart_kits.dropit.ui.theme.sans
 // alert role, no colour of warning, nothing that moves. The words follow one order: what the account has already had, what changes,
 // what Paid keeps. Where a number or a price is not known, the sentence that needs it is left out, not guessed.
 
-/** The pieces of one card: its words and up to two buttons (the first is the main one) */
-private class CardParts(val text: String, val primary: Pair<String, () -> Unit>? = null, val primaryLoading: Boolean = false, val secondary: Pair<String, () -> Unit>? = null)
+/** The pieces of one card: a title, a sentence or two, optionally a line of ticked phrases (what Paid keeps), up to two buttons (the first is the main one) and a line of small print */
+private class CardParts(val title: String?, val text: String, val perks: List<String>? = null, val primary: Pair<String, () -> Unit>? = null, val primaryLoading: Boolean = false, val secondary: Pair<String, () -> Unit>? = null, val fine: String? = null)
 
 /** "Days, items, devices" for the trial's last days: the parts that are known, in the sentence that fits them; null when there is nothing to say */
 @Composable
@@ -58,22 +61,28 @@ private fun enjoyedSentence(e: Enjoyed): String? {
     }
 }
 
-/** The part of the ended-trial card that lists what the account had: "During it: 14 days, 42 items sent, 3 devices receiving live." */
+/**
+ * What Paid keeps, as short ticked phrases side by side: real-time delivery first, then only the numbers the service has given
+ * (null when its plan list was never answered), so nothing here is a number the app made up.
+ */
 @Composable
-private fun duringSentence(e: Enjoyed): String? {
+private fun perksLine(paid: PlanLimits): List<String> {
     val parts = listOfNotNull(
-        e.days?.let { stringResource(R.string.mo_t3_days, it) },
-        e.items?.let { pluralStringResource(R.plurals.mo_t3_items, it, it) },
-        e.devices?.let { stringResource(R.string.mo_t3_devices, it) },
+        stringResource(R.string.mo_perk_realtime),
+        paid.perDay.takeIf { it > 0 }?.let { stringResource(R.string.mo_perk_per_day, it) },
+        paid.fileMB.takeIf { it > 0 }?.let { stringResource(R.string.mo_perk_file, it) },
+        paid.devices.takeIf { it > 0 }?.let { stringResource(R.string.mo_perk_devices, it) },
+        paid.days.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.mo_perk_days, it, it) },
     )
-    if (parts.isEmpty()) return null
-    return stringResource(R.string.mo_t3_during, parts.joinToString(stringResource(R.string.mo_list_sep)))
+    val tick = stringResource(R.string.mo_perk)
+    return parts.map { String.format(tick, it) }
 }
 
 /**
- * The card at the top of the home screen: the trial of background receiving ending or ended, the paid plan about to end or ended, or
+ * The card at the top of the home screen: the trial of real-time delivery ending or ended, the paid plan about to end or ended, or
  * a paid plan just begun. Dismissing it (the cross, or "OK") is remembered for its period; its buttons are there only when paying is on offer in this build.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun HomeMomentCard(card: Card, me: Me, now: Long, onDismiss: () -> Unit, go: (Screen) -> Unit, buy: Buy, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
@@ -86,58 +95,54 @@ internal fun HomeMomentCard(card: Card, me: Me, now: Long, onDismiss: () -> Unit
     val sep = stringResource(R.string.mo_sep)
     val keptDays = me.keptDays ?: free.days
     val days = trialDays(me, plans.catalog.value?.free?.realtimeTrialDays)
-    val ok = stringResource(R.string.mo_ok) to onDismiss
-    // Keeping background receiving is what this card is about: one tap to the checkout; the plans are the other button
+    // Keeping real-time delivery is what the trial's cards are about. They are not a limit that was just met, so the button opens the plans
+    // (all three ways to pay laid out, the price on the button is the one the plans page will show); the checkout is one more press there
     val keepLabel = when {
         prices.trial != null -> stringResource(R.string.mo_keep_trial, prices.trial)
         prices.year != null -> stringResource(R.string.mo_keep_year, prices.year)
         else -> stringResource(R.string.mo_keep)
     }
-    val keep: () -> Unit = { buy.start(UpgradeFrom.TRIAL_CARD, "realtime") }
+    val fine = when {
+        prices.trial != null && prices.year != null -> stringResource(R.string.mo_fine_after, prices.year)
+        prices.year != null -> stringResource(R.string.mo_fine_cancel)
+        else -> null
+    }
+    val keep: () -> Unit = { go(Screen.Plans(why = "realtime", from = UpgradeFrom.TRIAL_CARD)) }
+    // The fuller wording for an account with a good deal behind it, the short one otherwise; what Paid keeps only where Paid can be had
+    val rich = richTrialCopy(me)
+    val known = plans.catalog.value != null
+    val perks = if (rich && payOpen && known) perksLine(paid) else null
     val parts: CardParts = when (card.kind) {
         CardKind.T1, CardKind.T2 -> {
             val head = if (card.kind == CardKind.T2) stringResource(R.string.mo_t2_head)
             else daysLeft((me.realtimeUntil ?: now) - now).let { n -> pluralStringResource(R.plurals.mo_t1_head, n, n) }
-            val text = listOfNotNull(head, enjoyedSentence(enjoyed(me, now, days, ended = false)), pluralStringResource(R.plurals.mo_trial_tail, keptDays, keptDays)).joinToString(sep)
-            CardParts(
-                text,
-                primary = if (payOpen) keepLabel to keep else null, primaryLoading = buy.opening == "year",
-                secondary = if (payOpen) stringResource(R.string.mo_see_plans) to { go(Screen.Plans(from = UpgradeFrom.TRIAL_CARD)) } else null,
-            )
+            // Inside the trial the account's age is within its days, so "in D days" is true
+            val had = if (rich) enjoyedSentence(enjoyed(me, now, days, ended = false)) else null
+            val tail = if (rich) stringResource(R.string.mo_trial_tail_rich) else pluralStringResource(R.plurals.mo_trial_tail, keptDays, keptDays)
+            CardParts(head, listOfNotNull(had, tail).joinToString(sep), perks, primary = if (payOpen) keepLabel to keep else null, fine = if (payOpen) fine else null)
         }
         CardKind.T3 -> {
-            val tail = when {
-                prices.trial != null && prices.year != null -> stringResource(R.string.mo_t3_price_trial, prices.trial, prices.year)
-                prices.year != null -> stringResource(R.string.mo_t3_price_year, prices.year)
-                else -> stringResource(R.string.mo_t3_price_none)
-            }
-            val text = listOfNotNull(
-                stringResource(R.string.mo_t3_head),
-                duringSentence(enjoyed(me, now, days, ended = true)),
-                pluralStringResource(R.plurals.mo_t3_now, keptDays, keptDays) + tail,
-            ).joinToString(sep)
+            // The trial is over, so the account is older than its days: what it has had is "so far", not "in D days"
+            val had = if (rich) enjoyedSentence(enjoyed(me, now, days, ended = true).copy(days = null)) else null
+            val tail = if (rich) stringResource(R.string.mo_t3_now_rich) else pluralStringResource(R.plurals.mo_t3_now, keptDays, keptDays)
+            CardParts(stringResource(R.string.mo_t3_head), listOfNotNull(had, tail).joinToString(sep), perks, primary = if (payOpen) keepLabel to keep else null, fine = if (payOpen) fine else null)
+        }
+        CardKind.P1 -> {
+            val had = if (rich) enjoyedSentence(enjoyed(me, now, days, ended = false).copy(days = null)) else null
             CardParts(
-                text,
-                primary = if (payOpen) stringResource(R.string.mo_keep) to keep else null, primaryLoading = buy.opening == "year",
-                secondary = ok,
+                stringResource(R.string.mo_p1_head, formatDate(me.paidUntil ?: now)),
+                listOfNotNull(had, stringResource(R.string.mo_p1_tail)).joinToString(sep),
+                if (known) perksLine(paid) else null,
+                primary = if (payOpen && prices.once != null) stringResource(R.string.mo_renew, prices.once) to { buy.start(UpgradeFrom.NOTICE, plan = "year_once") } else null,
+                primaryLoading = buy.opening == "year_once",
+                secondary = if (me.canManage && BuildConfig.PAYMENTS) stringResource(R.string.mo_manage) to { buy.manage() } else null,
             )
         }
-        CardKind.P1 -> CardParts(
-            stringResource(R.string.mo_p1, formatDate(me.paidUntil ?: now), free.perDay, free.fileMB, free.devices, paid.days),
-            primary = if (payOpen && prices.once != null) stringResource(R.string.mo_renew, prices.once) to { buy.start(UpgradeFrom.NOTICE, plan = "year_once") } else null,
-            primaryLoading = buy.opening == "year_once",
-            secondary = if (me.canManage && BuildConfig.PAYMENTS) stringResource(R.string.mo_manage) to { buy.manage() } else null,
+        CardKind.P2 -> CardParts(
+            stringResource(R.string.mo_p2_head), stringResource(R.string.mo_p2_body), if (payOpen && known) perksLine(paid) else null,
+            primary = if (payOpen) stringResource(R.string.mo_reopen) to { go(Screen.Plans(from = UpgradeFrom.NOTICE)) } else null,
+            fine = me.paidGraceUntil?.let { stringResource(R.string.mo_p2_kept, formatDate(it)) },
         )
-        CardKind.P2 -> {
-            val total = me.itemsTotal?.takeIf { it > 0 }
-            val text = listOfNotNull(
-                stringResource(R.string.mo_p2_head),
-                total?.let { pluralStringResource(R.plurals.mo_p2_items, it, it) },
-                stringResource(R.string.mo_p2_now, free.perDay, free.fileMB, free.devices),
-                me.paidGraceUntil?.let { stringResource(R.string.mo_p2_kept, formatDate(it)) },
-            ).joinToString(sep)
-            CardParts(text, primary = if (payOpen) stringResource(R.string.mo_reopen) to { go(Screen.Plans(from = UpgradeFrom.NOTICE)) } else null, secondary = ok)
-        }
         CardKind.P4 -> {
             val sub = when {
                 me.paidKind == "life" -> stringResource(R.string.mo_p4_life)
@@ -149,7 +154,7 @@ internal fun HomeMomentCard(card: Card, me: Me, now: Long, onDismiss: () -> Unit
                 me.paidUntil != null -> stringResource(R.string.mo_p4_once, formatDate(me.paidUntil))
                 else -> null
             }
-            CardParts(listOfNotNull(stringResource(R.string.mo_p4_now, paid.perDay, paid.fileMB, paid.devices, paid.days), sub).joinToString(sep), secondary = ok)
+            CardParts(null, listOfNotNull(stringResource(R.string.mo_p4_now, paid.perDay, paid.fileMB, paid.devices, paid.days), sub).joinToString(sep))
         }
     }
     Column(
@@ -157,7 +162,16 @@ internal fun HomeMomentCard(card: Card, me: Me, now: Long, onDismiss: () -> Unit
             .padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
-            Txt(parts.text, sans(13.5.sp, lineHeight = 20.sp), c.ink, Modifier.weight(1f).padding(top = 4.dp, end = 4.dp, bottom = 4.dp))
+            Column(Modifier.weight(1f).padding(top = 4.dp, end = 4.dp, bottom = 4.dp)) {
+                parts.title?.let { Txt(it, sans(14.5.sp, FontWeight.SemiBold, lineHeight = 20.sp), c.ink, Modifier.padding(bottom = 2.dp)) }
+                Txt(parts.text, sans(13.5.sp, lineHeight = 20.sp), c.ink)
+                // Each ticked phrase wraps as a whole: "10 devices" is never split across two lines
+                parts.perks?.let { list ->
+                    androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        for (x in list) Txt(x, sans(12.5.sp, FontWeight.SemiBold, lineHeight = 18.sp), c.navy)
+                    }
+                }
+            }
             LinkAction(onDismiss, icon = Icons.X, name = stringResource(R.string.dismiss))
         }
         if (parts.primary != null || parts.secondary != null) {
@@ -166,6 +180,7 @@ internal fun HomeMomentCard(card: Card, me: Me, now: Long, onDismiss: () -> Unit
                 parts.secondary?.let { (label, act) -> LinkAction(act, text = label, color = c.navy, modifier = Modifier.heightIn(min = 48.dp)) }
             }
         }
+        parts.fine?.let { Txt(it, sans(12.sp, lineHeight = 17.sp), c.dim, Modifier.padding(bottom = 6.dp, end = 8.dp)) }
     }
 }
 
@@ -195,8 +210,14 @@ internal fun NearNote(v: NearView, now: Long, go: (Screen) -> Unit, modifier: Mo
                 }
             }
             NearKind.SPACE -> {
-                val kept = plans.free.days
-                Txt(pluralStringResource(R.plurals.mo_n2, kept, fileSize(v.usedBytes), mb(v.limitBytes), kept), style, c.dim)
+                Txt(stringResource(R.string.mo_n2, fileSize(v.usedBytes), mb(v.limitBytes)), style, c.dim)
+                // The way to the plans from a space that is nearly full: only where Paid can be had (no price here, the plans page has them)
+                if (BuildConfig.PAYMENTS && plans.offering) {
+                    Txt(
+                        stringResource(R.string.mo_n2_paid, Plans.space(plans.paid.spaceMB)), style, c.navy,
+                        Modifier.clip(RoundedCornerShape(4.dp)).clickable(role = Role.Button) { go(Screen.Plans(from = UpgradeFrom.NOTICE)) }.heightIn(min = 32.dp).padding(vertical = 7.dp),
+                    )
+                }
             }
         }
     }

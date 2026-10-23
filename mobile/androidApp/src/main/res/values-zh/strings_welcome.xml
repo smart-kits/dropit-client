@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch, before joining: three short screens -->
+    <string name="wl_1_title">发到你的其他设备</string>
+    <string name="wl_1_body">链接、文字、图片、文件，从这台手机直接发到电脑和其他设备。</string>
+    <string name="wl_2_title">一步发出</string>
+    <string name="wl_2_body">在任意应用里点「分享」，或在这里写好点「投递」。加设备时，扫它的二维码或输入配对码就行。</string>
+    <string name="wl_3_title">实时送达，收到就好</string>
+    <string name="wl_3_body">你发的内容几秒内送到你的设备，并用通知告诉你。允许下面两项，dropit 关着也能收到。</string>
+    <string name="rcv_notify_sub">有新内容时通知你</string>
+    <string name="rcv_bg_title">后台运行</string>
+    <string name="rcv_bg_sub">dropit 关着时，内容也能几秒内送到</string>
+    <string name="rcv_bg_allow">允许后台运行</string>
+    <string name="rcv_done">已允许</string>
+    <string name="set_notify_title">开启通知</string>
+    <string name="set_notify_sub">打开 dropit 的通知设置</string>
+    <string name="set_bg_title">允许后台运行</string>
+    <string name="set_bg_sub">dropit 关着时，内容也能几秒内送到</string>
+    <string name="too_large_paid">付费版单个文件最大可到 %1$d MB。</string>
+    <string name="wl_page">第 %1$d 页，共 %2$d 页</string>
+
+    <!-- Joining -->
+    <string name="join_or_type">或输入配对码</string>
+
+    <!-- A device joined -->
+    <string name="add_joined_sub">它现在可以收到你投递的内容。</string>
+    <string name="add_joined_replaced">它替换了 %1$s。</string>
+    <string name="add_another">再加一台设备</string>
+    <string name="dev_default_head">这台手机默认投给：</string>
+    <string name="dev_remove_body">它会退出账号，不再收发；要再用，需要重新加入。其他设备不受影响。</string>
+    <string name="sign_out_body">退出后，这台设备不再收发。App 里的收发列表会清空，默认投给恢复为全部；已保存在手机里的文件和其他设置会保留。重新加入即可继续使用。</string>
+    <!-- The send button: where it goes, and what the two parts are called for a screen reader -->
+    <string name="send_to_desc">投递给%1$s</string>
+    <string name="dest_pick_desc">选择投给哪些设备，现在：%1$s</string>
+</resources>

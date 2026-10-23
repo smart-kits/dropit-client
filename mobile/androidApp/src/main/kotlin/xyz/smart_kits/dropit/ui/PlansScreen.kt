@@ -117,7 +117,9 @@ fun PlansScreen(resumed: Int, why: String?, from: String, onBack: () -> Unit) {
                 "space" -> stringResource(R.string.why_space, Plans.space(f.spaceMB)) to stringResource(R.string.why_space_sub, Plans.space(p.spaceMB))
                 "queue" -> stringResource(R.string.why_queue) to stringResource(R.string.why_queue_sub, p.queue)
                 "devices" -> stringResource(R.string.why_devices, f.devices) to stringResource(R.string.why_devices_sub, p.devices)
-                "realtime" -> stringResource(R.string.why_realtime, f.realtimeTrialDays ?: 0) to stringResource(R.string.why_realtime_sub)
+                // From the trial's cards: while the trial still runs it is "keep it", only after it ended is it "bring it back"
+                "realtime" -> if (me?.realtimeUntil?.let { it <= System.currentTimeMillis() } == true) stringResource(R.string.why_realtime_over) to stringResource(R.string.why_realtime_over_sub)
+                    else stringResource(R.string.why_realtime) to stringResource(R.string.why_realtime_sub)
                 "uploads" -> stringResource(R.string.why_uploads) to stringResource(R.string.why_uploads_sub)
                 "downloads" -> stringResource(R.string.why_downloads, f.downloads) to stringResource(R.string.why_downloads_sub, p.downloads)
                 "kept" -> stringResource(R.string.why_kept) to stringResource(R.string.why_kept_sub, f.days, p.days)
