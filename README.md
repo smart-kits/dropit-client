@@ -35,7 +35,7 @@ One account, every device on it. Some clients only send; know which before you p
 |---|---|---|---|
 | **iPhone shortcut** | ✓ | — | Read it in Obsidian mobile or in the web inbox in Safari |
 | **Android app** | ✓ | ✓ | A notification (Copy · Open · Share), and in the app |
-| **Chrome · Edge extension** | ✓ | — | Read it in Obsidian, the terminal, the phone app or the web inbox |
+| **Chrome · Edge extension** | ✓ | ✓ (when you open it or press *Refresh*; no notifications) | A list in the popup: copy · open · download |
 | **Obsidian** | ✓ (right-click) | ✓ | A note, titled, images embedded |
 | **Terminal** | ✓ | ✓ | A folder (`dropit watch`) |
 | **Web inbox** | ✓ | ✓ (press *Pull new items*) | The page |
@@ -132,7 +132,7 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
 - **Nothing lost, nothing twice.** A receiver moves on only after an item is safely written: a crash means a repeat at worst,
   never a gap. The same thing sent twice in a row within a minute (a double tap, a retry) is kept once.
 - **Every device on its own.** Each is joined separately and can be removed separately. Send-only devices — the iPhone shortcut,
-  a browser extension joined with a code, bookmarklets — can't read anything you've sent.
+  bookmarklets, and a browser extension joined with a code (until you turn on receiving in it) — can't read anything you've sent.
 - **Small and open.** The terminal client is one Node.js file; the extension loads as it is; no build step, no dependencies.
 
 ## Security & privacy
@@ -141,7 +141,9 @@ that need your hands (loading the browser extension, adding the iPhone shortcut)
   extension: the browser's local extension storage; Obsidian: the plugin's `data.json`; web inbox: the browser's local storage.
 - Keys come in two kinds: **full** (send, receive, add devices) and **send-only**. The extension and the iPhone shortcut
   join send-only, so a leaked key can't read your items. A browser extension that created the account holds a full key,
-  so it can add your other devices.
+  so it can add your other devices and list what they sent. An extension that joined with a code stays send-only until you choose
+  *Receive on this browser* in it and enter a code from a device that already has a full key: it then holds a full key too, which can
+  read what is in your account, and the send-only key it had is replaced.
 - Lost a device? Remove it from any other one: web inbox → *Devices* → *Revoke*, or `dropit devices` and `dropit revoke <id>`.
 - Signing out of the extension removes it from your account. Joining or pairing again on the same computer — after
   reinstalling, say — takes the earlier one's place instead of using another device slot. To recognize it, the client
