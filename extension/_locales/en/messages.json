@@ -1,6 +1,6 @@
 {
   "extName": { "message": "dropit — Send to Phone, PC, Web & Obsidian" },
-  "extDescription": { "message": "Send links, text, images and files from your browser to your phone, other computers, a web inbox and Obsidian. Arrives in seconds." },
+  "extDescription": { "message": "Send and sync links, text, images and files from your browser to your phone, PC and all your devices. File transfer on any network." },
   "actionTitle": { "message": "Send to dropit" },
   "cmdDropNow": { "message": "Send the selection, or this page, right away" }
 }
