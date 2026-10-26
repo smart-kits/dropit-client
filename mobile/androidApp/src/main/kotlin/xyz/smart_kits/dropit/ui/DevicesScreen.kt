@@ -58,6 +58,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import xyz.smart_kits.dropit.BuildConfig
 import xyz.smart_kits.dropit.Me
+import xyz.smart_kits.dropit.deviceSuffix
 import xyz.smart_kits.dropit.R
 import xyz.smart_kits.dropit.app
 import xyz.smart_kits.dropit.shared.AttemptTimeout
@@ -117,7 +118,9 @@ internal fun DeviceRow(d: Peer, self: Boolean, now: Long, modifier: Modifier = M
             }
             if (!self && !d.canReceive) Tag(stringResource(R.string.label_scope_send))
             val note = if (self) ctx.getString(R.string.dev_active_now) else lastSeen(ctx, d.lastSeenAt, now)
-            if (!note.isNullOrEmpty()) Txt(note, sans(12.5.sp, lineHeight = 17.sp).copy(fontFeatureSettings = "tnum"), c.dim)
+            // The second line, small and grey: the end of its number (so two devices with one name can be told apart), then when it was last on
+            val line = listOfNotNull(deviceSuffix(d.id), note?.takeIf { it.isNotEmpty() }).joinToString(" · ")
+            if (line.isNotEmpty()) Txt(line, sans(12.5.sp, lineHeight = 17.sp).copy(fontFeatureSettings = "tnum"), c.dim)
         }
         trailing()
     }
@@ -214,6 +217,12 @@ fun DevicesScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit, onSign
         trailing = { devices?.let { Txt(stringResource(R.string.set_devices_count, it.size, limit), mono(13.sp), c.dim, Modifier.padding(end = 4.dp)) } },
     ) {
         val list = devices
+        // Which account this is: a short code, selectable so it can be copied and read out
+        account?.accountTag?.let { tag ->
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Txt(stringResource(R.string.dev_account, tag), mono(12.5.sp), c.dim, Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp))
+            }
+        }
         when {
             list == null && error == null -> LoadingRows(slow, Modifier.padding(top = 4.dp))
             list != null -> {

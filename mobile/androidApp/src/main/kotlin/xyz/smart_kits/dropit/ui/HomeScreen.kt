@@ -40,18 +40,15 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -77,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -271,10 +269,11 @@ fun HomeScreen(
             val out = info.outputData
             if (info.state == WorkInfo.State.SUCCEEDED) {
                 val said = out.getString(SendWorker.DONE).orEmpty().lines()
-                justSent = said.firstOrNull()
+                val seqs = out.getLongArray(SendWorker.SEQS)?.toList().orEmpty()
+                // On the button: just that it went, or that it had already gone. The numbers are in the receipt under the block
+                justSent = ctx.getString(if (said.firstOrNull() == ctx.getString(R.string.sent_again, seqRange(seqs))) R.string.sent_again_short else R.string.sent_short)
                 val problems = out.getString(SendWorker.PROBLEMS).orEmpty().lines().filter { it.isNotBlank() }
                 val clock = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-                val seqs = out.getLongArray(SendWorker.SEQS)?.toList().orEmpty()
                 val bytesSent = files.sumOf { it.size ?: 0L }
                 outcome = Outcome.Sent(ctx.getString(R.string.sent_at, seqRange(seqs), clock), said.drop(1), problems = problems, big = out.getBoolean(SendWorker.BIG, false))
                 sent()
@@ -382,24 +381,8 @@ fun HomeScreen(
     PullToRefreshBox(
         isRefreshing = pulling, onRefresh = { if (!selecting) pullList() }, state = pullState,
         modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
-        indicator = {
-            val f = pullState.distanceFraction
-            if (pulling || f > 0f) {
-                val ready = f >= 1f
-                Row(
-                    Modifier.align(Alignment.TopCenter)
-                        .offset { IntOffset(0, ((if (pulling) 1f else f.coerceAtMost(1.2f)) * 64.dp.toPx() - 36.dp.toPx()).roundToInt()) }
-                        .shadow(3.dp, CircleShape).clip(CircleShape).background(c.paper).padding(horizontal = 16.dp, vertical = 9.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (pulling) xyz.smart_kits.dropit.ui.kit.Spinner(c.navy, 18.dp) else Glyph(Icons.Up, c.navy, Modifier.rotate(if (ready) 0f else 180f), size = 18.dp)
-                    Txt(
-                        stringResource(when { pulling -> R.string.pulling; ready -> R.string.pull_release; else -> R.string.pull_hint }),
-                        sans(13.5.sp, FontWeight.SemiBold), c.navy,
-                    )
-                }
-            }
-        },
+        // No floating capsule: what pulling shows is a row between the tabs and the list (see below), where the list itself opens up
+        indicator = {},
     ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -595,7 +578,24 @@ fun HomeScreen(
             SelectHeader(picked.size, picked.size >= shown.size, onExit = { picked = emptySet() }, onAll = { picked = shown.map { it.id }.toSet() })
         } else {
             ListTabs(showSent, received.size, sent.size, sentDot, { showSent = it }, Modifier.padding(top = 14.dp))
-            pullLine?.let { Txt(it, sans(12.5.sp), c.dim, Modifier.fillMaxWidth().padding(top = 8.dp), align = TextAlign.Center) }
+            // Between the tabs and the list: pulling opens this row (an arrow, then a spinner while it asks), and the answer stays in it for a few seconds
+            val pullF = pullState.distanceFraction
+            if (pulling || pullF > 0f) {
+                val ready = pullF >= 1f
+                Row(
+                    Modifier.fillMaxWidth().height(if (pulling) 40.dp else (40.dp * pullF.coerceAtMost(1.2f))).clipToBounds(),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (pulling) xyz.smart_kits.dropit.ui.kit.Spinner(c.navy, 16.dp) else Glyph(Icons.Up, c.navy, Modifier.rotate(if (ready) 0f else 180f), size = 16.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Txt(
+                        stringResource(when { pulling -> R.string.pulling; ready -> R.string.pull_release; else -> R.string.pull_hint }),
+                        sans(12.5.sp, FontWeight.SemiBold), c.navy, maxLines = 1,
+                    )
+                }
+            } else {
+                pullLine?.let { Txt(it, sans(12.5.sp), c.dim, Modifier.fillMaxWidth().padding(top = 8.dp), align = TextAlign.Center) }
+            }
         }
         if (shown.isEmpty()) {
             ListEmpty(showSent, alone = (me?.devicesUsed ?: 0) <= 1, onAddDevice = { go(Screen.AddDevice) })

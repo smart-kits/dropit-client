@@ -142,8 +142,8 @@ fun PlansScreen(resumed: Int, why: String?, from: String, onBack: () -> Unit) {
                     )
                 }
                 if (paid) {
-                    val line = if (it.paidKind == "life" || it.paidUntil == null) stringResource(R.string.plan_paid_life)
-                    else stringResource(R.string.plan_paid_until, DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it.paidUntil)))
+                    val line = if (it.lifetime) stringResource(R.string.plan_paid_life)
+                    else stringResource(R.string.plan_paid_until, DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it.paidUntil ?: 0L)))
                     Txt(line, sans(13.sp, FontWeight.SemiBold), c.navy, Modifier.padding(bottom = 12.dp))
                 }
             }

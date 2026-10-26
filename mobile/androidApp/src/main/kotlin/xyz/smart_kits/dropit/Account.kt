@@ -58,8 +58,14 @@ data class Me(
     val renews: Boolean? = null,
     /** Whether there is a page to manage the subscription in */
     val canManage: Boolean = false,
+    /** The short account code as the service gives it; null when not said */
+    val accountTagGiven: String? = null,
 ) {
+    /** The code to show: the service's, else worked out from [createdAt]; null when neither is usable */
+    val accountTag: String? get() = accountTag(accountTagGiven, createdAt)
     val paid: Boolean get() = plan == "paid"
+    /** A plan that does not end: the service says lifetime (or gives no end date). Never guessed from a date */
+    val lifetime: Boolean get() = isLifetime(paid, paidKind, paidUntil)
 
     companion object {
         fun from(o: JsonObject) = Me(
@@ -84,6 +90,7 @@ data class Me(
             paidGraceUntil = o["paid_grace_until"]?.jsonPrimitive?.longOrNull,
             renews = o["renews"]?.jsonPrimitive?.booleanOrNull,
             canManage = o["can_manage"]?.jsonPrimitive?.booleanOrNull == true,
+            accountTagGiven = o["account_tag"]?.jsonPrimitive?.contentOrNull,
         )
     }
 }
@@ -179,3 +186,5 @@ class Account(
         }
     }
 }
+
+fun isLifetime(paid: Boolean, kind: String?, until: Long?): Boolean = paid && (kind == "life" || until == null)

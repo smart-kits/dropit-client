@@ -55,6 +55,8 @@
     <string name="sent">已投递 %1$s</string>
     <string name="sent_at">✓ 已投递 %1$s · %2$s</string>
     <string name="sent_again">刚才已经投过 %1$s</string>
+    <string name="sent_short">已投递</string>
+    <string name="sent_again_short">已投过</string>
     <string name="send_failed">没投出去</string>
     <string name="taken">收到，正在投递</string>
     <string name="card_not_sent_more">%1$s（另有 %2$d 项）</string>
@@ -167,6 +169,7 @@
     <string name="sign_out_confirm">退出</string>
 
     <string name="dev_count">%1$d/%2$d</string>
+    <string name="dev_account">账号 %1$s</string>
     <string name="dev_active_now">刚刚在线</string>
     <string name="dev_active">%1$s在线</string>
     <string name="dev_up_to">已收到 #%1$d</string>

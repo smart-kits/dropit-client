@@ -63,6 +63,8 @@
     <string name="sent">Sent %1$s</string>
     <string name="sent_at">✓ Sent %1$s · %2$s</string>
     <string name="sent_again">Already sent a moment ago %1$s</string>
+    <string name="sent_short">Sent</string>
+    <string name="sent_again_short">Already sent</string>
     <string name="send_failed">Not sent</string>
     <string name="taken">Got it — sending</string>
     <string name="card_not_sent_more">%1$s (+%2$d more)</string>
@@ -183,6 +185,7 @@
 
     <!-- Devices -->
     <string name="dev_count">%1$d/%2$d</string>
+    <string name="dev_account">Account %1$s</string>
     <string name="dev_active_now">Active now</string>
     <string name="dev_active">Active %1$s</string>
     <string name="dev_up_to">up to #%1$d</string>

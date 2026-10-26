@@ -80,7 +80,7 @@ fun PlanCard(go: (Screen) -> Unit, modifier: Modifier = Modifier, buy: Buy = rem
             Column(Modifier.weight(1f)) {
                 Txt(stringResource(if (m.paid) R.string.plan_name_paid else R.string.plan_name_free), sans(20.sp, FontWeight.Bold, lineHeight = 25.sp), c.ink)
                 val line = when {
-                    m.paid && (m.paidKind == "life" || m.paidUntil == null) -> stringResource(R.string.plan_paid_life)
+                    m.lifetime -> stringResource(R.string.plan_paid_life)
                     m.paid -> stringResource(R.string.plan_ends_on, formatDate(m.paidUntil!!))
                     else -> stringResource(R.string.plan_free_sub, m.devicesLimit, plans.free.perDay)
                 }

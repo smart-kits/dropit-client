@@ -182,7 +182,9 @@ fun SettingsScreen(resumed: Int, go: (Screen) -> Unit, onBack: () -> Unit) {
                     PanelRow(stringResource(R.string.set_language), icon = Icons.Globe, onClick = {
                         runCatching { ctx.startActivity(Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:${ctx.packageName}"))) }
                     }) {
-                        Txt(stringResource(R.string.lang_system), sans(13.5.sp), c.dim)
+                        // What the person chose in the system's page for this app; "System" only when nothing is chosen. Read again on every return
+                        val chosen = remember(resumed) { appLanguageName(ctx) }
+                        Txt(chosen ?: stringResource(R.string.lang_system), sans(13.5.sp), c.dim)
                         Go()
                     }
                 }
@@ -555,4 +557,13 @@ internal fun Confirm(title: String, text: String?, confirm: String, onConfirm: (
             }
         },
     )
+}
+
+/** The language picked for this app in the system settings (Android 13 and later), written in its own language; null when it follows the system */
+@androidx.annotation.RequiresApi(33)
+private fun appLanguageName(ctx: android.content.Context): String? {
+    val locales = ctx.getSystemService(android.app.LocaleManager::class.java)?.applicationLocales ?: return null
+    if (locales.isEmpty) return null
+    val l = locales[0] ?: return null
+    return l.getDisplayName(l).replaceFirstChar { it.titlecase(l) }
 }
