@@ -228,6 +228,19 @@ class TargetsTest {
         assertNull(r.failure)
     }
 
+    @Test fun `U-T23b the items of a letter sent again share one new batch in the order they were sent`() {
+        fun l(vararg q: Long) = Letter(id = "a", mine = true, at = 1, seqs = q.toList())
+        assertEquals(listOf<Group?>(null), resendGroups(l(5), "N"))
+        assertEquals(emptyList<Group?>(), resendGroups(l(), "N"))
+        assertEquals(listOf<Group?>(Group("N", 1, 2), Group("N", 2, 2)), resendGroups(l(5, 6), "N"))
+        // words then files: the places follow the seqs as they stand, from 1
+        assertEquals(listOf(1, 2, 3, 4), resendGroups(l(10, 11, 12, 13), "N").map { it!!.i })
+        assertEquals(setOf(4), resendGroups(l(10, 11, 12, 13), "N").map { it!!.n }.toSet())
+        assertTrue(resendGroups(l(1, 2)).first()!!.id.isNotBlank())
+        // more than a batch holds: each goes alone
+        assertTrue(resendGroups(Letter(id = "a", mine = true, at = 1, seqs = (1L..17L).toList()), "N").all { it == null })
+    }
+
     @Test fun `U-T24 the devices the service says it sent to are read from its answer`() {
         val a = Answer(Json.parseToJsonElement("""{"seq":5,"to":[{"device_id":"d_a","name":"Mac"},{"device_id":"d_b","name":"Linux"}]}""").jsonObject)
         assertEquals(Targets(listOf("d_a", "d_b"), listOf("Mac", "Linux")), targetsIn(a))

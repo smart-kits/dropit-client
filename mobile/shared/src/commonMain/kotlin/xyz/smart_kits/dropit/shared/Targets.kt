@@ -251,6 +251,14 @@ fun resendAvail(letter: Letter, nowMs: Long, otherReceivers: Int): ResendAvail =
     else -> ResendAvail.OK
 }
 
+/**
+ * The batch marker each item of a letter takes when it is sent again, in the order of [Letter.seqs] (the order they were sent:
+ * words first, then files). One new batch id for the lot, so the other side shows them together again; a letter of one item,
+ * or of more than a batch can hold, sends each alone (nulls).
+ */
+fun resendGroups(letter: Letter, id: String = randomGroupId()): List<Group?> =
+    if (letter.seqs.size > GROUP_MAX) List(letter.seqs.size) { null } else groupsFor(letter.seqs.size, id)
+
 /** The letter a resend makes: the same words and files, a new place in the list, to the devices chosen, marked as sent again */
 fun resentLetter(from: Letter, id: String, seqs: List<Long>, targets: Targets, nowMs: Long, until: Long?): Letter = from.copy(
     id = id, mine = true, at = nowMs, seqs = seqs, toIds = targets.ids, toNames = targets.names, again = true, until = until, failure = null,

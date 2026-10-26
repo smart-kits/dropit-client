@@ -161,11 +161,16 @@ object Requests {
     /**
      * Send what is already on the service once more, to the named devices (`to` is required here: sending again to everyone is
      * [to] = null → "all"). It is a new item, a new send for the day's count. 410 when the service no longer has it.
+     * [group]: the place this item takes in a batch sent again together (the same shape as when sending); without it the
+     * new item stands alone.
      */
-    fun resend(seq: Long, to: List<String>?) = RequestSpec(
+    fun resend(seq: Long, to: List<String>?, group: Group? = null) = RequestSpec(
         "POST", "/v1/items/$seq/resend",
         body = buildJsonObject {
             if (to.isNullOrEmpty()) put("to", "all") else put("to", JsonArray(to.map(::JsonPrimitive)))
+            group?.let {
+                put("group", buildJsonObject { put("id", it.id); put("i", it.i); put("n", it.n) })
+            }
         },
     )
 

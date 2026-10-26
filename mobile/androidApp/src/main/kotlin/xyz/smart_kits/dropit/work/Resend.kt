@@ -10,6 +10,7 @@ import xyz.smart_kits.dropit.shared.Letter
 import xyz.smart_kits.dropit.shared.OfflineError
 import xyz.smart_kits.dropit.shared.Requests
 import xyz.smart_kits.dropit.shared.Targets
+import xyz.smart_kits.dropit.shared.resendGroups
 import xyz.smart_kits.dropit.shared.resentLetter
 import java.util.UUID
 
@@ -32,8 +33,10 @@ class Resend(private val context: Context) {
         val made = mutableListOf<Long>()
         var already = false
         try {
-            for (seq in letter.seqs) {
-                val answer = app.client.send(Requests.resend(seq, targets.to))
+            // One new batch for the lot (not the old one: that is already complete on the other side)
+            val groups = resendGroups(letter)
+            for ((k, seq) in letter.seqs.withIndex()) {
+                val answer = app.client.send(Requests.resend(seq, targets.to, groups[k]))
                 already = already || answer.deduped
                 answer.seq?.let(made::add)
             }

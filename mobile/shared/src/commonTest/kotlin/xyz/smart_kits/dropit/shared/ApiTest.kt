@@ -86,6 +86,15 @@ class ApiTest {
         assertEquals("all", Requests.resend(12, null).body!!.getValue("to").jsonPrimitive.content)
     }
 
+    @Test fun `U-T27b sending again in a batch carries its place and without one the body is as before`() {
+        val plain = Requests.resend(12, listOf("d_a"))
+        assertEquals("""{"to":["d_a"]}""", plain.body.toString())
+        assertEquals(plain.body, Requests.resend(12, listOf("d_a"), null).body)
+        val g = Requests.resend(12, listOf("d_a"), Group("NEWID", 2, 7)).body!!
+        assertEquals("""{"to":["d_a"],"group":{"id":"NEWID","i":2,"n":7}}""", g.toString())
+        assertEquals("""{"to":"all","group":{"id":"x","i":1,"n":2}}""", Requests.resend(1, null, Group("x", 1, 2)).body.toString())
+    }
+
     @Test fun `U-T28 the new answers read as errors in words`() {
         val gone = errorMessage("TARGET_UNAVAILABLE", JsonObject(emptyMap()), 400)
         assertEquals("errors.TARGET_UNAVAILABLE", gone.key)
