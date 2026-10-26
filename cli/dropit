@@ -36,7 +36,7 @@ const BATCH_QUIET_MS = 90_000;               // watch: a batch still short of it
 const BATCH_MAX_MS = 300_000;                // …and at the latest this long after its first
 const NOTES_WAIT_MS = 3_000;                 // watch: at most this long is spent reading the account before connecting
 const BATCH_KEEP_MS = 24 * 3_600_000;        // watch: a handled batch is remembered this long, so a member that comes late is not run on its own
-const VERSION = '1.2.0';                     // released as cli-<VERSION> on GitHub; bump when this file changes
+const VERSION = '1.2.1';                     // released as cli-<VERSION> on GitHub; bump when this file changes
 
 // ── Language ────────────────────────────────────────────────────────────
 // English by default; Simplified Chinese when the environment asks for it.
