@@ -6,9 +6,9 @@
 A page, a paragraph, an image, a PDF, a screenshot: a few seconds later it is waiting in Obsidian,
 on your phone, or in any browser. Chrome and Edge.
 
-![Right-click a page, a selection, a link, an image, a PDF, a download link or a video → dropit; or paste and pick files in the popup. Each lands on the phone a moment later.](../media/extension-tour.webp)
+![From the browser: a video page, the video or sound itself, a selected passage, a link, an image, a linked file, an open PDF, or a pasted screenshot with files — then pick which devices get it; the same into Obsidian; and what was shared on the phone, waiting in the popup.](../media/extension-tour.webp)
 
-<sub>Shown: <i>Big Buck Bunny</i> © Blender Foundation (CC BY 3.0) on YouTube · Wikipedia (CC BY-SA 4.0) · Hacker News · NASA images and video (public domain) · <i>Attention Is All You Need</i>, arXiv:1706.03762 · <i>Pride and Prejudice</i>, Internet Archive (public domain).</sub>
+<sub>Shown: <i>Big Buck Bunny</i> © Blender Foundation / Blender Institute (CC BY 3.0) · NASA Image of the Day and “Star Trails” (NASA/Anil Menon) · <i>Attention Is All You Need</i>, Vaswani et al., arXiv:1706.03762. Other pages and files are made for the demo.</sub>
 
 ## One move each
 

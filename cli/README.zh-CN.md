@@ -7,9 +7,9 @@
 
 支持 macOS 和 Linux。单个 Node.js 文件，没有依赖。
 
-![dropit pair 一行加入；dropit send 发剪贴板、文件、构建完成的提醒；dropit watch 把手机分享来的东西落成文件。](../media/cli-tour.webp)
+![dropit pair 用配对码加入；dropit send 发剪贴板、命令输出、一句话或链接，再到照片、视频、PDF，发给全部设备或只发几台；dropit watch 把手机分享来的东西落成文件；handlers 把每条内容交给你自己的脚本。](../media/cli-tour.webp)
 
-<sub>画面内容：Lonely Planet 页面链接 · NASA 照片（公共领域）。</sub>
+<sub>画面内容：一条 Wikipedia 链接（Lisbon）· NASA 照片（NASA/Anil Menon）。其余文件是为演示自制的。</sub>
 
 ## 一行就够
 

@@ -64,9 +64,9 @@ Add each device with a pairing code (*Start in three steps*, below): create the 
 
 ## The web inbox
 
-![Drop files and send from any browser; pull and copy on another computer; add a device by scanning a code; send any page with the bookmarklet.](./media/web-inbox-tour.webp)
+![An iPhone shares photos, a PDF and a spreadsheet, a page and the clipboard (Back Tap) to dropit; the web inbox and the browser extension pick them up; and the web inbox sends files and text, picks devices and sends again. iPhone screens are drawn; what they send and what arrives is real.](./media/web-ios-tour.webp)
 
-<sub>Shown: a NASA photograph and page (public domain) · a Lonely Planet page link.</sub>
+<sub>Shown: a NASA photograph (NASA/Anil Menon). Other pages and files are made for the demo.</sub>
 
 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz), in any browser, phone or computer. Nothing to install.
 

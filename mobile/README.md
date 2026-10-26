@@ -9,6 +9,10 @@ Send without opening the app: *Share* → **dropit**, select text → **dropit**
 what this phone sent. Join by scanning the QR code another device shows, or by typing its pairing code; add
 and remove devices; see what each plan gives. When another device sends something, the phone shows a notification (system push; it needs Google Play services on the phone) with Copy, Open and Share on it. Files that arrive wait for a tap: **Save** puts one in Downloads/dropit, then Open, Share (and Copy image for a picture) work without the network. Each file says until when the service still has it (1 day on the free plan, 10 on the paid one): after that it shows as expired and can't be saved; a file already saved stays on the phone. Each save counts against the account's downloads for the day. Saving needs Android 10 or newer. The build from the website checks for updates by itself.
 
+![Share photos, a screenshot, a video link, a clip and a voice note to dropit from the gallery or any app; send selected text or the clipboard; write a line with files for one device only; then see a shared PDF in the browser extension, pick up an item in the web inbox, and send a note, a picture or a passage from Obsidian to the phone. Phone screens are drawn; what they send and what arrives is real.](../media/android-tour.webp)
+
+<sub>The phone screens are drawn; what they send and what arrives is real. Shown: a NASA photograph (NASA/Anil Menon). Other pages and files are made for the demo.</sub>
+
 When many accounts were created from one network in a day, creating one more may take a few seconds of computing on the phone first: it shows "Getting the account ready…", then goes on by itself.
 
 It looks like the rest of dropit: an airmail envelope you send from, a red button that sends (with a small devices icon beside it, to

@@ -60,9 +60,9 @@
 
 ## 网页收件箱
 
-![在任何浏览器里拖文件发送；在另一台电脑上拉取、复制；扫码加设备；用书签小工具投当前页面。](./media/web-inbox-tour.webp)
+![iPhone 把照片、PDF 和表格、网页、剪贴板（轻点背面）分享给 dropit；网页收件箱和浏览器扩展接住它们；网页收件箱也能发文件和文字、选设备、再发一次。iPhone 的画面是画的，发出和收到的内容是真实的。](./media/web-ios-tour.webp)
 
-<sub>画面内容：NASA 照片与页面（公共领域）· Lonely Planet 页面链接。</sub>
+<sub>画面内容：NASA 照片（NASA/Anil Menon）。其余页面和文件是为演示自制的。</sub>
 
 [dropit.smart-kits.xyz](https://dropit.smart-kits.xyz)，任何浏览器、手机电脑都行，什么都不用装。
 
