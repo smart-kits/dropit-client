@@ -111,7 +111,7 @@ read what is in your account.* Then enter a code from a device that has full acc
 the web inbox, `dropit code` — and press *Agree and turn on*. The browser joins again in its own place: no extra device slot, the
 send-only key stops working and the new full one takes over. A code that is refused changes nothing; it keeps sending as before.
 
-The menu at the top right also has a small line with the extension's version and whether this browser can *send and receive* or is *send only*.
+The menu at the top right also has a small line with the extension's version and whether this browser can *send and receive* or is *send only*, and under it `Account xxxxxxxx`: a short code that tells you which account this browser belongs to (select it to copy; an older service sends none, and then the line is not shown). In the list where you choose which devices a send goes to, each device's second line starts with the last four characters of its ID, before when it was last active (`bT5Q · just now`), so two devices with the same name can be told apart.
 
 ## Right-click
 

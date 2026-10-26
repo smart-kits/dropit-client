@@ -9,7 +9,7 @@ import { refreshReceived, groupReceived, receivedList, pruneReceived, fileLinkFr
 import { readPage, readSelection } from './page.js';
 import { scopeFromProbe, canAddDevices, canTurnOnReceiving, canReceive, receiveJoinBody, slotPlan, pairLink, newcomer, pairTick, clock, ago, POLL_EVERY } from './pairing.js';
 import { QR } from './qr.js';
-import { DEFAULT_KEY, usable, candidates, reconcile, toValue, shortTarget, destLine, deviceIcon, activity, canChoose, withDeviceCount } from './targets.js';
+import { DEFAULT_KEY, usable, candidates, reconcile, toValue, shortTarget, destLine, deviceIcon, activity, canChoose, withDeviceCount, accountTag, deviceSuffix } from './targets.js';
 
 const $ = (id) => document.getElementById(id);
 // Opened as a small window (setup from a right-click, or picking files where the popup can't stay open)
@@ -609,8 +609,9 @@ function deviceRow(d, checked, onToggle) {
   tile.append(icon(deviceIcon(d.name)));
   const body = Object.assign(document.createElement('div'), { className: 'body' });
   body.append(
-    Object.assign(document.createElement('p'), { className: 'tt', textContent: d.name, title: d.name }),
-    Object.assign(document.createElement('p'), { className: 'mt', textContent: activity(d, Date.now(), t, lang === 'zh' ? 'zh-CN' : 'en', ago) }));
+    Object.assign(document.createElement('p'), { className: 'tt', title: d.name, textContent: d.name }),
+    // second line: the short id first, then when it was last active, so two devices with the same name can be told apart
+    Object.assign(document.createElement('p'), { className: 'mt', textContent: `${deviceSuffix(d.device_id)} · ${activity(d, Date.now(), t, lang === 'zh' ? 'zh-CN' : 'en', ago)}` }));
   const box = Object.assign(document.createElement('input'), { type: 'checkbox', className: 'tick', checked });
   box.setAttribute('aria-label', d.name);
   box.onchange = () => onToggle(d.device_id, box);
@@ -1271,6 +1272,9 @@ async function readTab(tab) {
 /** The header: plan and how many devices are in use */
 function drawPlan(m) {
   $('plan').textContent = m ? t.planLine(t.plans[m.plan] ?? m.plan, m.devices_used, m.devices_limit) : '';
+  const tag = accountTag(m);                      // from the same account line: nothing more is asked; an older service sends none
+  $('account').textContent = tag ? t.accountLine(tag) : '';
+  $('account').hidden = !tag;
 }
 
 async function showPlan(fresh = false) {

@@ -111,6 +111,12 @@ export function shortTarget(to, names, t) {
   return t.targetN(to.length);
 }
 
+/** The short account code from the account line, or '' when the service did not send one (then nothing is shown) */
+export const accountTag = (account) => (/^[0-9a-f]{8}$/.test(account?.account_tag ?? '') ? account.account_tag : '');
+
+/** The last four characters of a device id (without its `d_`): tells two devices with the same name apart */
+export const deviceSuffix = (id) => String(id ?? '').replace(/^d_/, '').slice(-4);
+
 /** Which small drawing a device gets, from its name (the list says nothing else about what it is) */
 export function deviceIcon(name) {
   if (/^cli\b|终端|terminal/i.test(name)) return 'terminal';

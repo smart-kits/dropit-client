@@ -115,6 +115,7 @@ const EN = {
   failedFiles: (n) => (n === 1 ? '1 file' : `${n} files`),
   themeLine: (mode) => `Theme: ${mode}`,
   // The settings panel's line about this install: its version, and whether this browser both sends and receives
+  accountLine: (tag) => `Account ${tag}`,
   aboutLine: (version, scope) => `Version ${version}${scope === 'full' ? ' · can send and receive' : scope === 'ingest_only' ? ' · send only' : ''}`,
   themes: { auto: 'match system', light: 'light', dark: 'dark' },
 
@@ -322,6 +323,7 @@ const ZH = {
   retryLabel: (what) => `重新投递：${what}`,
   failedFiles: (n) => `${n} 个文件`,
   themeLine: (mode) => `主题：${mode}`,
+  accountLine: (tag) => `账号 ${tag}`,
   aboutLine: (version, scope) => `版本 ${version}${scope === 'full' ? ' · 能收能发' : scope === 'ingest_only' ? ' · 只能投递' : ''}`,
   themes: { auto: '跟随系统', light: '浅色', dark: '深色' },
 

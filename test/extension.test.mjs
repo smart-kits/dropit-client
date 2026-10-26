@@ -10,7 +10,7 @@ import {
 } from '../extension/payload.js';
 import { STRINGS } from '../extension/i18n.js';
 import * as P from '../extension/pow.js';
-import { reconcile, toValue, canChoose, withDeviceCount, destLine, inListOrder, shortTarget } from '../extension/targets.js';
+import { accountTag, deviceSuffix, reconcile, toValue, canChoose, withDeviceCount, destLine, inListOrder, shortTarget } from '../extension/targets.js';
 import * as R from '../extension/receive.js';
 import { forgetToken, tooLarge } from '../extension/api.js';
 import { pruneRecent, recentList, remember, RECENT_KEY } from '../extension/recent.js';
@@ -1028,6 +1028,8 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
 // V-01..V-05 · look fixes after the first browser pass
 {
   const css = readFileSync(new URL('../extension/popup.css', import.meta.url), 'utf8');
+  // V-06 · a long file name in a received batch must not widen the card: the file list is one column that may shrink to the card
+  ok('V-06 the files of a received batch are one shrinkable column', /\.files \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(css) && /\.files \{[^}]*min-width: 0/.test(css));
   const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
   const names = new Map([['mac', 'Mac'], ['pixel', 'Pixel'], ['ipad', 'iPad']]);      // the device list's order
   const fits = (n) => (text) => [...text].length <= n;
@@ -1044,6 +1046,18 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   ok('V-02 the popup asks the real room (canvas) before it writes names', /measure\.measureText\(text\)\.width/.test(popup) && /destLine\(to, targets\.names, t, destFits\)/.test(popup));
   ok('V-01 the ring has a size of its own in a flex holder, 16px', /\.send \.lead \{ display: inline-flex/.test(css) && /\.spin \{ box-sizing: border-box; display: block; width: 16px; height: 16px/.test(css));
   ok('V-05 the focus ring follows the block\'s corners', /\.send:focus-visible, \.more:focus-visible \{ outline: none; \}/.test(css) && /\.split:has\(> \.send:focus-visible, > \.more:focus-visible\) \{ box-shadow: 0 0 0 2px var\(--paper\), 0 0 0 4px var\(--navy\)/.test(css));
+}
+
+// ── Which account, which device ──────────────────────────────────────────────────────
+{
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../extension/popup.html', import.meta.url), 'utf8');
+  eq('A1 accountTag: 8 lowercase hex only', [accountTag({ account_tag: 'fc985852' }), accountTag({ account_tag: 'FC985852' }), accountTag({ account_tag: 'fc9858' }), accountTag({}), accountTag(null), accountTag({ account_tag: 'fc98585<' })], ['fc985852', '', '', '', '', '']);
+  eq('A2 deviceSuffix: last four characters after d_', [deviceSuffix('d_QMNWEuCelwDcAB7hmUbT5Q'), deviceSuffix('d_ab'), deviceSuffix(undefined)], ['bT5Q', 'ab', '']);
+  ok('A3 the menu has the account line under the version, hidden until there is one', /id="about"><\/p>\s*(<!--[^>]*-->\s*)?<p class="menu-note menu-account" id="account" hidden><\/p>/.test(html));
+  ok('A4 it is drawn from the account line the popup already has (drawPlan), no request of its own', /function drawPlan\(m\) \{[\s\S]*?accountTag\(m\)[\s\S]*?\$\('account'\)\.hidden = !tag;/.test(popup));
+  ok('A5 the device rows write the suffix on the second line, before the last-active text, and not after the name', /className: 'mt', textContent: `\$\{deviceSuffix\(d\.device_id\)\} · \$\{activity\(/.test(popup) && !/nameWithSuffix|className: 'sfx'/.test(popup) && /className: 'tt', title: d\.name, textContent: d\.name \}/.test(popup));
+  eq('A6 the wording', [STRINGS.en.accountLine('fc985852'), STRINGS.zh.accountLine('fc985852')], ['Account fc985852', '账号 fc985852']);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
