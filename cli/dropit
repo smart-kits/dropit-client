@@ -163,6 +163,7 @@ const T = {
     droppedNote: (names) => `Not sent to ${names}: removed from the account`,
     devThis: 'this',
     devSendOnly: 'send-only',
+    devAccount: (tag) => `Account: ${tag}`,
     devCount: (used, limit) => `${used} / ${limit}`,
     devFull: 'All device slots are in use',
     needReplace: '--replace needs a device name or id: dropit code --replace "My Mac"',
@@ -541,6 +542,7 @@ Source code, and problems or ideas: https://github.com/smart-kits/dropit-client/
     droppedNote: (names) => `没有投给 ${names}：它已从账号里移除`,
     devThis: '这台',
     devSendOnly: '只能投递',
+    devAccount: (tag) => `账号：${tag}`,
     devCount: (used, limit) => `${used} / ${limit} 台`,
     devFull: '名额已满',
     needReplace: '--replace 后面要跟设备名或编号：dropit code --replace "我的 Mac"',
@@ -2137,10 +2139,15 @@ function defaultView(cfg, list, tt = t) {
   return { mark: new Set(keep.map((e) => e.id)), line: tt.devDefaultLine(keep.map((e) => shown(e.name)).join(tt.tgtSep)) };
 }
 
+/** The short account code from the account line, or '' when it is missing or not 8 lowercase hex characters */
+const accountTagOf = (m) => (/^[0-9a-f]{8}$/.test(m?.account_tag ?? '') ? m.account_tag : '');
+
 async function devices() {
   const cfg = needToken();
   const [list, me] = await Promise.all([fetchDevices(cfg), api(cfg, 'GET', '/v1/me').catch(() => null)]);
   const view = defaultView(cfg, list);
+  const tag = accountTagOf(me);
+  if (tag) console.log(`  ${dim(t.devAccount(tag))}\n`);          // older services send none: no line
   for (const line of deviceLines(list, cfg.device_id, t, Date.now(), view?.mark ?? null)) console.log(line);
   if (me && me.devices_used != null) {
     const full = Number.isFinite(me.devices_limit) && me.devices_used >= me.devices_limit;
@@ -3657,7 +3664,7 @@ if (require.main === module) {
     execPayload, fireExec, afterWrite, handOn, prefetch, sendFile, sendFiles,
     // who a send goes to, and how a send reads back
     groupOf, rulesOn, batchJoin, batchItem, batchSource, runBatch, finishBatches, waitingBatches, stopRealtime, forgetDevices, batchFlags, withSrc,
-    toFlag, flagValue, slotPlan, newCode, wordsOf, resolveWords, targetLabel, targetFor, savedTargets, settleDefault, setDefault, receiptLine, targetCmd, deviceLines, send,
+    toFlag, flagValue, slotPlan, newCode, wordsOf, resolveWords, targetLabel, targetFor, savedTargets, settleDefault, setDefault, receiptLine, targetCmd, deviceLines, accountTagOf, send,
     receivers, shellQuote, pair, devices, cols, padCols, sizeText, colorOn, BATCH_QUIET_MS, BATCH_MAX_MS, RECENT_DEFAULT, newQueue, agentsCmd, handlersCmd, runCmd, kindOfFile, planOf, commandLine, writeItem,
     RUN_AGENTS, RUN_KINDS, RUN_DEFAULTS, planRun, composeInput, sanitizeAnswer, safeFileName, detectAgents, composePrompt, kindsFor, resultDocument,
   };

@@ -994,6 +994,20 @@ ok('refusal names both ways out', en.alreadyJoined.includes('dropit pair <code>'
     route = () => null;
     r = await run(() => cli.devices());
     ok('dropit devices: when there is room, it does not', !r.out.some((l) => l.includes(en.devFull)), r.out.join('|'));
+    // which account: a short code on top; an older service sends none, and then there is no line and no gap
+    route = (q) => (q.path === '/v1/me' ? answer(200, { devices_used: 2, devices_limit: 6, account_tag: 'fc985852' }) : null);
+    r = await run(() => cli.devices());
+    ok('dropit devices: "Account: fc985852" is the first line, then a blank line', r.out[0] === '  Account: fc985852\n', r.out.join('|'));
+    ok('…the device rows are unchanged and each still ends with its full id (the last four characters are in it)', r.out.some((l) => /d_pix\s*$/.test(l)), r.out.join('|'));
+    r = await run(() => cli.devices());
+    is('…in Chinese the line reads 账号：', [zh.devAccount('fc985852'), en.devAccount('fc985852')], ['账号：fc985852', 'Account: fc985852']);
+    route = () => null;
+    r = await run(() => cli.devices());
+    ok('dropit devices: no account_tag from the service → no Account line, the list starts at once', !r.out.some((l) => /Account|账号/.test(l)) && r.out[0] !== '' && !r.out[0].startsWith('\n'), r.out.join('|'));
+    route = (q) => (q.path === '/v1/me' ? answer(200, { devices_used: 2, account_tag: 'FC98585\u001b[31m' }) : null);
+    r = await run(() => cli.devices());
+    ok('dropit devices: a tag that is not 8 lowercase hex characters is not shown', !r.out.some((l) => /Account/.test(l)), r.out.join('|'));
+    is('accountTagOf: only 8 lowercase hex', [cli.accountTagOf({ account_tag: 'fc985852' }), cli.accountTagOf({ account_tag: 'FC985852' }), cli.accountTagOf({ account_tag: 'fc98585' }), cli.accountTagOf({}), cli.accountTagOf(null)], ['fc985852', '', '', '', '']);
     // the default, marked in the list and said under it
     {
       const rows = (o) => o.filter((l) => /d_(me|pix|lin|ios|o1|o2)\s*$/.test(l.trim()));
