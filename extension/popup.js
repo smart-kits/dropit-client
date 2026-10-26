@@ -71,8 +71,9 @@ function helpDeviceFull(err) {
 }
 
 /**
- * A joined browser gets a send-only key: a leaked one can't read anything. Creating the account gives a full one
- * (it can add devices). What the key may do is kept, so the popup knows without asking.
+ * Creating the account and joining with a code both give a full key (send, receive, add devices); the key stays in this
+ * browser's own storage. A browser that joined earlier with the send-only key keeps it until receiving is turned on.
+ * What the key may do is kept, so the popup knows without asking.
  */
 async function adopt(res, scope, { receiving = false } = {}) {
   await store.set({ token: res.token, device_id: res.device_id, scope });
@@ -117,7 +118,7 @@ $('claim').onclick = guardSetup(async () => {
   const code = $('code').value.trim().toUpperCase();
   if (!code) return $('code').focus();
   await adopt(await api('POST', '/v1/pair/claim',
-    { code, device_name: t.deviceName(navigator.platform), scope: 'ingest_only', ...await sameBrowser() }, { auth: false }), 'ingest_only');
+    { code, device_name: t.deviceName(navigator.platform), scope: 'full', ...await sameBrowser() }, { auth: false }), 'full');
 });
 
 // Signing out removes this browser from the account first, so it stops using a device slot. Offline or
@@ -927,7 +928,7 @@ async function pullReceived(why) {
 $('recv-refresh').onclick = () => pullReceived('manual');
 chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && RECEIVED_KEY in changes) drawReceived(); });
 
-// ── Turning receiving on in a browser that joined with a code ─────────────
+// ── Turning receiving on in a browser that joined with the send-only key (before joining gave a full one) ──
 // That browser's key can only send. Reading needs a full key, so it joins once more — with a code from a device that has
 // full access, asking for full — and takes the place of its earlier join: one device slot, as before.
 
@@ -1025,8 +1026,8 @@ $('theme').onclick = () => {
 };
 
 // ── Adding a device ─────────────────────────────────────────────────────
-// Only a key that may add devices offers it: the one that created the account. A browser joined with a code
-// has a send-only key and never sees the entry, rather than finding out from an error.
+// Only a key that may add devices offers it: a full one (the browser that created the account or joined with a code).
+// A browser that joined earlier with the send-only key never sees the entry, rather than finding out from an error.
 
 /**
  * What this browser's key may do. Recorded when it joined; a key from before that was recorded is asked about
@@ -1052,6 +1053,7 @@ async function offerAdding() {
   $('add-device').hidden = !may || !$('pair').hidden;
   targets.scope = scope;
   $('receive-open').hidden = !canTurnOnReceiving(scope);
+  $('about').textContent = t.aboutLine(chrome.runtime.getManifest().version, scope);
   initTargets();
   if (canReceive(scope)) {
     drawReceived();

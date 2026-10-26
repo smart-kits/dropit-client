@@ -42,7 +42,7 @@ While it sends, the **Send** button reads *Sending*, the envelope's red-and-blue
 (*Sending 2 of 3…*). Then the popup **stays open**: *✓ Sent #71 · 14:07* under an empty box, ready for the next thing.
 
 **Recently sent** lists the last five things this browser sent (from the popup, the right-click menu or the shortcut), newest first:
-text and links have a copy button, a link's title opens it. In the browser that created the account, each row also says who it went to
+text and links have a copy button, a link's title opens it. In a browser that created the account or joined with a code, each row also says who it went to
 (*→ All*, *→ a device's name*, *→ 3 devices*). The list is kept only in this browser's own storage,
 forgotten after a week or when you sign out, and never sent anywhere. If a send comes back, a card with a pale red outline, the reason and a
 *Try again* button sits above it until you edit the box.
@@ -52,7 +52,7 @@ reporting a problem, the privacy notice and signing out.
 
 ## Choose which devices a send goes to
 
-In the browser that **created the account**, once the account has two or more other devices that can receive, the block on the right of the box gets a second part
+In a browser that **created the account or joined with a code**, once the account has two or more other devices that can receive, the block on the right of the box gets a second part
 under **Send**: a light strip that says where Send goes (*→ All*, *→ Mac, Pixel*, *→ 3 devices*). By default everything goes to all your devices, and nothing changes. To pick:
 
 - **This one send**: press that strip. One list, *Send to which devices*, with your default already ticked.
@@ -63,12 +63,12 @@ under **Send**: a light strip that says where Send goes (*→ All*, *→ Mac, Pi
 - **Saved in this browser only.** Ticking every device saves *All*, so devices you add later are included; ticking some
   saves just those. Signing out or reinstalling puts it back to *All*. A device that was removed is taken off the default
   (you are told once); if none is left it is back to *All*.
-- A browser that joined with a pairing code can't read the device list, so it only has **Send**, and sends to all —
-  until you [turn on receiving](#receive-here-too) there, which gives it a full key like the browser that created the account.
+- A browser that joined earlier with the old send-only key can't read the device list, so it only has **Send**, and sends to all —
+  until you [turn on receiving](#receive-here-too) there, which gives it a full key like every browser that joins now.
 
 ## Add a device
 
-What you send needs somewhere to arrive. In the browser where you **created the account**, the popup adds your
+What you send needs somewhere to arrive. In a browser that **created the account or joined with a code**, the popup adds your
 phone, Obsidian or another computer:
 
 - **Right after *Create a new account*** it already shows a 6-character code and its QR code (also copied for you).
@@ -83,13 +83,13 @@ phone, Obsidian or another computer:
 - **Joining and the slots are full?** The new browser says the device limit was reached and what to do: remove one on a
   device you already use, or (free accounts, when Paid is offered) a link to upgrade.
 
-A browser that joined with a code doesn't show this: its key can only send (see below), until you
+Only a browser that joined earlier with the old send-only key doesn't show this, until you
 [turn on receiving](#receive-here-too) there. Make codes on a device with a full key instead — the web inbox, Obsidian,
-`dropit code`, or the browser that created the account.
+`dropit code`, or another browser.
 
 ## Receive here too
 
-The browser that **created the account** can also list what your other devices sent. It is deliberately plain: **no
+A browser that **created the account or joined with a code** also lists what your other devices sent, from the moment it joins. It is deliberately plain: **no
 notifications, no connection kept open in the background.** Open the popup and, under *Received*, it fetches what came since
 last time. **Refresh** (the small arrow next to the heading) fetches again.
 
@@ -104,11 +104,14 @@ last time. **Refresh** (the small arrow next to the heading) fetches again.
   sending something from your phone and then opening the popup is the usual way to try it. Nothing pops up either way.
 - Each refresh makes a few requests at most; a long backlog is caught up on the next one.
 
-**A browser that joined with a pairing code can't read anything by default** — its key is send-only. To receive there, open the menu
+**Joining with a pairing code gives the browser a full key, so it receives right away** — nothing more to turn on. Only a browser
+that joined with an earlier version of the extension has a send-only key. To receive there, open the menu
 at the top right › **Receive on this browser** (shown only in such a browser). It says one thing first: *Once on, this browser can
 read what is in your account.* Then enter a code from a device that has full access — the browser that created the account, Obsidian,
 the web inbox, `dropit code` — and press *Agree and turn on*. The browser joins again in its own place: no extra device slot, the
 send-only key stops working and the new full one takes over. A code that is refused changes nothing; it keeps sending as before.
+
+The menu at the top right also has a small line with the extension's version and whether this browser can *send and receive* or is *send only*.
 
 ## Right-click
 
@@ -190,13 +193,10 @@ Same folder, same extension — you stay joined.
 Images and files are fetched **by the page itself**, the way it already loads them, so most sites need nothing more.
 The rare site that refuses gets a one-site question; you can take it back on the extension's details page.
 
-**Your account stays safe.** Each browser is its own device. Joining with a code gives it a **send-only** key by default:
-even if it leaked, nobody could read your items, add devices or change settings with it. The browser where you
-*created* the account holds the account's first key, a **full** one — that's what lets it
-[add your other devices](#add-a-device) and [list what they sent](#receive-here-too), and like any full key it could read your
-items if it leaked, so sign that browser out on a computer that isn't yours. A browser that joined with a code gets a full key
-only when you choose *Receive on this browser* in it, with a code from a device that already has one — from then on it is
-as trusted as the browser that created the account. Either way the key stays in the extension's own storage on this computer
+**Your account stays safe.** Each browser is its own device. Creating the account and joining with a code both give the browser a
+**full** key — it can [add your other devices](#add-a-device) and [list what they sent](#receive-here-too). Like any full key it
+could read your items if it leaked, so sign that browser out on a computer that isn't yours. (A browser that joined with an
+earlier version has a send-only key until you turn on receiving in it.) The key stays in the extension's own storage on this computer
 and never enters a web page — the page only hands over the bytes. To disconnect this browser, use
 *Sign out* in the menu at the top right of the popup (a screen says what goes with it before it signs out; text you haven’t sent is not kept), or remove it from another device.
 

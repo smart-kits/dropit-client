@@ -83,7 +83,7 @@ const EN = {
   accessDenied: 'Not allowed to read files from this site',
 
   deviceName: (platform) => `Browser · ${clipDeviceName(platform)}`,
-  consent: 'Joining sends this browser’s name and a fingerprint hash, used only to manage your device slots. What you send is kept on the service for a short while (1 day on the free plan) so your other devices can receive it.',
+  consent: 'Joining sends this browser’s name and a fingerprint hash, used only to manage your device slots. This browser will be able to send and receive. What you send is kept on the service for a short while (1 day on the free plan) so your other devices can receive it.',
   privacyLink: 'Privacy',
   replacedOld: (name) => `Took the place of this browser's earlier “${name}” — it no longer uses a device slot`,
   revokedReplaced: 'dropit was joined again in this browser, so this copy was signed out — join again to use it',
@@ -114,6 +114,8 @@ const EN = {
   retryLabel: (what) => `Try sending again: ${what}`,
   failedFiles: (n) => (n === 1 ? '1 file' : `${n} files`),
   themeLine: (mode) => `Theme: ${mode}`,
+  // The settings panel's line about this install: its version, and whether this browser both sends and receives
+  aboutLine: (version, scope) => `Version ${version}${scope === 'full' ? ' · can send and receive' : scope === 'ingest_only' ? ' · send only' : ''}`,
   themes: { auto: 'match system', light: 'light', dark: 'dark' },
 
   // Who a send goes to: only a browser whose key may read the device list (the one that created the account)
@@ -291,7 +293,7 @@ const ZH = {
   accessDenied: '没有读取这个网站文件的权限',
 
   deviceName: (platform) => `浏览器 · ${clipDeviceName(platform)}`,
-  consent: '加入时会发送这个浏览器的名称和一个设备指纹摘要，只用来管理你的设备名额。你投递的内容会在服务上暂存一段时间（免费版 1 天），供你的其他设备接收。',
+  consent: '加入时会发送这个浏览器的名称和一个设备指纹摘要，只用来管理你的设备名额。这个浏览器加入后能收能发。你投递的内容会在服务上暂存一段时间（免费版 1 天），供你的其他设备接收。',
   privacyLink: '隐私说明',
   replacedOld: (name) => `已替换这个浏览器之前的「${name}」，不再多占一台设备的名额`,
   revokedReplaced: '这个浏览器上重新加入过 dropit，这一份已退出 —— 要用请重新加入',
@@ -320,6 +322,7 @@ const ZH = {
   retryLabel: (what) => `重新投递：${what}`,
   failedFiles: (n) => `${n} 个文件`,
   themeLine: (mode) => `主题：${mode}`,
+  aboutLine: (version, scope) => `版本 ${version}${scope === 'full' ? ' · 能收能发' : scope === 'ingest_only' ? ' · 只能投递' : ''}`,
   themes: { auto: '跟随系统', light: '浅色', dark: '深色' },
 
   targetAll: '全部',

@@ -16,9 +16,11 @@
       <button role="menuitem" id="add-device" type="button" hidden data-i18n="addDevice"></button>
       <!-- Only a browser whose key can read the device list, and only when there is another device to choose -->
       <button role="menuitem" id="defaults-open" class="has-value" type="button" hidden><span data-i18n="menuDefaults"></span><span class="val" id="defaults-val"></span></button>
-      <!-- Only a browser that joined with the send-only key (it cannot read anything yet) shows it -->
+      <!-- Only a browser that joined earlier with the send-only key (it cannot read anything yet) shows it -->
       <button role="menuitem" id="receive-open" type="button" hidden data-i18n="menuReceive"></button>
       <button role="menuitem" id="theme" type="button"></button>
+      <!-- Not an action: this install's version and whether this browser can receive too -->
+      <p class="menu-note" id="about"></p>
       <a role="menuitem" href="https://github.com/smart-kits/dropit-client" target="_blank" rel="noopener" data-i18n="source"></a>
       <a role="menuitem" id="issue" target="_blank" rel="noopener" data-i18n="issue"></a>
       <a role="menuitem" id="privacy" target="_blank" rel="noopener"></a>

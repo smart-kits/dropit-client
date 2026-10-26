@@ -385,15 +385,20 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
 
 // E33 · what this browser's key may do: recorded on joining; an older key is asked about once
 {
-  const { scopeFromProbe, canAddDevices } = await import('../extension/pairing.js');
+  const { scopeFromProbe, canAddDevices, canReceive, canTurnOnReceiving } = await import('../extension/pairing.js');
   eq('E33 the device list answered → full', scopeFromProbe(null), 'full');
   eq('E33 refused for scope → send-only', scopeFromProbe({ code: 'SCOPE_INSUFFICIENT', status: 403 }), 'ingest_only');
   eq('E33 offline → unknown, ask again next time', scopeFromProbe({ code: 'OFFLINE' }), null);
   eq('E33 a server error → unknown, not send-only', scopeFromProbe({ code: undefined, status: 500 }), null);
   ok('E33 only a full key offers adding a device', canAddDevices('full') && !canAddDevices('ingest_only') && !canAddDevices(null) && !canAddDevices(undefined));
   const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
-  ok('E33 creating the account records full, joining with a code records ingest_only',
-    /'\/v1\/accounts'[\s\S]{0,200}'full'\)/.test(popup) && /'\/v1\/pair\/claim'[\s\S]{0,300}'ingest_only'\)/.test(popup));
+  ok('E33 creating the account records full, joining with a code asks for full and records full',
+    /'\/v1\/accounts'[\s\S]{0,200}'full'\)/.test(popup) && /'\/v1\/pair\/claim',\s*\{[^}]*scope: 'full'[^}]*\}[^)]*\)[^;]*'full'\);/.test(popup));
+  ok('E33 joining with a code never asks for or records a send-only key (the one mention left is the unable-to-read fallback)', (popup.match(/ingest_only/g) ?? []).length === 1);
+  ok('E33 a browser that joined with a code is a full one at once: it receives and may add devices, and is not offered "Receive on this browser"',
+    canReceive('full') && canAddDevices('full') && !canTurnOnReceiving('full'));
+  ok('E33 an older send-only browser keeps the old way in: the entry, and the fallback when the key turns out unable to read',
+    canTurnOnReceiving('ingest_only') && /SCOPE_INSUFFICIENT[\s\S]{0,200}store\.set\(\{ scope: 'ingest_only' \}\)/.test(popup));
   const api = readFileSync(new URL('../extension/api.js', import.meta.url), 'utf8');
   ok('E33 forgetting the key forgets what it could do', /remove\(\[[^\]]*'scope'/.test(api));
 }
@@ -784,6 +789,24 @@ eq('fileSize', [fileSize(11), fileSize(14 * 1024), fileSize(2.34 * 1048576)], ['
   ok('RV7 the code field is the same kind of control as the join screen (an input inside an envelope.join)', /<div class="envelope join">\s*<input type="text" id="rcode"/.test(html));
   const en = STRINGS.en.html, zh = STRINGS.zh.html;
   ok('RV7 the warning is said in both languages', /read what is in your account/.test(en.rcvWarn) && /读到你账号里的内容/.test(zh.rcvWarn));
+}
+
+// E35 · the settings panel says the version and what this browser may do
+{
+  const popup = readFileSync(new URL('../extension/popup.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../extension/popup.html', import.meta.url), 'utf8');
+  const manifest = JSON.parse(readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'));
+  ok('E35 the panel has a line for it, not an action', /<p class="menu-note" id="about"><\/p>/.test(html) && !/role="menuitem" id="about"/.test(html));
+  ok('E35 the version is the manifest\'s own, read at run time', /\$\('about'\)\.textContent = t\.aboutLine\(chrome\.runtime\.getManifest\(\)\.version, scope\)/.test(popup));
+  for (const [lang, t] of Object.entries(STRINGS)) {
+    const v = manifest.version;
+    ok(`E35 ${lang} full: version and can send and receive`, t.aboutLine(v, 'full').includes(v) && t.aboutLine(v, 'full') !== t.aboutLine(v, 'ingest_only'));
+    ok(`E35 ${lang} send-only: version and says send only`, t.aboutLine(v, 'ingest_only').includes(v));
+    eq(`E35 ${lang} unknown: the version alone`, t.aboutLine(v, null).replace(/\D*(\d[\d.]*)\D*/, '$1'), v);
+  }
+  ok('E35 the wording', /send and receive/.test(STRINGS.en.aboutLine('1', 'full')) && /send only/.test(STRINGS.en.aboutLine('1', 'ingest_only'))
+    && /能收能发/.test(STRINGS.zh.aboutLine('1', 'full')) && /只能投递/.test(STRINGS.zh.aboutLine('1', 'ingest_only')));
+  ok('E35 the join screen says this browser will send and receive, in both languages', /send and receive/.test(STRINGS.en.consent) && /能收能发/.test(STRINGS.zh.consent));
 }
 
 // RV9 · things sent together are one card
